@@ -18,7 +18,7 @@ chrome.storage.sync.get([
     //set them to default if not set by user yet
     optionsForm.overlayVideoType.value = result.overlayVideoType ?? 'yt-playlist';
     optionsForm.ytPlaylistID.value = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
-    optionsForm.ytVideoID.value = result.ytVideoID ?? 's86-Z-CbaHA';
+    optionsForm.ytVideoID.value = result.ytVideoID ?? '5AMQbxBZohY';
     optionsForm.ytLiveID.value = result.ytLiveID ?? 'QhJcIlE0NAQ';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
