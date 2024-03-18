@@ -1,0 +1,64 @@
+body {
+    background-color: black;
+    width: 300px;
+    font-family: 'Roboto', sans-serif;
+}
+
+h1 {
+    font-size: 40px;
+    text-align: center;
+    font-family: 'Roboto Condensed', sans-serif;
+    color: white;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    margin-block: 0px;
+    line-height: 20px;
+}
+
+h2 {
+    font-size: 22px;
+    margin-block-start: 0px;
+    margin-block-end: 0px;
+}
+
+p {
+    color: white;
+}
+
+form {
+    color: white;
+    font-size: 14px;
+}
+
+input[type=radio] {
+    float: left;
+}
+
+input[type=number] {
+    width: 40px;
+    float: right;
+}
+
+.display-location, .display-location[type=radio] {
+    float: right;
+}
+
+.checkbox-label, .note {
+    font-size: 12px;
+}
+
+button {
+    cursor: pointer;
+}
+
+.button-hidden {
+    display: none;
+}
+
+.advanced {
+    display: none;
+}
+
+.highlight {
+    background-color: darkred;
+}
