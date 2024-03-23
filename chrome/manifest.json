@@ -9,9 +9,7 @@
     "storage"
   ],
   "host_permissions": [
-    "<all_urls>",
-    "http://*/*",
-    "https://*/*"
+    "https://www.youtube.com/*"
   ],
   "commands": {
     "execute_shortcut": {
@@ -33,15 +31,5 @@
   },
   "background": {
     "service_worker": "scripts/background.js"
-  },
-  "content_scripts": [
-    {
-      "all_frames": true,
-      "js": [ "scripts/content.js" ],
-      "matches": [ "<all_urls>" ],
-      "exclude_matches": [ "https://www.youtube.com/*" ],
-      "exclude_globs": [ "https://www.youtube.com/*" ],
-      "css": [ "styles/style.css" ]
-    }
-  ]
+  }
 }

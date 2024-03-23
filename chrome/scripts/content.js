@@ -1,4 +1,6 @@
 
+//TODO: exclude this working on www.youtube.com
+
 //Establish variables
 var isCommercialState = false;
 var firstClick = true;
@@ -57,7 +59,21 @@ chrome.storage.sync.get([
     }
     shouldHideYTBackground = result.shouldHideYTBackground ?? true;
 
+    //calling firstRun() from here so I know the async grabbing of these values is complete
+    firstRun();
+
 });
+
+
+
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action === 'check-is-script-injected') {
+        sendResponse({ status: "true" });
+        console.log('i am content and i recieved your message and am sending back a response ' + window.location + ' document location: ' + document.location + ' body: ' + document.getElementsByTagName('body')[0]); //debug
+    }
+});
+
+
 
 //function that is responsible for loading the video iframe over top of the main/background video
 function setOverlayVideo() {
@@ -136,79 +152,7 @@ chrome.runtime.onMessage.addListener(function (message) {
         //special actions for the very first time this is initiated on a page
         if (isFirstRun) {
 
-            //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
-            if (document.fullscreenElement) {
-
-                //TODO: look into why this would ever return iframe and why I'm stopping because of it
-                if (document.fullscreenElement.nodeName != 'IFRAME') {
-
-                    //removing the not full screen alert if previously set
-                    if (document.getElementsByClassName('not-full-screen-alert')[0]) {
-
-                        let elements = document.getElementsByClassName('not-full-screen-alert');
-                        let element;
-
-                        //doing this weird since getElementsByClassName returns a live collection
-                        while (element = elements[0]) {
-                            element.parentNode.removeChild(element);
-                        }
-
-                    }
-
-                    setOverlayVideo();
-
-                    //muting main/background video
-                    if (mainVideoVolumeDuringCommercials == 0) {
-
-                        //using the actually controls to mute YTTV because for whatever reason, it will unmute itself
-                        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
-                            document.querySelector('[aria-label="Mute (m)"]').click();
-                        }
-
-                        mainVideo.muted = true;
-
-                    } else if (mainVideoVolumeDuringCommercials < 1) {
-
-                        mainVideo.volume = mainVideoVolumeDuringCommercials;
-
-                    } //else do nothing for 100
-
-                    //wait a little bit for the video to load //TODO: get indicator of when completely loaded
-                    setTimeout(() => {
-                        chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
-                    }, 2000); 
-
-                    isCommercialState = true;
-                    isFirstRun = false;
-
-                } //else do nothing for when nodeName is IFRAME
-
-            } else {
-                //since user was not in full screen, instruct them that they need to be
-
-                if (!fullScreenAlertSet && document.getElementsByTagName('video')[0]) {
-
-                    //TODO: move into own function
-                    let potentialVideos = document.getElementsByTagName('video');
-
-                    for (let i = 0; i < potentialVideos.length; i++) {
-
-                        let elm = document.createElement('div');
-                        elm.className = "not-full-screen-alert";
-                        elm.textContent = 'Must be full screen first'
-
-                        let insertLocation = potentialVideos[i].parentNode;
-                        insertLocation = insertLocation.parentNode;
-                        let firstChild = insertLocation.firstChild;
-                        insertLocation.insertBefore(elm, firstChild);
-
-                    }
-
-                    fullScreenAlertSet = true;
-
-                }
-
-            }
+            firstRun();
             
         } else {
 
@@ -262,3 +206,85 @@ chrome.runtime.onMessage.addListener(function (message) {
     }
 
 });
+
+
+function firstRun() {
+
+    console.log('firstRun() in content.js running. window location: ' + window.location + ' document location: ' + document.location + ' body: ' + document.getElementsByTagName('body')[0]); //debug
+
+    //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
+    if (document.fullscreenElement) {
+
+        //TODO: look into why this would ever return iframe and why I'm stopping because of it
+        if (document.fullscreenElement.nodeName != 'IFRAME') {
+
+            //removing the not full screen alert if previously set
+            if (document.getElementsByClassName('not-full-screen-alert')[0]) {
+
+                let elements = document.getElementsByClassName('not-full-screen-alert');
+                let element;
+
+                //doing this weird since getElementsByClassName returns a live collection
+                while (element = elements[0]) {
+                    element.parentNode.removeChild(element);
+                }
+
+            }
+
+            setOverlayVideo();
+
+            //muting main/background video
+            if (mainVideoVolumeDuringCommercials == 0) {
+
+                //using the actually controls to mute YTTV because for whatever reason, it will unmute itself
+                if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+                    document.querySelector('[aria-label="Mute (m)"]').click();
+                }
+
+                mainVideo.muted = true;
+
+            } else if (mainVideoVolumeDuringCommercials < 1) {
+
+                mainVideo.volume = mainVideoVolumeDuringCommercials;
+
+            } //else do nothing for 100
+
+            //wait a little bit for the video to load //TODO: get indicator of when completely loaded
+            setTimeout(() => {
+                console.log('this is content.js sending initial_execute_overlay_video_interaction'); //debug
+                chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
+            }, 2000);
+
+            isCommercialState = true;
+            isFirstRun = false;
+
+        } //else do nothing for when nodeName is IFRAME
+
+    } else {
+        //since user was not in full screen, instruct them that they need to be
+
+        if (!fullScreenAlertSet && document.getElementsByTagName('video')[0]) {
+
+            //TODO: move into own function
+            let potentialVideos = document.getElementsByTagName('video');
+
+            for (let i = 0; i < potentialVideos.length; i++) {
+
+                let elm = document.createElement('div');
+                elm.className = "not-full-screen-alert";
+                elm.textContent = 'Must be full screen first'
+
+                let insertLocation = potentialVideos[i].parentNode;
+                insertLocation = insertLocation.parentNode;
+                let firstChild = insertLocation.firstChild;
+                insertLocation.insertBefore(elm, firstChild);
+
+            }
+
+            fullScreenAlertSet = true;
+
+        }
+
+    }
+
+}

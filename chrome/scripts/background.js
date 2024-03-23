@@ -1,16 +1,67 @@
+//TODO: look further into reducing permissions while working around this https://issues.chromium.org/issues/41379298#comment9
 
 //sending message to content.js when user plugs in keyboard shortcut
-chrome.commands.onCommand.addListener(function (command) {
+chrome.commands.onCommand.addListener(function (command, tab) {
     if (command === "execute_shortcut") {
-        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-            chrome.tabs.sendMessage(tabs[0].id, { action: "execute_manual_switch_function" });
+
+        //debug
+        chrome.scripting.executeScript({
+            target: { tabId: tab.id, allFrames: true },
+            files: ['scripts/tester.js']
         });
+
+        console.log('tab id shortcut executed on = ' + tab.id); //debug
+
+        //TODO: catch or ignore errors on this - https://stackoverflow.com/a/42377997
+        chrome.tabs.sendMessage(tab.id, { action: "check-is-script-injected" }, function(response) {
+
+            response = response || {};
+
+            if (response.status == 'true') {
+
+                console.log('has been injected'); //debug
+
+                chrome.tabs.sendMessage(tab.id, { action: "execute_manual_switch_function" });
+
+            } else {
+
+                chrome.scripting.insertCSS({
+                    target: { tabId: tab.id, allFrames: true },
+                    files: ['styles/style.css']
+                });
+
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id, allFrames: true },
+                    files: ['scripts/content.js']
+                });
+
+                //debug
+                //setTimeout(() => {
+                //    chrome.storage.sync.get(['shouldHideYTBackground'], (result) => {
+
+                //        let shouldHideYTBackground = result.shouldHideYTBackground ?? true;
+
+                //        chrome.scripting.executeScript({
+                //            target: { tabId: tab.id, allFrames: true },
+                //            func: initialCommercialState,
+                //            args: [shouldHideYTBackground]
+                //        });
+
+                //    });
+                //}, 2000);
+
+            }
+
+        });
+
     }
 });
 
 //listining for messages from content.js
+//TODO: can remove sender and sendResponse?
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "initial_execute_overlay_video_interaction") {
+        console.log('this is background.js recieving initial_execute_overlay_video_interaction'); //debug
 
         //grab user set values
         chrome.storage.sync.get(['shouldHideYTBackground'], (result) => {
@@ -18,14 +69,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             let shouldHideYTBackground = result.shouldHideYTBackground ?? true;
 
             //injecting initialCommercialState() into all frames on the active tab
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                const tab = tabs[0];
+            //chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            //    const tab = tabs[0];
                 chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
+                    target: { tabId: sender.tab.id, allFrames: true },
                     func: initialCommercialState,
                     args: [shouldHideYTBackground]
                 });
-            });
+            /*});*/
 
         });
 
@@ -74,9 +125,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 
 function initialCommercialState(shouldHideYTBackground) {
+    console.log('this is initialCommercialState() in window location: ' + window.location + ' document location: ' + document.location + ' body: ' + document.getElementsByTagName('body')[0]); //debug
+    console.log(document.getElementsByTagName('body')[0]); //debug
 
     //making sure frame is www.youtube.com so this doesn't accidentaly impact the main/background video
-    if (window.location.hostname == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
+    if (/*window.location.hostname == 'www.youtube.com' &&*/ document.getElementsByClassName('video-stream html5-main-video')[0]) { //debug
 
         //initial click on the overlay video to start playing it
         document.getElementsByClassName('video-stream html5-main-video')[0].click();
