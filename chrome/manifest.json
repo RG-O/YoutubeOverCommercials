@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Over Commercials",
-  "version": "1.0",
+  "version": "1.1",
   "permissions": [
     "tabs",
     "activeTab",
