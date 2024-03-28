@@ -1,5 +1,5 @@
 
-//Establish variables
+//establish variables
 var isCommercialState = false;
 var firstClick = true;
 var mainVideo;
@@ -12,6 +12,9 @@ var overlayVideoType;
 var ytPlaylistID;
 var ytVideoID;
 var ytLiveID;
+var otherVideoURL;
+var otherLiveURL;
+var overlayHostName;
 var mainVideoFade;
 var videoOverlayWidth;
 var videoOverlayHeight;
@@ -27,6 +30,9 @@ chrome.storage.sync.get([
     'ytPlaylistID',
     'ytVideoID',
     'ytLiveID',
+    'otherVideoURL',
+    'otherLiveURL',
+    'overlayHostName',
     'mainVideoFade',
     'videoOverlayWidth',
     'videoOverlayHeight',
@@ -42,6 +48,9 @@ chrome.storage.sync.get([
     ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
     ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
     ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
+    otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
+    otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8?vp=0gEEEgIwAQ%3D%3D';
+    overlayHostName = result.overlayHostName ?? 'www.youtube.com';
     overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
     overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
     mainVideoFade = result.mainVideoFade ?? 50;
@@ -103,6 +112,10 @@ function setOverlayVideo() {
         } else {
             url = url.concat(ytLiveID);
         }
+    } else if (overlayVideoType == 'other-video') {
+        url = otherVideoURL;
+    } else if (overlayVideoType == 'other-live') {
+        url = otherLiveURL;
     }
 
     let iFrame = document.createElement('iframe');
@@ -124,10 +137,9 @@ function setOverlayVideo() {
 
     }
 
-    isFirstRun = false;
-
 }
 
+//TODO: seperate these different paths into their own functions
 //background.js is listening for user to enter in keyboard shortcut then sending a message to intiate this
 chrome.runtime.onMessage.addListener(function (message) {
 
@@ -141,6 +153,9 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                 //TODO: look into why this would ever return iframe and why I'm stopping because of it
                 if (document.fullscreenElement.nodeName != 'IFRAME') {
+
+                    isCommercialState = true;
+                    isFirstRun = false;
 
                     //removing the not full screen alert if previously set
                     if (document.getElementsByClassName('not-full-screen-alert')[0]) {
@@ -178,12 +193,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                         chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
                     }, 2000); 
 
-                    isCommercialState = true;
-                    isFirstRun = false;
-
                 } //else do nothing for when nodeName is IFRAME
 
-            } else {
+            } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
                 //since user was not in full screen, instruct them that they need to be
 
                 if (!fullScreenAlertSet && document.getElementsByTagName('video')[0]) {

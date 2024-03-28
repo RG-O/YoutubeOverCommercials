@@ -1,3 +1,4 @@
+//TODO: hide ID text fields when corresponding radio button not checked
 
 //grab all user set values
 chrome.storage.sync.get([
@@ -5,6 +6,8 @@ chrome.storage.sync.get([
     'ytPlaylistID',
     'ytVideoID',
     'ytLiveID',
+    'otherVideoURL',
+    'otherLiveURL',
     'mainVideoFade',
     'videoOverlayWidth',
     'videoOverlayHeight',
@@ -20,6 +23,8 @@ chrome.storage.sync.get([
     optionsForm.ytPlaylistID.value = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
     optionsForm.ytVideoID.value = result.ytVideoID ?? '5AMQbxBZohY';
     optionsForm.ytLiveID.value = result.ytLiveID ?? 'QhJcIlE0NAQ';
+    optionsForm.otherVideoURL.value = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
+    optionsForm.otherLiveURL.value = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8?vp=0gEEEgIwAQ%3D%3D';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
     optionsForm.mainVideoFade.value = result.mainVideoFade ?? 35;
@@ -42,6 +47,8 @@ document.getElementById("save-button").onclick = function () {
         optionsForm.ytPlaylistID.value &&
         optionsForm.ytVideoID.value &&
         optionsForm.ytLiveID.value &&
+        optionsForm.otherVideoURL.value &&
+        optionsForm.otherLiveURL.value &&
         optionsForm.overlayVideoLocationHorizontal.value &&
         optionsForm.overlayVideoLocationVertical.value &&
         optionsForm.mainVideoFade.value &&
@@ -51,12 +58,24 @@ document.getElementById("save-button").onclick = function () {
         optionsForm.mainVideoVolumeDuringNonCommercials.value
     ) {
 
+        let overlayHostName;
+        if (optionsForm.overlayVideoType.value === "other-video") {
+            overlayHostName = new URL(optionsForm.otherVideoURL.value).hostname;
+        } else if (optionsForm.overlayVideoType.value === "other-live") {
+            overlayHostName = new URL(optionsForm.otherLiveURL.value).hostname;
+        } else {
+            overlayHostName = 'www.youtube.com';
+        }
+
         //save the values to the users chrome profile, close the extension window, and then give them message telling them they might need to refresh
         chrome.storage.sync.set({
             overlayVideoType: optionsForm.overlayVideoType.value,
             ytPlaylistID: optionsForm.ytPlaylistID.value,
             ytVideoID: optionsForm.ytVideoID.value,
             ytLiveID: optionsForm.ytLiveID.value,
+            otherVideoURL: optionsForm.otherVideoURL.value,
+            otherLiveURL: optionsForm.otherLiveURL.value,
+            overlayHostName: overlayHostName,
             overlayVideoLocationHorizontal: optionsForm.overlayVideoLocationHorizontal.value,
             overlayVideoLocationVertical: optionsForm.overlayVideoLocationVertical.value,
             mainVideoFade: optionsForm.mainVideoFade.value,

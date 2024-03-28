@@ -1,4 +1,7 @@
 
+//TODO: add second way of initiating this by user clicking button in extension popup that then starts listening for full screen
+//TODO: remove most &&s on if statements and seperate them to make it more readable
+
 //sending message to content.js when user plugs in keyboard shortcut
 chrome.commands.onCommand.addListener(function (command) {
     if (command === "execute_shortcut") {
@@ -13,18 +16,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "initial_execute_overlay_video_interaction") {
 
         //grab user set values
-        chrome.storage.sync.get(['shouldHideYTBackground'], (result) => {
+        chrome.storage.sync.get(['shouldHideYTBackground', 'overlayHostName'], (result) => {
 
             let shouldHideYTBackground = result.shouldHideYTBackground ?? true;
+            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
 
+            //TODO: inject an entire js file into the overlay video and then message functions in it, would that be better?
             //injecting initialCommercialState() into all frames on the active tab
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                const tab = tabs[0];
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
-                    func: initialCommercialState,
-                    args: [shouldHideYTBackground]
-                });
+            chrome.scripting.executeScript({
+                target: { tabId: sender.tab.id, allFrames: true },
+                func: initialCommercialState,
+                args: [shouldHideYTBackground, overlayHostName]
             });
 
         });
@@ -32,18 +34,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "execute_overlay_video_non_commercial_state") {
 
         //grab user set values
-        chrome.storage.sync.get(['overlayVideoType'], (result) => {
+        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName'], (result) => {
 
             let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
 
             //injecting stopCommercialState() into all frames on the active tab
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                const tab = tabs[0];
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
-                    func: stopCommercialState,
-                    args: [overlayVideoType]
-                });
+            chrome.scripting.executeScript({
+                target: { tabId: sender.tab.id, allFrames: true },
+                func: stopCommercialState,
+                args: [overlayVideoType, overlayHostName]
             });
 
         });
@@ -53,18 +53,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "execute_overlay_video_commercial_state") {
 
         //grab user set values
-        chrome.storage.sync.get(['overlayVideoType'], (result) => {
+        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName'], (result) => {
 
             let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
 
             //injecting startCommercialState() into all frames on the active tab
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                const tab = tabs[0];
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
-                    func: startCommercialState,
-                    args: [overlayVideoType]
-                });
+            chrome.scripting.executeScript({
+                target: { tabId: sender.tab.id, allFrames: true },
+                func: startCommercialState,
+                args: [overlayVideoType, overlayHostName]
             });
 
         });
@@ -73,19 +71,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
-function initialCommercialState(shouldHideYTBackground) {
+function initialCommercialState(shouldHideYTBackground, overlayHostName) {
 
-    //making sure frame is www.youtube.com so this doesn't accidentaly impact the main/background video
-    if (window.location.hostname == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
+    //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
+    if (overlayHostName != 'www.youtube.com') {
+        if (typeof mainVideo !== 'undefined') {
+            if (mainVideo == document.getElementsByTagName('video')[0]) {
+                return;
+            }
+        }
+    }
 
-        //initial click on the overlay video to start playing it
-        document.getElementsByClassName('video-stream html5-main-video')[0].click();
+    //making sure frame has the requested hostname of the overlay video so this doesn't accidentaly impact the main/background video
+    if (window.location.hostname == overlayHostName) {
+
+        //initial click or play on the overlay video
+        if (overlayHostName == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
+            document.getElementsByClassName('video-stream html5-main-video')[0].click();
+        } else if (overlayHostName != 'tv.youtube.com') {
+            document.getElementsByTagName('video')[0].play();
+        } //else do nothing because yttv plays automatically
+        
 
         if (shouldHideYTBackground) {
 
             setTimeout(() => {
-                document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
-                document.getElementsByTagName('body')[0].style.backgroundColor = "transparent";
+                //TODO: do special background hiding for yttv
+                if (document.getElementsByClassName('html5-video-player')[0]) {
+                    document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
+                }
+                if (document.getElementsByTagName('body')[0]) {
+                    document.getElementsByTagName('body')[0].style.backgroundColor = "transparent";
+                }
             }, 1000); //wait a little because when a video plays initially it disapears for a sec and it looks janky for it to look like it flickers
 
         }
@@ -93,16 +110,26 @@ function initialCommercialState(shouldHideYTBackground) {
         //waiting a second for video to load to run some checks and stuff
         setTimeout(() => {
 
-            let myYTOCVideo = document.getElementsByTagName('video')[0];
-
-            //unmute if started out muted
-            if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
-                document.getElementsByClassName('ytp-mute-button')[0].click();
+            let myYTOCVideo;
+            if (overlayHostName == 'tv.youtube.com') {
+                myYTOCVideo = document.getElementsByClassName('video-stream html5-main-video')[0];
+            } else {
+                myYTOCVideo = document.getElementsByTagName('video')[0];
             }
 
-            if (document.getElementsByClassName('ytp-pause-overlay-container')[0]) {
-                document.getElementsByClassName('ytp-pause-overlay-container')[0].remove();
+            //unmute if started out muted for yt
+            if (overlayHostName == 'www.youtube.com') {
+
+                if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
+                    document.getElementsByClassName('ytp-mute-button')[0].click();
+                }
+
+                if (document.getElementsByClassName('ytp-pause-overlay-container')[0]) {
+                    document.getElementsByClassName('ytp-pause-overlay-container')[0].remove();
+                }
+
             }
+            
             
             //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
             if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
@@ -114,6 +141,7 @@ function initialCommercialState(shouldHideYTBackground) {
                 elm.style.setProperty("z-index", "2147483647", "important");
                 elm.style.setProperty("position", "absolute", "important");
 
+                //TODO: set at very top level insead of video level
                 let insertLocation = myYTOCVideo.parentNode;
                 insertLocation = insertLocation.parentNode;
                 let firstChild = insertLocation.firstChild;
@@ -152,17 +180,54 @@ function initialCommercialState(shouldHideYTBackground) {
 }
 
 //plays or unmutes overlay video
-function startCommercialState(overlayVideoType) {
+function startCommercialState(overlayVideoType, overlayHostName) {
 
-    if (window.location.hostname == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
-        
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
+    //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
+    if (overlayHostName != 'www.youtube.com') {
+        if (typeof mainVideo !== 'undefined') {
+            if (mainVideo == document.getElementsByTagName('video')[0]) {
+                return;
+            }
+        }
+    }
 
-            document.getElementsByClassName('ytp-mute-button')[0].click();
+    if (window.location.hostname == overlayHostName) {
 
-        } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
+        if (overlayHostName == 'www.youtube.com') {
 
-            document.getElementsByTagName('video')[0].play();
+            if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
+
+                document.getElementsByClassName('ytp-mute-button')[0].click();
+
+            } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
+
+                document.getElementsByTagName('video')[0].play();
+
+            }
+
+        } else {
+
+            if (overlayVideoType == 'other-live') {
+
+                if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
+
+                    document.querySelector('[aria-label="Unmute (m)"]').click();
+
+                } else if (overlayHostName != 'tv.youtube.com') {
+
+                    document.getElementsByTagName('video')[0].muted = false;
+
+                }
+
+            } else {
+
+                if (document.getElementsByTagName('video')[0].paused) {
+
+                    document.getElementsByTagName('video')[0].play();
+
+                }
+
+            }
 
         }
 
@@ -171,19 +236,56 @@ function startCommercialState(overlayVideoType) {
 }
 
 //pauses or mutes overlay video
-function stopCommercialState(overlayVideoType) {
+function stopCommercialState(overlayVideoType, overlayHostName) {
 
-    if (window.location.hostname == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
+    //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
+    if (overlayHostName != 'www.youtube.com') {
+        if (typeof mainVideo !== 'undefined') {
+            if (mainVideo == document.getElementsByTagName('video')[0]) {
+                return;
+            }
+        }
+    }
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Mute (m)"]')) {
+    if (window.location.hostname == overlayHostName) {
 
-            document.getElementsByClassName('ytp-mute-button')[0].click();
+        if (overlayHostName == 'www.youtube.com') {
 
-        } else if (overlayVideoType != 'yt-live' && !document.getElementsByTagName('video')[0].paused) {
+            if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Mute (m)"]')) {
 
-            document.getElementsByTagName('video')[0].pause();
+                document.getElementsByClassName('ytp-mute-button')[0].click();
 
-        } //else do nothing
+            } else if (overlayVideoType != 'yt-live' && !document.getElementsByTagName('video')[0].paused) {
+
+                document.getElementsByTagName('video')[0].pause();
+
+            } //else do nothing
+
+        } else {
+
+            if (overlayVideoType == 'other-live') {
+
+                if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+
+                    document.querySelector('[aria-label="Mute (m)"]').click();
+
+                } else if (overlayHostName != 'tv.youtube.com') {
+
+                    document.getElementsByTagName('video')[0].muted = true;
+
+                }
+
+            } else {
+
+                if (!document.getElementsByTagName('video')[0].paused) {
+
+                    document.getElementsByTagName('video')[0].pause();
+
+                }
+
+            }
+
+        }
 
     } //else do nothing
 
