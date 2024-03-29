@@ -49,11 +49,11 @@ chrome.storage.sync.get([
     ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
     ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
     otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
-    otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8?vp=0gEEEgIwAQ%3D%3D';
+    otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     overlayHostName = result.overlayHostName ?? 'www.youtube.com';
     overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
     overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
-    mainVideoFade = result.mainVideoFade ?? 50;
+    mainVideoFade = result.mainVideoFade ?? 30;
     videoOverlayWidth = result.videoOverlayWidth ?? 75;
     videoOverlayHeight = result.videoOverlayHeight ?? 75;
     mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
