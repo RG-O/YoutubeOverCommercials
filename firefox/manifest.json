@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube Over Commercials",
+  "version": "1.1",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "commands": {
+    "execute_shortcut": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+F",
+        "mac": "MacCtrl+Shift+F"
+      },
+      "description": "Execute keyboard shortcut"
+    }
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icon128.png",
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png"
+    }
+  },
+  "background": {
+    "service_worker": "scripts/background.js"
+  },
+  "content_scripts": [
+    {
+      "all_frames": true,
+      "js": [ "scripts/content.js" ],
+      "matches": [ "<all_urls>" ],
+      "exclude_matches": [ "https://www.youtube.com/*" ],
+      "exclude_globs": [ "https://www.youtube.com/*" ],
+      "css": [ "styles/style.css" ]
+    }
+  ]
+}
