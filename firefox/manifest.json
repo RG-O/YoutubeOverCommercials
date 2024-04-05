@@ -1,14 +1,16 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 2,
   "name": "YouTube Over Commercials",
+  "description": "YouTube Over Commercials make is easy to play YouTube videos and more over top of commercial breaks.",
+  "icons": {
+    "128": "icon128.png"
+  },
   "version": "1.1",
   "permissions": [
     "tabs",
     "activeTab",
     "scripting",
-    "storage"
-  ],
-  "host_permissions": [
+    "storage",
     "<all_urls>",
     "http://*/*",
     "https://*/*"
@@ -16,13 +18,13 @@
   "commands": {
     "execute_shortcut": {
       "suggested_key": {
-        "default": "Ctrl+Shift+F",
-        "mac": "MacCtrl+Shift+F"
+        "default": "Ctrl+Alt+C",
+        "mac": "MacCtrl+Alt+C"
       },
       "description": "Execute keyboard shortcut"
     }
   },
-  "action": {
+  "browser_action": {
     "default_popup": "popup.html",
     "default_icon": {
       "128": "icon128.png",
@@ -32,7 +34,7 @@
     }
   },
   "background": {
-    "service_worker": "scripts/background.js"
+    "scripts": [ "scripts/background.js" ]
   },
   "content_scripts": [
     {
@@ -43,5 +45,10 @@
       "exclude_globs": [ "https://www.youtube.com/*" ],
       "css": [ "styles/style.css" ]
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "YouTubeOverCommercials@safd787sfa.xyz"
+    }
+  }
 }

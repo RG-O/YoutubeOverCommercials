@@ -32,3 +32,26 @@
     z-index: 2147483647 !important;
     position: absolute !important;
 }
+
+.ytoc-overlay-instructions {
+    z-index: 2147483647 !important;
+    position: absolute !important;
+    margin: auto !important;
+    cursor: not-allowed;
+}
+
+.ytoc-click-blocker {
+    /*background-color: rgba(0, 0, 0, 0.8) !important;*/
+    z-index: 2147483647 !important;
+    position: fixed !important;
+    /*position: relative !important;*/
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: help !important;
+}
+
+/*.ytoc-click-blocker-addition {
+    pointer-events: none;
+}*/
