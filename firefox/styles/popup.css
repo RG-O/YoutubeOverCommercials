@@ -2,6 +2,7 @@ body {
     background-color: black;
     width: 300px;
     font-family: 'Roboto', sans-serif;
+    overflow-x: hidden;
 }
 
 h1 {
@@ -43,7 +44,7 @@ input[type=number] {
     float: right;
 }
 
-.checkbox-label, .note {
+.checkbox-label, .note, .tooltiptext {
     font-size: 12px;
 }
 
@@ -62,3 +63,57 @@ button {
 .highlight {
     background-color: darkred;
 }
+
+.id-field-wrapper {
+    display: none;
+}
+
+    .id-field-wrapper label {
+        float: left;
+        margin-right: 5px;
+        margin-left: 22px;
+    }
+
+    .id-field-wrapper div {
+        overflow: hidden;
+    }
+
+    .id-field-wrapper input {
+        width: 100%;
+        -moz-box-sizing: border-box;
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+        display: block;
+    }
+
+.commercial-detection-mode-instructions-wrapper {
+    display: none;
+    margin-left: 22px;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    color: rgb(140, 179, 210, .9);
+}
+
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        width: 120px;
+        background-color: black;
+        color: #fff;
+        text-align: center;
+        padding: 5px 0;
+        border-style: solid !important;
+        border: 1px;
+        border-color: rgb(140, 179, 210, .9);
+        border-radius: 3px;
+        position: absolute;
+        left: -130px;
+        top: 22px;
+        z-index: 1;
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+    }

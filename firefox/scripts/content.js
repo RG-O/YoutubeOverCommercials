@@ -1,3 +1,4 @@
+//TODO: Add instrutions for manual mode
 
 //establish variables
 var isCommercialState = false;
@@ -7,16 +8,12 @@ var isFirstRun = true;
 var fullScreenAlertSet = false;
 var overlayScreen;
 var overlayVideo;
+var isAutoModeInitiated = false;
 var selectedPixel = null;
 var isAutoModeFirstCommercial = true;
 var mismatchCount = 0;
 var matchCount = 0;
-
-//TODO: Set as user prefs
-var isDebugMode = true;
-var mismatchCountThreshold = 4; //22 to account for replays?
-var matchCountThreshold = 2;
-var commercialDetectionMode = 'auto';
+var cooldownCountRemaining = 5; //set to 5 for an initial cooldown so video won't display right away
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -32,6 +29,18 @@ var overlayVideoLocationHorizontal;
 var overlayVideoLocationVertical;
 var mainVideoVolumeDuringCommercials;
 var mainVideoVolumeDuringNonCommercials;
+var clickBlocker1;
+var clickBlocker2;
+var nativeInlinePointerEvents;
+var htmlElement;
+var overlayInstructions;
+var logoBox;
+var commercialDetectionMode;
+var mismatchCountThreshold;
+var matchCountThreshold;
+var colorDifferenceMatchingThreshold;
+var manualOverrideCooldown;
+var isDebugMode;
 
 //grab all user set values
 //note: this is an async function
@@ -50,7 +59,13 @@ chrome.storage.sync.get([
     'overlayVideoLocationVertical',
     'mainVideoVolumeDuringCommercials',
     'mainVideoVolumeDuringNonCommercials',
-    'shouldHideYTBackground'
+    'shouldHideYTBackground',
+    'commercialDetectionMode',
+    'mismatchCountThreshold',
+    'matchCountThreshold',
+    'colorDifferenceMatchingThreshold',
+    'manualOverrideCooldown',
+    'isDebugMode'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -63,7 +78,7 @@ chrome.storage.sync.get([
     overlayHostName = result.overlayHostName ?? 'www.youtube.com';
     overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
     overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
-    mainVideoFade = result.mainVideoFade ?? 30;
+    mainVideoFade = result.mainVideoFade ?? 50;
     videoOverlayWidth = result.videoOverlayWidth ?? 75;
     videoOverlayHeight = result.videoOverlayHeight ?? 75;
     mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
@@ -75,6 +90,12 @@ chrome.storage.sync.get([
         mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
     }
     shouldHideYTBackground = result.shouldHideYTBackground ?? true;
+    commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
+    mismatchCountThreshold = result.mismatchCountThreshold ?? 2;
+    matchCountThreshold = result.matchCountThreshold ?? 2;
+    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 8;
+    manualOverrideCooldown = result.manualOverrideCooldown ?? 20;
+    isDebugMode = result.isDebugMode ?? false;
 
 });
 
@@ -140,16 +161,35 @@ function setOverlayVideo() {
     overlayVideo.appendChild(iFrame);
 
     //adding an overlay to darken the main/background video during commercials if user has chosen to do so
-    if (mainVideoFade > 0 && commercialDetectionMode != 'auto') {
+    if (mainVideoFade > 0) {
 
         overlayScreen = document.createElement('div');
-        overlayScreen.className = "ytoc-overlay-screen";
-        overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
-        insertLocation.insertBefore(overlayScreen, firstChild);
+
+        if (commercialDetectionMode != 'auto') {
+
+            overlayScreen.className = "ytoc-overlay-screen";
+            overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
+            insertLocation.insertBefore(overlayScreen, firstChild);
+
+        } else if (selectedPixel) {
+
+            overlayScreen.className = "ytoc-overlay-screen-with-hole";
+            //setting location of hole for the pixel color detector to look through, subtracting by 5 for radius of hole
+            overlayScreen.style.left = (selectedPixel.x - 3) + 'px';
+            overlayScreen.style.top = (selectedPixel.y - 3) + 'px';
+            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            insertLocation.insertBefore(overlayScreen, firstChild);
+
+        } else {
+            //setting mainVideoFade to 0 to effectively shut it off since it is auto detection mode but I don't know where to put the hole
+            mainVideoFade = 0;
+        }
+        
 
     }
 
 }
+
 
 //removes all elements on the page with a specific class name
 function removeElementsByClass(className) {
@@ -174,9 +214,8 @@ function initialRun() {
     isCommercialState = true;
     isFirstRun = false;
 
-    //remove all full screen alerts if previously set
-    removeElementsByClass('not-full-screen-alert');
-    
+    removeNotFullscreenAlerts();
+
     setOverlayVideo();
 
     //muting main/background video
@@ -211,8 +250,12 @@ function endCommercialMode() {
     chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
     overlayVideo.style.visibility = "hidden";
 
-    if (mainVideoFade > 0 && commercialDetectionMode != 'auto') {
-        overlayScreen.style.backgroundColor = "transparent";
+    if (mainVideoFade > 0) {
+        if (commercialDetectionMode != 'auto') {
+            overlayScreen.style.backgroundColor = "transparent";
+        } else {
+            overlayScreen.style.boxShadow = "0 0 0";
+        }
     }
 
     if (mainVideoVolumeDuringCommercials == 0) {
@@ -230,20 +273,35 @@ function endCommercialMode() {
 //switches to commercial state which means showing the overlay video and muting the main/background video
 function startCommercialMode() {
 
-    isCommercialState = true;
-
     if (commercialDetectionMode == 'auto' && isAutoModeFirstCommercial) {
 
-        isAutoModeFirstCommercial = false;
+        //check again if in full screen in case user exited
+        if (document.fullscreenElement) {
 
-        initialRun();
+            isCommercialState = true;
+
+            isAutoModeFirstCommercial = false;
+            //setting cooldown time so video has a chance to play for the first time
+            cooldownCountRemaining = 5;
+            initialRun();
+
+        } else {
+            setNotFullscreenAlerts();
+        }
+        
 
     } else {
 
+        isCommercialState = true;
+
         chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
 
-        if (mainVideoFade > 0 && commercialDetectionMode != 'auto') {
-            overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
+        if (mainVideoFade > 0) {
+            if (commercialDetectionMode != 'auto') {
+                overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
+            } else {
+                overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            }
         }
 
         if (mainVideoVolumeDuringCommercials == 0) {
@@ -274,16 +332,21 @@ chrome.runtime.onMessage.addListener(function (message) {
             //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
             if (document.fullscreenElement) {
 
-                //TODO: look into why this would ever return iframe and why I'm stopping because of it
+                //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
                 if (document.fullscreenElement.nodeName != 'IFRAME') {
 
                     //setting up for pixel selection for auto mode or continuing run for manual
                     if (commercialDetectionMode == 'auto') {
 
-                        setBlockersAndPixelSelectionInstructions();
-                        //TODO: figure out if this makes sense to set isFirstRun here to avoid possible issues
-                        isFirstRun = false;
-                        document.addEventListener('click', pixelSelection);
+                        if (!isAutoModeInitiated) {
+
+                            isAutoModeInitiated = true;
+                            setBlockersAndPixelSelectionInstructions();
+                            //TODO: figure out if this makes sense to set isFirstRun here to avoid possible issues
+                            //isFirstRun = false;
+                            document.addEventListener('click', pixelSelection);
+
+                        } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
 
                     } else {
 
@@ -296,27 +359,7 @@ chrome.runtime.onMessage.addListener(function (message) {
             } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
                 //since user was not in full screen, instruct them that they need to be
 
-                if (!fullScreenAlertSet && document.getElementsByTagName('video')[0]) {
-
-                    //TODO: move into own function
-                    let potentialVideos = document.getElementsByTagName('video');
-
-                    for (let i = 0; i < potentialVideos.length; i++) {
-
-                        let elm = document.createElement('div');
-                        elm.className = "not-full-screen-alert";
-                        elm.textContent = 'Must be full screen first'
-
-                        let insertLocation = potentialVideos[i].parentNode;
-                        insertLocation = insertLocation.parentNode;
-                        let firstChild = insertLocation.firstChild;
-                        insertLocation.insertBefore(elm, firstChild);
-
-                    }
-
-                    fullScreenAlertSet = true;
-
-                }
+                setNotFullscreenAlerts();
 
             }
             
@@ -333,17 +376,57 @@ chrome.runtime.onMessage.addListener(function (message) {
 
             }
 
+            //set cooldown period so auto doesn't switch mode for user defined amount of time
+            cooldownCountRemaining = manualOverrideCooldown;
+
         }
 
     }
 
 });
 
+
+//sets text over top of every video on the page letting the user know that they need to be fullscreen for the extension to work
+function setNotFullscreenAlerts() {
+
+    if (!fullScreenAlertSet && document.getElementsByTagName('video')[0]) {
+
+        let potentialVideos = document.getElementsByTagName('video');
+
+        for (let i = 0; i < potentialVideos.length; i++) {
+
+            let elm = document.createElement('div');
+            elm.className = "not-full-screen-alert";
+            elm.textContent = 'Video must be full screen for YTOC extension to work.'
+
+            let insertLocation = potentialVideos[i].parentNode;
+            insertLocation = insertLocation.parentNode;
+            let firstChild = insertLocation.firstChild;
+            insertLocation.insertBefore(elm, firstChild);
+
+        }
+
+        fullScreenAlertSet = true;
+
+    }
+
+}
+
+
+//remove all full screen alerts if previously set
+function removeNotFullscreenAlerts() {
+
+    removeElementsByClass('not-full-screen-alert');
+    fullScreenAlertSet = false;
+
+}
+
+
 //sets blockers so users cursor movement doesn't trigger any of the main/background video's UI to display and keeps click from pausing video
 //also displays instructions to user for selecting pixel
 function setBlockersAndPixelSelectionInstructions() {
 
-    let clickBlocker1 = document.createElement('div');
+    clickBlocker1 = document.createElement('div');
     clickBlocker1.className = "ytoc-click-blocker";
 
     let insertLocation = document.getElementsByTagName('body')[0];
@@ -358,12 +441,21 @@ function setBlockersAndPixelSelectionInstructions() {
         insertLocationFullscreenElm = document.getElementsByTagName('body')[0];
     }
 
-    let clickBlocker2 = document.createElement('div');
+    clickBlocker2 = document.createElement('div');
     clickBlocker2.className = "ytoc-click-blocker";
 
     insertLocationFullscreenElm.insertBefore(clickBlocker2, null);
 
-    let overlayInstructions = document.createElement('div');
+    //adding extra level of click blocking and mouse interference when inside iframe
+    if (inIFrame()) {
+
+        htmlElement = document.getElementsByTagName('html')[0];
+        nativeInlinePointerEvents = htmlElement.style.pointerEvents;
+        htmlElement.style.pointerEvents = 'none';
+
+    }
+
+    overlayInstructions = document.createElement('div');
     overlayInstructions.className = "ytoc-overlay-instructions";
     insertLocationFullscreenElm.insertBefore(overlayInstructions, null);
 
@@ -405,188 +497,170 @@ function pixelSelection(event) {
     //TODO: figure out if this check is really necessary
     if (!selectedPixel) {
 
+        removeNotFullscreenAlerts();
 
-        removeElementsByClass('not-full-screen-alert');
-        removeElementsByClass('ytoc-overlay-instructions');
+        //remove help cursor right away
+        clickBlocker1.style.setProperty("cursor", "none", "important");
+        clickBlocker2.style.setProperty("cursor", "none", "important");
+
         //wait a sec to remove the click blocker so UI doesn't pop up right away
         setTimeout(() => {
             removeElementsByClass('ytoc-click-blocker');
+            if (inIFrame()) {
+                htmlElement.style.pointerEvents = nativeInlinePointerEvents;
+            }
         }, 3000);
+
+        selectedPixel = { x: event.clientX, y: event.clientY };
+
+        //TODO: create user option to turn off logo completely
+        setCommercialDetectedIndicator(selectedPixel);
 
         document.removeEventListener('click', pixelSelection);
 
-
-        selectedPixel = { x: event.clientX, y: event.clientY };
-        console.log(`Selected pixel location: (${selectedPixel.x}, ${selectedPixel.y})`); //debug
-
-        //TODO: break this out to take captureOriginalPixelColor() or something like that and then like pixelColorMonitor()
-        takeScreenshot(selectedPixel)
-            .then(function (pixelColor) {
-
-                //establish original pixel color
-                const [orgR, orgG, orgB, orgA] = pixelColor;
-                //const [orgH, orgS, orgL] = rgbToHsl(orgR, orgG, orgB);
-
-                setInterval(() => {
-                    //TODO: set some sort of pause on this interval if user leaves full screen
-
-                    takeScreenshot(selectedPixel)
-                        .then(function (pixelColor) {
-
-                            //current color of pixel
-                            let [r, g, b, a] = pixelColor; //debug - I switched this from const to let
-                            //const [h, s, l] = rgbToHsl(r, g, b);
-
-                            console.log('%cOriginal pixel color = rgba(' + orgR + ', ' + orgG + ', ' + orgB + ', ' + orgA + ')', 'background: rgba(' + orgR + ', ' + orgG + ', ' + orgB + ', ' + orgA + ')'); //debug
-                            console.log('%cCurrent pixel color = rgba(' + r + ', ' + g + ', ' + b + ', ' + a + ')', 'background: rgba(' + r + ', ' + g + ', ' + b + ', ' + a + ')'); //debug
-
-                            //console.log('%cOriginal pixel color = hsl(' + orgH + ', ' + orgS + ', ' + orgL); //debug
-                            //console.log('%cCurrent pixel color = hsl(' + h + ', ' + s + ', ' + l + ')'); //debug
-
-                            let redDifference = Math.abs(orgR - r);
-                            let greenDifference = Math.abs(orgG - g);
-                            let blueDifference = Math.abs(orgB - b);
-                            let alphaDifference = Math.abs(orgA - a); //TODO: should I even check this?
-
-                            console.log('%cPixel color difference = rgba(' + redDifference + ', ' + greenDifference + ', ' + blueDifference + ', ' + alphaDifference); //debug
-
-                            //TODO: create user preference for going by rgb or hsl, actually, maybe have it be two separate buttons?
-                            //TODO: add a current state check so I only call to update when state changes
-                            //TODO: set to be a consecutive number of times before it changes?
-                            //TODO: update to user set values
-                            if (
-                                redDifference > 10 ||
-                                greenDifference > 10 ||
-                                blueDifference > 10
-                            ) {
-
-                                mismatchCount++;
-                                matchCount = 0;
-
-                                if (mismatchCount >= mismatchCountThreshold) {
-
-                                    if (!isCommercialState) {
-
-                                        startCommercialMode();
-                                        
-                                        console.log('Pixel color changed'); //debug
-
-                                        //TODO: add these as a debug option for the the users
-                                        //videoTextOverlay.style.backgroundColor = 'rgba(' + orgR + ', ' + orgG + ', ' + orgB + ', ' + orgA + ')';
-                                        //videoTextOverlay.style.color = 'rgba(' + r + ', ' + g + ', ' + b + ', ' + a + ')';
-                                        //videoTextOverlay.textContent = "COMMERCIAL DETECTED";
-
-                                    }
-
-                                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
-                                    mismatchCount = 0;
-
-                                }
-
-                            } else {
-
-                                matchCount++;
-                                mismatchCount = 0;
-
-                                if (matchCount >= matchCountThreshold) {
-
-                                    if (isCommercialState) {
-
-                                        endCommercialMode();
-
-                                        //TODO: add this as a debug option
-                                        //videoTextOverlay.textContent = "";
-
-                                    }
-
-                                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
-                                    matchCount = 0;
-
-                                }
-                            }
-
-                        })
-                        .catch(function (error) {
-                            console.error(error);
-                        });
-
-                }, 1000);
-
-            })
-            .catch(function (error) {
-                console.error(error);
-            });
+        captureOriginalPixelColor(selectedPixel);
 
     }
 
 }
 
 
-function rgbToHsl(r, g, b) {
-    r /= 255, g /= 255, b /= 255;
-    var max = Math.max(r, g, b), min = Math.min(r, g, b);
-    var h, s, l = (max + min) / 2;
+//grabs the color of the of the user set pixel at time of selection so it can use it to compare in subsequent checks
+function captureOriginalPixelColor(selectedPixel) {
 
-    if (max == min) {
-        h = s = 0; // achromatic
-    } else {
-        var d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-            case g: h = (b - r) / d + 2; break;
-            case b: h = (r - g) / d + 4; break;
-        }
-        h /= 6;
-    }
+    //TODO: break this out to take captureOriginalPixelColor() or something like that and then like pixelColorMonitor()
+    getPixelColor(selectedPixel).then(function (pixelColor) {
 
-    return [Math.floor(h * 360), Math.floor(s * 100), Math.floor(l * 100)];
+        overlayInstructions.style.setProperty("cursor", "none", "important");
+
+        //establish original pixel color
+        const originalPixelColor = pixelColor;
+
+        overlayInstructions.style.color = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
+        overlayInstructions.textContent = 'Pixel set!';
+
+        logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
+        if (isDebugMode) { logoBox.style.display = 'block'; }
+
+        //wait a sec to remove the instructions to let them see the pixel selected message
+        setTimeout(() => {
+            removeElementsByClass('ytoc-overlay-instructions');
+        }, 3000);
+
+        pixelColorMatchMonitor(originalPixelColor, selectedPixel);
+
+    })
+    .catch(function (error) {
+        console.error(error);
+    });
+
 }
 
-//TODO: swtich vars and consts to lets
-//TODO: rename to grabPixelColor() or something like that
-function takeScreenshot(coordinates) {
-    console.log('content.js running takeScreenshot'); //debug
+
+//checks the color of the user set pixel and compares it to the original color in intervals and initiates commercial or non-commercial mode accordingly
+function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
+
+    setInterval(() => {
+        //TODO: set some sort of pause on this interval if user leaves full screen
+
+        getPixelColor(selectedPixel).then(function (pixelColor) {
+
+            let redDifference = Math.abs(originalPixelColor.r - pixelColor.r);
+            let greenDifference = Math.abs(originalPixelColor.g - pixelColor.g);
+            let blueDifference = Math.abs(originalPixelColor.b - pixelColor.b);
+
+            //TODO: Create HSL option
+            if (
+                redDifference > colorDifferenceMatchingThreshold ||
+                greenDifference > colorDifferenceMatchingThreshold ||
+                blueDifference > colorDifferenceMatchingThreshold
+            ) {
+
+                mismatchCount++;
+                matchCount = 0;
+
+                if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
+
+                    if (!isCommercialState) {
+
+                        startCommercialMode();
+
+                        logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+                        logoBox.style.display = 'block';
+                        if (!isDebugMode) {
+                            setTimeout(() => {
+                                logoBox.style.display = 'none';
+                            }, 5000);
+                        }
+
+                    }
+
+                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                    mismatchCount = 0;
+
+                }
+
+            } else {
+
+                matchCount++;
+                mismatchCount = 0;
+
+                if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
+
+                    if (isCommercialState) {
+
+                        endCommercialMode();
+
+                        if (!isDebugMode) { logoBox.style.display = 'none'; }
+
+                    }
+
+                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                    matchCount = 0;
+
+                }
+
+            }
+
+            logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+
+            cooldownCountRemaining--;
+
+        })
+        .catch(function (error) {
+            console.error(error);
+        });
+
+    }, 1000);
+
+}
+
+
+//grabs color of plugged in pixel by asking background.js to take a screenshot of said pixel
+function getPixelColor(coordinates) {
 
     return new Promise(function (resolve, reject) {
 
-        var rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
+        let rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
 
         chrome.runtime.sendMessage({ action: "capture-screenshot", rect: rect }, function (response) {
 
-            console.log(response.imgSrc); //debug
-
-            var image = new Image();
+            let image = new Image();
             image.src = response.imgSrc;
-
-            console.log('i am here'); //debug
 
             image.addEventListener('load', function () {
 
-                console.log('i am here2'); //debug
-
-                var canvas = document.createElement('canvas');
-                var context = canvas.getContext('2d');
-
-                //var viewPortWidth = window.innerWidth; //debug
-                //var viewPortHeight = window.innerHeight;
-                //console.log('current viewport:' + viewPortWidth + "x" + viewPortHeight);
-                //console.log('current pixel ratio:' + window.devicePixelRatio);
+                let canvas = document.createElement('canvas');
+                let context = canvas.getContext('2d');
 
                 canvas.width = image.width; //TODO: figure out is this necessary with setting it in draw image?
                 canvas.height = image.height;
                 context.drawImage(image, 0, 0);
 
-                //var x = (coordinates.x * window.devicePixelRatio); //debug
-                //var y = (coordinates.y * window.devicePixelRatio);
-                //console.log(`Screen density relative pixel location: (${x}, ${y})`);
-                //var pixelColor = context.getImageData(x, y, 1, 1).data;
+                let pixelColor = context.getImageData(0, 0, 1, 1).data;
+                pixelColor = { r: pixelColor[0], g: pixelColor[1], b: pixelColor[2] };
 
-                var pixelColor = context.getImageData(0, 0, 1, 1).data;
-                const [r, g, b, a] = pixelColor;
-                console.log(`rgba(${r}, ${g}, ${b}, ${a})`);
-
-                resolve(pixelColor); // Resolve the promise with myString value
+                resolve(pixelColor); // Resolve the promise with pixelColor value
 
             });
 
@@ -594,4 +668,49 @@ function takeScreenshot(coordinates) {
 
     });
 
+}
+
+
+//sets element to show user color differences next to selected pixel when commercial is detected
+function setCommercialDetectedIndicator(selectedPixel) {
+
+    //TODO: add check to make sure user is still in fullscreen mode
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    let firstChild = insertLocation.firstChild;
+
+    logoBox = document.createElement('div');
+    logoBox.className = "ytoc-logo";
+    logoBox.textContent = 'YTOC';
+    logoBox.style.display = 'none';
+
+    let windowWidth = window.innerWidth;
+
+    if (selectedPixel.x < windowWidth / 2) {
+        //user clicked on the left side of the page
+        logoBox.style.left = (selectedPixel.x + 10) + 'px';
+        logoBox.style.right = 'auto';
+    } else {
+        //user clicked on the right side of the page
+        logoBox.style.right = (windowWidth - selectedPixel.x + 10) + 'px';
+        logoBox.style.left = 'auto';
+    }
+
+    logoBox.style.top = (selectedPixel.y - 15) + 'px';
+
+    insertLocation.insertBefore(logoBox, firstChild);
+
+}
+
+
+//detects if content script is running inside an iframe, should work for cross domain and same domain iframes
+function inIFrame() {
+    try {
+        return window.self !== window.top;
+    } catch (e) {
+        return true;
+    }
 }
