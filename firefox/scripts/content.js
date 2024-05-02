@@ -13,7 +13,7 @@ var selectedPixel = null;
 var isAutoModeFirstCommercial = true;
 var mismatchCount = 0;
 var matchCount = 0;
-var cooldownCountRemaining = 5; //set to 5 for an initial cooldown so video won't display right away
+var cooldownCountRemaining = 8; //set to 5 for an initial cooldown so video won't display right away
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -78,7 +78,7 @@ chrome.storage.sync.get([
     overlayHostName = result.overlayHostName ?? 'www.youtube.com';
     overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
     overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
-    mainVideoFade = result.mainVideoFade ?? 50;
+    mainVideoFade = result.mainVideoFade ?? 55;
     videoOverlayWidth = result.videoOverlayWidth ?? 75;
     videoOverlayHeight = result.videoOverlayHeight ?? 75;
     mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
@@ -91,9 +91,9 @@ chrome.storage.sync.get([
     }
     shouldHideYTBackground = result.shouldHideYTBackground ?? true;
     commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
-    mismatchCountThreshold = result.mismatchCountThreshold ?? 2;
+    mismatchCountThreshold = result.mismatchCountThreshold ?? 3;
     matchCountThreshold = result.matchCountThreshold ?? 2;
-    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 8;
+    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 10;
     manualOverrideCooldown = result.manualOverrideCooldown ?? 20;
     isDebugMode = result.isDebugMode ?? false;
 
@@ -282,7 +282,7 @@ function startCommercialMode() {
 
             isAutoModeFirstCommercial = false;
             //setting cooldown time so video has a chance to play for the first time
-            cooldownCountRemaining = 5;
+            cooldownCountRemaining = 6;
             initialRun();
 
         } else {
@@ -509,7 +509,7 @@ function pixelSelection(event) {
             if (inIFrame()) {
                 htmlElement.style.pointerEvents = nativeInlinePointerEvents;
             }
-        }, 3000);
+        }, 5000);
 
         selectedPixel = { x: event.clientX, y: event.clientY };
 
