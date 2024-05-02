@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "YouTube Over Commercials",
-  "description": "YouTube Over Commercials make is easy to play YouTube videos and more over top of commercial breaks.",
+  "description": "Automatically detects commercials on any streaming platform and plays YouTube videos of your choice overtop of them.",
   "icons": {
     "128": "icon128.png"
   },
