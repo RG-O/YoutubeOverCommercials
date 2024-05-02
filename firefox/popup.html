@@ -22,7 +22,7 @@
         <br>
         <div id="auto" class="commercial-detection-mode-instructions-wrapper">
             <div class="note">
-                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span style="color: red;">Ctrl + Alt + C</span> when there are no commercials on screen, and then follow on screen instructions presented.
+                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span style="color: red;">Ctrl + Alt + C</span> when there are no commercials on screen, and then follow the on-screen instructions presented.
             </div>
         </div>
 
@@ -129,7 +129,7 @@
 
 
             <b>Y Display:</b>
-            <label class="display-location" for="overlayVideoLocationVertical-left">Top</label>
+            <label class="display-location" for="overlayVideoLocationVertical-top">Top</label>
             <input class="display-location" type="radio" id="overlayVideoLocationVertical-top" name="overlayVideoLocationVertical" value="top"><br>
 
             <label class="display-location" for="overlayVideoLocationVertical-middle">Middle</label>
@@ -168,24 +168,25 @@
             <br />
             <br />
 
-            <b>Color Mismatch Count Threshold:</b>
+            <b>Color Mismatch Count Threshold:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial.</span></span>
             <input type="number" name="mismatchCountThreshold" id="mismatchCountThreshold" min="1"><br>
             <br>
 
-            <b>Color Match Count Threshold:</b>
+            <b>Color Match Count Threshold:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to match its original color at time of selection before declaring the program as resumed and hiding the overlaid video.</span></span>
             <input type="number" name="matchCountThreshold" id="matchCountThreshold" min="1"><br>
             <br>
 
-            <b>Color Difference Threshold:</b>
-            <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="5" max="30"><br>
+            <b>Color Difference Threshold:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">How different from the original pixel color does the current pixel color need to be before deciding it isn't a matching color. This isn't really a percentage, but more so a made up measurement where around 8-12 is usually the sweet spot. Set higher if you absolutely have to pick a pixel inside a semi-transparent logo/graphic.</span></span>
+            <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="3" max="88"><br>
             <br>
 
-            <b>Manual Override Cooldown:</b>
+            <b>Override Cooldown Time (sec):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
             <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1"><br>
             <br>
 
             <input type="checkbox" name="isDebugMode" id="isDebugMode">
             <label class="checkbox-label" for="isDebugMode">Set Debug Mode?</label><br>
+            <br>
             <br>
 
         </div>
