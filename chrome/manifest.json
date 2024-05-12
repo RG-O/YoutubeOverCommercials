@@ -1,12 +1,18 @@
 {
   "manifest_version": 3,
   "name": "YouTube Over Commercials",
+  "description": "Automatically detects commercials on any streaming platform and plays YouTube videos of your choice overtop of them.",
+  "icons": {
+    "128": "icon128.png"
+  },
   "version": "1.1",
   "permissions": [
     "tabs",
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "tabCapture",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -42,6 +48,12 @@
       "exclude_matches": [ "https://www.youtube.com/*" ],
       "exclude_globs": [ "https://www.youtube.com/*" ],
       "css": [ "styles/style.css" ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [ "pixel-select-instructions.html" ],
+      "matches": [ "<all_urls>" ]
     }
   ]
 }

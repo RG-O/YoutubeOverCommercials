@@ -341,6 +341,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                         if (!isAutoModeInitiated) {
 
                             isAutoModeInitiated = true;
+
+                            recordTab();
+
                             setBlockersAndPixelSelectionInstructions();
                             //TODO: figure out if this makes sense to set isFirstRun here to avoid possible issues
                             //isFirstRun = false;
@@ -480,7 +483,7 @@ function setBlockersAndPixelSelectionInstructions() {
 
     //TODO: fix issue where if user places video at bottom of some sites like peacock, it adds scrollbar to whole page
     let iFrame = document.createElement('iframe');
-    iFrame.src = chrome.extension.getURL("pixel-select-instructions.html");
+    iFrame.src = chrome.runtime.getURL('pixel-select-instructions.html');
     iFrame.width = "100%";
     iFrame.height = "100%";
     iFrame.allow = "autoplay; encrypted-media";
@@ -488,6 +491,8 @@ function setBlockersAndPixelSelectionInstructions() {
     iFrame.style.setProperty("border", "3px red solid", "important");
 
     overlayInstructions.appendChild(iFrame);
+
+    document.addEventListener('fullscreenchange', fullscreenChanged);
 
 }
 
@@ -641,28 +646,13 @@ function getPixelColor(coordinates) {
 
     return new Promise(function (resolve, reject) {
 
-        let rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "capture-screenshot",
+            coordinates: coordinates
+        }, function (response) {
 
-        chrome.runtime.sendMessage({ action: "capture-screenshot", rect: rect }, function (response) {
-
-            let image = new Image();
-            image.src = response.imgSrc;
-
-            image.addEventListener('load', function () {
-
-                let canvas = document.createElement('canvas');
-                let context = canvas.getContext('2d');
-
-                canvas.width = image.width; //TODO: figure out is this necessary with setting it in draw image?
-                canvas.height = image.height;
-                context.drawImage(image, 0, 0);
-
-                let pixelColor = context.getImageData(0, 0, 1, 1).data;
-                pixelColor = { r: pixelColor[0], g: pixelColor[1], b: pixelColor[2] };
-
-                resolve(pixelColor); // Resolve the promise with pixelColor value
-
-            });
+            resolve(response.pixelColor);
 
         });
 
@@ -712,5 +702,29 @@ function inIFrame() {
         return window.self !== window.top;
     } catch (e) {
         return true;
+    }
+}
+
+
+//TODO: figure out peacock refresh
+//calls background.js to create an offscreen document and grabs the getMediaStreamId of the tab to send to the offscreen document which then starts recording the tab
+function recordTab() {
+
+    let windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+
+    chrome.runtime.sendMessage({ action: "record-tab", windowDimensions: windowDimensions });
+
+    //trigger closeOffscreen() when user refreshes page //TODO: is there a better way to do this?
+    //TODO: figure out when/how to stop viewing
+    //window.addEventListener('beforeunload', chrome.runtime.sendMessage({ action: "close-offscreen" }));
+
+}
+
+
+function fullscreenChanged(event) {
+    if (!document.fullscreenElement) {
+        //TODO: Make this temporarily disable extension
+        alert('Note: To enter full screen again, attempt to do so like normal, but then hit F11 on keyboard.');
+        document.removeEventListener('fullscreenchange', fullscreenChanged);
     }
 }

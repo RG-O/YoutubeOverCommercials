@@ -292,35 +292,42 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 }
 
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+    if (message.action === "record-tab") {
 
-    if (request.action === 'capture-screenshot') {
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['USER_MEDIA'],
+            justification: 'Recording tab in order to extract user selected pixel color'
+        });
 
-        console.log('message received for background.js to take screenshot') //debug
-        console.log(`Selected screenshot location: (${request.rect.x}, ${request.rect.y})`); //debug
+        const streamId = await chrome.tabCapture.getMediaStreamId({
+            targetTabId: sender.tab.id
+        });
 
-        //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
-        chrome.tabs.captureVisibleTab(
-
-            sender.tab.windowId, //debug - replace with just null if this doesn't work
-            {
-                format: 'png'
-                , rect: request.rect
-            },
-            function (dataUrl) {
-
-                console.log('dataUrl = ' + dataUrl); //debug
-                sendResponse({ imgSrc: dataUrl });
-                console.log('screenshot captured?'); //debug
-
+        const constraints = {
+            video: {
+                mandatory: {
+                    chromeMediaSource: 'tab',
+                    chromeMediaSourceId: streamId,
+                    maxFrameRate: 4,
+                    minFrameRate: 4,
+                    maxWidth: message.windowDimensions.x,
+                    maxHeight: message.windowDimensions.y,
+                    minWidth: message.windowDimensions.x,
+                    minHeight: message.windowDimensions.y
+                }
             }
+        }
 
-        );
+        chrome.runtime.sendMessage({
+            target: 'offscreen',
+            action: 'start-recording',
+            constraints: constraints
+        });
 
+        //TODO: figure out when/how to stop viewing
+    } else if (message.action === "close-offscreen") {
+        chrome.offscreen.closeDocument();
     }
-
-    //TODO: figure out why I added this here
-    return true;
-    
-    }
-);
+});
