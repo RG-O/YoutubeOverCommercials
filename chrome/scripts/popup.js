@@ -32,16 +32,16 @@ chrome.storage.sync.get([
     optionsForm.otherLiveURL.value = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
-    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 50;
+    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 55;
     optionsForm.videoOverlayWidth.value = result.videoOverlayWidth ?? 75;
     optionsForm.videoOverlayHeight.value = result.videoOverlayHeight ?? 75;
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
     optionsForm.commercialDetectionMode.value = result.commercialDetectionMode ?? 'auto';
-    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 2;
+    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 6;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 8;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 10;
     optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 20;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
 

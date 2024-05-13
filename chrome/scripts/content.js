@@ -13,7 +13,7 @@ var selectedPixel = null;
 var isAutoModeFirstCommercial = true;
 var mismatchCount = 0;
 var matchCount = 0;
-var cooldownCountRemaining = 8; //set to 5 for an initial cooldown so video won't display right away
+var cooldownCountRemaining = 8; //set to 8 for an initial cooldown so video won't display right away
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -41,6 +41,8 @@ var matchCountThreshold;
 var colorDifferenceMatchingThreshold;
 var manualOverrideCooldown;
 var isDebugMode;
+var haveLogoCountdown;
+var logoCountdownMismatchesRemaining;
 
 //grab all user set values
 //note: this is an async function
@@ -91,7 +93,7 @@ chrome.storage.sync.get([
     }
     shouldHideYTBackground = result.shouldHideYTBackground ?? true;
     commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
-    mismatchCountThreshold = result.mismatchCountThreshold ?? 3;
+    mismatchCountThreshold = result.mismatchCountThreshold ?? 6;
     matchCountThreshold = result.matchCountThreshold ?? 2;
     colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 10;
     manualOverrideCooldown = result.manualOverrideCooldown ?? 20;
@@ -185,7 +187,6 @@ function setOverlayVideo() {
             mainVideoFade = 0;
         }
         
-
     }
 
 }
@@ -335,6 +336,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                 //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
                 if (document.fullscreenElement.nodeName != 'IFRAME') {
 
+                    //TODO: grab user set variables here
+
                     //setting up for pixel selection for auto mode or continuing run for manual
                     if (commercialDetectionMode == 'auto') {
 
@@ -342,12 +345,15 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                             isAutoModeInitiated = true;
 
-                            recordTab();
+                            startViewingTab();
 
-                            setBlockersAndPixelSelectionInstructions();
-                            //TODO: figure out if this makes sense to set isFirstRun here to avoid possible issues
-                            //isFirstRun = false;
-                            document.addEventListener('click', pixelSelection);
+                            document.addEventListener('fullscreenchange', abortPixelSelection);
+
+                            //give a sec for recording to start before asking user to pick a pixel
+                            setTimeout(() => {
+                                setBlockersAndPixelSelectionInstructions();
+                                document.addEventListener('click', pixelSelection);
+                            }, 1000);
 
                         } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
 
@@ -481,6 +487,16 @@ function setBlockersAndPixelSelectionInstructions() {
         overlayInstructions.style.setProperty("bottom", "0", "important");
     }
 
+    //hide verticle scrollbar if video placed on bottom
+    if (overlayVideoLocationVertical == 'bottom') {
+        let hideScollStyle = document.createElement("style");
+        hideScollStyle.textContent = `
+        ::-webkit-scrollbar {
+            display: none;
+        }`
+        insertLocation.appendChild(hideScollStyle);
+    }
+
     //TODO: fix issue where if user places video at bottom of some sites like peacock, it adds scrollbar to whole page
     let iFrame = document.createElement('iframe');
     iFrame.src = chrome.runtime.getURL('pixel-select-instructions.html');
@@ -488,11 +504,33 @@ function setBlockersAndPixelSelectionInstructions() {
     iFrame.height = "100%";
     iFrame.allow = "autoplay; encrypted-media";
     iFrame.frameBorder = "0";
-    iFrame.style.setProperty("border", "3px red solid", "important");
+    //iFrame.style.setProperty("border", "3px red solid", "important");
 
     overlayInstructions.appendChild(iFrame);
 
-    document.addEventListener('fullscreenchange', fullscreenChanged);
+}
+
+
+function removeBlockersListenersAndPixelSelectionInstructions() {
+
+    removeNotFullscreenAlerts();
+
+    removeElementsByClass('ytoc-overlay-instructions');
+
+    //remove help cursor right away
+    clickBlocker1.style.setProperty("cursor", "none", "important");
+    clickBlocker2.style.setProperty("cursor", "none", "important");
+
+    document.removeEventListener('fullscreenchange', abortPixelSelection);
+    document.removeEventListener('click', pixelSelection);
+
+    //wait a sec to remove the click blocker so UI doesn't pop up right away
+    setTimeout(() => {
+        removeElementsByClass('ytoc-click-blocker');
+        if (inIFrame()) {
+            htmlElement.style.pointerEvents = nativeInlinePointerEvents;
+        }
+    }, 5000);
 
 }
 
@@ -502,26 +540,14 @@ function pixelSelection(event) {
     //TODO: figure out if this check is really necessary
     if (!selectedPixel) {
 
-        removeNotFullscreenAlerts();
-
-        //remove help cursor right away
-        clickBlocker1.style.setProperty("cursor", "none", "important");
-        clickBlocker2.style.setProperty("cursor", "none", "important");
-
-        //wait a sec to remove the click blocker so UI doesn't pop up right away
-        setTimeout(() => {
-            removeElementsByClass('ytoc-click-blocker');
-            if (inIFrame()) {
-                htmlElement.style.pointerEvents = nativeInlinePointerEvents;
-            }
-        }, 5000);
-
         selectedPixel = { x: event.clientX, y: event.clientY };
+
+        removeBlockersListenersAndPixelSelectionInstructions();
 
         //TODO: create user option to turn off logo completely
         setCommercialDetectedIndicator(selectedPixel);
 
-        document.removeEventListener('click', pixelSelection);
+        document.addEventListener('fullscreenchange', fullscreenChanged);
 
         captureOriginalPixelColor(selectedPixel);
 
@@ -533,26 +559,38 @@ function pixelSelection(event) {
 //grabs the color of the of the user set pixel at time of selection so it can use it to compare in subsequent checks
 function captureOriginalPixelColor(selectedPixel) {
 
-    //TODO: break this out to take captureOriginalPixelColor() or something like that and then like pixelColorMonitor()
-    getPixelColor(selectedPixel).then(function (pixelColor) {
+    //grabbing a throwaway because sometimes the first one is incorrect (darker) for some reason //TODO: look into why this is.
+    getPixelColor(selectedPixel).then(function (throwAwayPixelColor) {
 
-        overlayInstructions.style.setProperty("cursor", "none", "important");
+        console.log(throwAwayPixelColor);
 
-        //establish original pixel color
-        const originalPixelColor = pixelColor;
+        //grabbing real one
+        getPixelColor(selectedPixel).then(function (pixelColor) {
 
-        overlayInstructions.style.color = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
-        overlayInstructions.textContent = 'Pixel set!';
+            console.log(pixelColor);
 
-        logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
-        if (isDebugMode) { logoBox.style.display = 'block'; }
+            //establish original pixel color
+            const originalPixelColor = pixelColor;
 
-        //wait a sec to remove the instructions to let them see the pixel selected message
-        setTimeout(() => {
-            removeElementsByClass('ytoc-overlay-instructions');
-        }, 3000);
+            logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
+            //deciding whether to set text as white or black based on background color
+            if ((originalPixelColor.r * 0.299 + originalPixelColor.g * 0.587 + originalPixelColor.b * 0.114) > 150) {
+                logoBox.style.color = "rgba(0, 0, 0, 1)";
+            } else {
+                logoBox.style.color = "rgba(255, 255, 255, 1)";
+            }
+            //wait a sec to remove pixel selected message and replace with log to let the user read it
+            setTimeout(() => {
+                logoBox.textContent = 'YTOC';
+                if (!isDebugMode) { logoBox.style.display = 'none'; }
+            }, 2000);
 
-        pixelColorMatchMonitor(originalPixelColor, selectedPixel);
+            pixelColorMatchMonitor(originalPixelColor, selectedPixel);
+
+        })
+        .catch(function (error) {
+            console.error(error);
+        });
 
     })
     .catch(function (error) {
@@ -583,6 +621,14 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                 mismatchCount++;
                 matchCount = 0;
+                logoCountdownMismatchesRemaining = (mismatchCountThreshold - mismatchCount);
+
+                if (logoCountdownMismatchesRemaining <= 3 && logoCountdownMismatchesRemaining >= 1 && !isCommercialState) {
+
+                    logoBox.textContent = logoCountdownMismatchesRemaining;
+                    logoBox.style.display = 'block';
+
+                }
 
                 if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
 
@@ -590,6 +636,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         startCommercialMode();
 
+                        logoBox.textContent = "YTOC"
                         logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         logoBox.style.display = 'block';
                         if (!isDebugMode) {
@@ -610,13 +657,14 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 matchCount++;
                 mismatchCount = 0;
 
+                if (!isDebugMode) { logoBox.style.display = 'none'; }
+                logoBox.textContent = "YTOC"
+
                 if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
 
                     if (isCommercialState) {
 
                         endCommercialMode();
-
-                        if (!isDebugMode) { logoBox.style.display = 'none'; }
 
                     }
 
@@ -674,8 +722,8 @@ function setCommercialDetectedIndicator(selectedPixel) {
 
     logoBox = document.createElement('div');
     logoBox.className = "ytoc-logo";
-    logoBox.textContent = 'YTOC';
-    logoBox.style.display = 'none';
+    logoBox.textContent = 'PIXEL SELECTED!';
+    logoBox.style.display = 'block';
 
     let windowWidth = window.innerWidth;
 
@@ -708,23 +756,71 @@ function inIFrame() {
 
 //TODO: figure out peacock refresh
 //calls background.js to create an offscreen document and grabs the getMediaStreamId of the tab to send to the offscreen document which then starts recording the tab
-function recordTab() {
+function startViewingTab() {
 
     let windowDimensions = { x: window.innerWidth, y: window.innerHeight };
 
-    chrome.runtime.sendMessage({ action: "record-tab", windowDimensions: windowDimensions });
+    chrome.runtime.sendMessage({ action: "view-tab", windowDimensions: windowDimensions });
 
-    //trigger closeOffscreen() when user refreshes page //TODO: is there a better way to do this?
-    //TODO: figure out when/how to stop viewing
-    //window.addEventListener('beforeunload', chrome.runtime.sendMessage({ action: "close-offscreen" }));
+    window.addEventListener('beforeunload', stopViewingTab);
 
 }
 
 
-function fullscreenChanged(event) {
+//TODO: maybe have this close the offscreen doc instead and get rid of the fancy offscreen management
+function stopViewingTab() {
+
+    //console.log('stopViewingTab called'); //debug
+
+    //call offscreen.js to stop viewing
+    //chrome.runtime.sendMessage({
+    //    target: "offscreen",
+    //    action: "stop-viewing"
+    //});
+
+    //close offscreen.js
+    chrome.runtime.sendMessage({
+        target: "offscreen",
+        action: "close"
+    });
+
+    window.removeEventListener('beforeunload', stopViewingTab);
+
+}
+
+
+
+function fullscreenChanged() {
     if (!document.fullscreenElement) {
-        //TODO: Make this temporarily disable extension
-        alert('Note: To enter full screen again, attempt to do so like normal, but then hit F11 on keyboard.');
+        //TODO: Make this temporarily pause extension and not show overlay video until user is back in full screen and without offscreen.js self destructing
         document.removeEventListener('fullscreenchange', fullscreenChanged);
+
+        alert('Note: To enter full screen again, attempt to do so like normal, but then hit F11 on keyboard.');
+        
+    }
+}
+
+
+function abortPixelSelection() {
+    if (!document.fullscreenElement) {
+
+        isAutoModeInitiated = false;
+
+        removeBlockersListenersAndPixelSelectionInstructions();
+
+        //close offscreen.js
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "close"
+        });
+
+        window.removeEventListener('beforeunload', stopViewingTab);
+        document.removeEventListener('fullscreenchange', abortPixelSelection);
+
+        //give a split second for the other stuff to occur before temporarly freezing everything with this alert
+        setTimeout(() => {
+            alert('Pixel selection aborted! Go back to full screen and hit keyboard shortcut to start again.');
+        }, 500);
+
     }
 }

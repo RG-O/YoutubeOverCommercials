@@ -2,6 +2,9 @@
 //TODO: add second way of initiating this by user clicking button in extension popup that then starts listening for full screen
 //TODO: remove most &&s on if statements and seperate them to make it more readable
 
+//I don't think I should declare global variables inside a service worker like this, but the chrome offscreen documentation recommends this
+//let creating;
+
 //sending message to content.js when user plugs in keyboard shortcut
 chrome.commands.onCommand.addListener(function (command) {
     if (command === "execute_shortcut") {
@@ -293,7 +296,9 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 
 
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
-    if (message.action === "record-tab") {
+    if (message.action === "view-tab") {
+
+        //await setupOffscreenDocument('offscreen.html');
 
         await chrome.offscreen.createDocument({
             url: 'offscreen.html',
@@ -322,12 +327,38 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
         chrome.runtime.sendMessage({
             target: 'offscreen',
-            action: 'start-recording',
+            action: 'start-viewing',
             constraints: constraints
         });
 
-        //TODO: figure out when/how to stop viewing
-    } else if (message.action === "close-offscreen") {
-        chrome.offscreen.closeDocument();
     }
 });
+
+
+//checks to see if offscreen document is set up and if it isn't, it sets it up
+//async function setupOffscreenDocument(path) {
+
+//    const offscreenUrl = chrome.runtime.getURL(path);
+//    const existingContexts = await chrome.runtime.getContexts({
+//        contextTypes: ['OFFSCREEN_DOCUMENT'],
+//        documentUrls: [offscreenUrl]
+//    });
+
+//    if (existingContexts.length > 0) {
+//        return;
+//    }
+
+//    // create offscreen document
+//    if (creating) {
+//        await creating;
+//    } else {
+//        creating = chrome.offscreen.createDocument({
+//            url: path,
+//            reasons: ['USER_MEDIA'],
+//            justification: 'Recording tab in order to extract user selected pixel color'
+//        });
+//        await creating;
+//        creating = null;
+//    }
+
+//}
