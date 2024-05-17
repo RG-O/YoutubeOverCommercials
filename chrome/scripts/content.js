@@ -93,10 +93,10 @@ chrome.storage.sync.get([
     }
     shouldHideYTBackground = result.shouldHideYTBackground ?? true;
     commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
-    mismatchCountThreshold = result.mismatchCountThreshold ?? 6;
+    mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
     matchCountThreshold = result.matchCountThreshold ?? 2;
-    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 10;
-    manualOverrideCooldown = result.manualOverrideCooldown ?? 20;
+    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
+    manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
     isDebugMode = result.isDebugMode ?? false;
 
 });
@@ -112,11 +112,12 @@ function setOverlayVideo() {
         insertLocation = document.getElementsByTagName('body')[0];
     }
 
-    let firstChild = insertLocation.firstChild;
+    addOverlayFade(insertLocation);
+
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
     //TODO: replace firstChild with null since the last items is actually most likely to show on top?
-    insertLocation.insertBefore(overlayVideo, firstChild);
+    insertLocation.insertBefore(overlayVideo, null);
     overlayVideo.style.visibility = "visible";
     overlayVideo.style.setProperty("width", videoOverlayWidth + "%", "important");
     overlayVideo.style.setProperty("height", videoOverlayHeight + "%", "important");
@@ -162,7 +163,12 @@ function setOverlayVideo() {
 
     overlayVideo.appendChild(iFrame);
 
-    //adding an overlay to darken the main/background video during commercials if user has chosen to do so
+}
+
+
+//adding an overlay to darken the main/background video during commercials if user has chosen to do so
+function addOverlayFade(insertLocation) {
+
     if (mainVideoFade > 0) {
 
         overlayScreen = document.createElement('div');
@@ -171,16 +177,16 @@ function setOverlayVideo() {
 
             overlayScreen.className = "ytoc-overlay-screen";
             overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
-            insertLocation.insertBefore(overlayScreen, firstChild);
+            insertLocation.insertBefore(overlayScreen, null);
 
         } else if (selectedPixel) {
 
             overlayScreen.className = "ytoc-overlay-screen-with-hole";
-            //setting location of hole for the pixel color detector to look through, subtracting by 5 for radius of hole
+            //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
             overlayScreen.style.left = (selectedPixel.x - 3) + 'px';
             overlayScreen.style.top = (selectedPixel.y - 3) + 'px';
             overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
-            insertLocation.insertBefore(overlayScreen, firstChild);
+            insertLocation.insertBefore(overlayScreen, null);
 
         } else {
             //setting mainVideoFade to 0 to effectively shut it off since it is auto detection mode but I don't know where to put the hole
@@ -321,7 +327,7 @@ function startCommercialMode() {
 }
 
 
-//TODO: seperate these different paths into their own functions
+//TODO: made it so the manual override works before the video ever comes up on its own
 //background.js is listening for user to enter in keyboard shortcut then sending a message to intiate this
 chrome.runtime.onMessage.addListener(function (message) {
 
@@ -410,8 +416,7 @@ function setNotFullscreenAlerts() {
 
             let insertLocation = potentialVideos[i].parentNode;
             insertLocation = insertLocation.parentNode;
-            let firstChild = insertLocation.firstChild;
-            insertLocation.insertBefore(elm, firstChild);
+            insertLocation.insertBefore(elm, null);
 
         }
 
@@ -540,14 +545,17 @@ function pixelSelection(event) {
     //TODO: figure out if this check is really necessary
     if (!selectedPixel) {
 
-        selectedPixel = { x: event.clientX, y: event.clientY };
+        //subtracting by 1 so it doesn't accidentally capture the cursor if it still happens to be showing
+        selectedPixel = { x: (event.clientX - 1), y: (event.clientY - 2) };
 
         removeBlockersListenersAndPixelSelectionInstructions();
 
-        //TODO: create user option to turn off logo completely
-        setCommercialDetectedIndicator(selectedPixel);
+        indicateSelectedPixel(selectedPixel);
 
         document.addEventListener('fullscreenchange', fullscreenChanged);
+
+        //TODO: create user option to turn off logo completely
+        setCommercialDetectedIndicator(selectedPixel);
 
         captureOriginalPixelColor(selectedPixel);
 
@@ -559,38 +567,27 @@ function pixelSelection(event) {
 //grabs the color of the of the user set pixel at time of selection so it can use it to compare in subsequent checks
 function captureOriginalPixelColor(selectedPixel) {
 
-    //grabbing a throwaway because sometimes the first one is incorrect (darker) for some reason //TODO: look into why this is.
-    getPixelColor(selectedPixel).then(function (throwAwayPixelColor) {
+    getPixelColor(selectedPixel).then(function (pixelColor) {
 
-        console.log(throwAwayPixelColor);
+        //establish original pixel color
+        const originalPixelColor = pixelColor;
 
-        //grabbing real one
-        getPixelColor(selectedPixel).then(function (pixelColor) {
+        logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
+        //deciding whether to set text as white or black based on background color
+        if ((originalPixelColor.r * 0.299 + originalPixelColor.g * 0.587 + originalPixelColor.b * 0.114) > 150) {
+            logoBox.style.color = "rgba(0, 0, 0, 1)";
+        } else {
+            logoBox.style.color = "rgba(255, 255, 255, 1)";
+        }
 
-            console.log(pixelColor);
+        //wait a sec to remove pixel selected message and replace with logo to let the user read message
+        setTimeout(() => {
+            logoBox.textContent = 'YTOC';
+            if (!isDebugMode) { logoBox.style.display = 'none'; }
+            removeElementsByClass('ytoc-selection-indicator');
+        }, 2000);
 
-            //establish original pixel color
-            const originalPixelColor = pixelColor;
-
-            logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
-            //deciding whether to set text as white or black based on background color
-            if ((originalPixelColor.r * 0.299 + originalPixelColor.g * 0.587 + originalPixelColor.b * 0.114) > 150) {
-                logoBox.style.color = "rgba(0, 0, 0, 1)";
-            } else {
-                logoBox.style.color = "rgba(255, 255, 255, 1)";
-            }
-            //wait a sec to remove pixel selected message and replace with log to let the user read it
-            setTimeout(() => {
-                logoBox.textContent = 'YTOC';
-                if (!isDebugMode) { logoBox.style.display = 'none'; }
-            }, 2000);
-
-            pixelColorMatchMonitor(originalPixelColor, selectedPixel);
-
-        })
-        .catch(function (error) {
-            console.error(error);
-        });
+        pixelColorMatchMonitor(originalPixelColor, selectedPixel);
 
     })
     .catch(function (error) {
@@ -623,16 +620,28 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 matchCount = 0;
                 logoCountdownMismatchesRemaining = (mismatchCountThreshold - mismatchCount);
 
-                if (logoCountdownMismatchesRemaining <= 3 && logoCountdownMismatchesRemaining >= 1 && !isCommercialState) {
+                //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
+                if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
 
-                    logoBox.textContent = logoCountdownMismatchesRemaining;
-                    logoBox.style.display = 'block';
+                    if (cooldownCountRemaining >= 1) {
+
+                        logoBox.textContent = cooldownCountRemaining;
+                        logoBox.style.display = 'block';
+
+                    } else if (logoCountdownMismatchesRemaining >= 1) {
+
+                        logoBox.textContent = logoCountdownMismatchesRemaining;
+                        logoBox.style.display = 'block';
+
+                    }
 
                 }
 
                 if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
 
                     if (!isCommercialState) {
+
+                        if (isDebugMode) { console.log('commercial detected'); }
 
                         startCommercialMode();
 
@@ -663,6 +672,8 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
 
                     if (isCommercialState) {
+
+                        if (isDebugMode) { console.log('commercial undetected'); }
 
                         endCommercialMode();
 
@@ -699,6 +710,10 @@ function getPixelColor(coordinates) {
             action: "capture-screenshot",
             coordinates: coordinates
         }, function (response) {
+            
+            //console.log(response.myCoordinates); //debug-high
+            //console.log(response.pixelColor); //debug-high
+            //console.log(response.image); //debug-high
 
             resolve(response.pixelColor);
 
@@ -717,8 +732,6 @@ function setCommercialDetectedIndicator(selectedPixel) {
     if (insertLocation.nodeName == 'HTML') {
         insertLocation = document.getElementsByTagName('body')[0];
     }
-
-    let firstChild = insertLocation.firstChild;
 
     logoBox = document.createElement('div');
     logoBox.className = "ytoc-logo";
@@ -739,7 +752,7 @@ function setCommercialDetectedIndicator(selectedPixel) {
 
     logoBox.style.top = (selectedPixel.y - 15) + 'px';
 
-    insertLocation.insertBefore(logoBox, firstChild);
+    insertLocation.insertBefore(logoBox, null);
 
 }
 
@@ -769,14 +782,6 @@ function startViewingTab() {
 
 //TODO: maybe have this close the offscreen doc instead and get rid of the fancy offscreen management
 function stopViewingTab() {
-
-    //console.log('stopViewingTab called'); //debug
-
-    //call offscreen.js to stop viewing
-    //chrome.runtime.sendMessage({
-    //    target: "offscreen",
-    //    action: "stop-viewing"
-    //});
 
     //close offscreen.js
     chrome.runtime.sendMessage({
@@ -823,4 +828,25 @@ function abortPixelSelection() {
         }, 500);
 
     }
+}
+
+
+//circles the selected pixel in a red ring
+function indicateSelectedPixel(selectedPixel) {
+
+    //TODO: add check to make sure user is still in full screen and if not to break and resut isFirstRun
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    let selectedPixelRing = document.createElement('div');
+
+    selectedPixelRing.className = "ytoc-selection-indicator";
+    //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
+    selectedPixelRing.style.left = (selectedPixel.x - 3) + 'px';
+    selectedPixelRing.style.top = (selectedPixel.y - 3) + 'px';
+
+    insertLocation.insertBefore(selectedPixelRing, null);
+
 }

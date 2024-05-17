@@ -39,10 +39,10 @@ chrome.storage.sync.get([
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
     optionsForm.commercialDetectionMode.value = result.commercialDetectionMode ?? 'auto';
-    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 6;
+    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 10;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 20;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';

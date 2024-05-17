@@ -298,8 +298,6 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     if (message.action === "view-tab") {
 
-        //await setupOffscreenDocument('offscreen.html');
-
         await chrome.offscreen.createDocument({
             url: 'offscreen.html',
             reasons: ['USER_MEDIA'],
@@ -333,32 +331,3 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
 
     }
 });
-
-
-//checks to see if offscreen document is set up and if it isn't, it sets it up
-//async function setupOffscreenDocument(path) {
-
-//    const offscreenUrl = chrome.runtime.getURL(path);
-//    const existingContexts = await chrome.runtime.getContexts({
-//        contextTypes: ['OFFSCREEN_DOCUMENT'],
-//        documentUrls: [offscreenUrl]
-//    });
-
-//    if (existingContexts.length > 0) {
-//        return;
-//    }
-
-//    // create offscreen document
-//    if (creating) {
-//        await creating;
-//    } else {
-//        creating = chrome.offscreen.createDocument({
-//            url: path,
-//            reasons: ['USER_MEDIA'],
-//            justification: 'Recording tab in order to extract user selected pixel color'
-//        });
-//        await creating;
-//        creating = null;
-//    }
-
-//}
