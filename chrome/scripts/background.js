@@ -94,7 +94,13 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
         } else if (overlayHostName != 'tv.youtube.com') {
             document.getElementsByTagName('video')[0].play();
         } //else do nothing because yttv plays automatically
-        
+
+        //set marker on overlay video so the Live Thread Ticker browser extension knows not to apply
+        if (document.getElementsByTagName('body')[0]) {
+            let lttBlocker = document.createElement("span");
+            lttBlocker.id = 'YTOC-LTT-Blocker';
+            document.getElementsByTagName('body')[0].appendChild(lttBlocker);
+        }
 
         if (shouldHideYTBackground) {
 

@@ -289,13 +289,12 @@ function startCommercialMode() {
 
             isAutoModeFirstCommercial = false;
             //setting cooldown time so video has a chance to play for the first time
-            cooldownCountRemaining = 6;
+            cooldownCountRemaining = 8;
             initialRun();
 
         } else {
             setNotFullscreenAlerts();
         }
-        
 
     } else {
 
@@ -355,11 +354,11 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                             document.addEventListener('fullscreenchange', abortPixelSelection);
 
-                            //give a sec for recording to start before asking user to pick a pixel
+                            //give a split sec for recording to start before asking user to pick a pixel
                             setTimeout(() => {
                                 setBlockersAndPixelSelectionInstructions();
                                 document.addEventListener('click', pixelSelection);
-                            }, 1000);
+                            }, 500);
 
                         } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
 
