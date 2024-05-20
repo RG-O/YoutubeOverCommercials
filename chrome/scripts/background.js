@@ -2,9 +2,6 @@
 //TODO: add second way of initiating this by user clicking button in extension popup that then starts listening for full screen
 //TODO: remove most &&s on if statements and seperate them to make it more readable
 
-//I don't think I should declare global variables inside a service worker like this, but the chrome offscreen documentation recommends this
-//let creating;
-
 //sending message to content.js when user plugs in keyboard shortcut
 chrome.commands.onCommand.addListener(function (command) {
     if (command === "execute_shortcut") {

@@ -341,7 +341,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                 //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
                 if (document.fullscreenElement.nodeName != 'IFRAME') {
 
-                    //TODO: grab user set variables here
+                    //TODO: grab user set variables here - except I need overlay host name earlier
 
                     //setting up for pixel selection for auto mode or continuing run for manual
                     if (commercialDetectionMode == 'auto') {
