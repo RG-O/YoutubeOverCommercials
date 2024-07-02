@@ -14,6 +14,11 @@ var isAutoModeFirstCommercial = true;
 var mismatchCount = 0;
 var matchCount = 0;
 var cooldownCountRemaining = 8; //set to 8 for an initial cooldown so video won't display right away
+var monitorIntervalID;
+var originalPixelColor;
+var windowDimensions;
+var logoBoxText;
+var countdownOngoing = false;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -78,11 +83,18 @@ chrome.storage.sync.get([
     otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
     otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     overlayHostName = result.overlayHostName ?? 'www.youtube.com';
-    overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
-    overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
     mainVideoFade = result.mainVideoFade ?? 55;
-    videoOverlayWidth = result.videoOverlayWidth ?? 75;
-    videoOverlayHeight = result.videoOverlayHeight ?? 75;
+    if (overlayVideoType != 'spotify') {
+        overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+        overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+        videoOverlayWidth = result.videoOverlayWidth ?? 75;
+        videoOverlayHeight = result.videoOverlayHeight ?? 75;
+    } else {
+        overlayVideoLocationHorizontal = 'middle';
+        overlayVideoLocationVertical = 'middle';
+        videoOverlayWidth = 50;
+        videoOverlayHeight = 50;
+    }
     mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
     mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
     if (mainVideoVolumeDuringCommercials > 0) {
@@ -103,8 +115,6 @@ chrome.storage.sync.get([
 
 //function that is responsible for loading the video iframe over top of the main/background video
 function setOverlayVideo() {
-
-    mainVideo = document.getElementsByTagName('video')[0]; //TODO: grab all videos on page and loop and interaction with all of them
 
     //TODO: add check to make sure user is still in full screen and if not to break and resut isFirstRun
     let insertLocation = document.fullscreenElement;
@@ -223,8 +233,16 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    setOverlayVideo();
+    if (overlayVideoType != 'spotify') {
+        setOverlayVideo();
+    } else {
+        //TODO: open spotify earlier
+        chrome.runtime.sendMessage({ action: "open_spotify" });
+        window.addEventListener('beforeunload', closeSpotify);
+    }
 
+    mainVideo = document.getElementsByTagName('video')[0]; //TODO: grab all videos on page and loop and interaction with all of them
+    
     //muting main/background video
     if (mainVideoVolumeDuringCommercials == 0) {
 
@@ -241,9 +259,13 @@ function initialRun() {
 
     } //else do nothing for 100
 
-    //wait a little bit for the video to load //TODO: get indicator of when completely loaded
+    //wait a little bit for the video/spotify to load //TODO: get indicator of when completely loaded
     setTimeout(() => {
-        chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
+        if (overlayVideoType != 'spotify') {
+            chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
+        } else {
+            chrome.runtime.sendMessage({ action: "initial_execute_music_interaction" });
+        }
     }, 2000);
 
 }
@@ -254,17 +276,26 @@ function endCommercialMode() {
 
     isCommercialState = false;
 
-    chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
-    overlayVideo.style.visibility = "hidden";
+    if (overlayVideoType == 'spotify') {
 
-    if (mainVideoFade > 0) {
-        if (commercialDetectionMode != 'auto') {
-            overlayScreen.style.backgroundColor = "transparent";
-        } else {
-            overlayScreen.style.boxShadow = "0 0 0";
+        chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+
+    } else {
+
+        chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
+
+        overlayVideo.style.visibility = "hidden";
+
+        if (mainVideoFade > 0) {
+            if (commercialDetectionMode != 'auto') {
+                overlayScreen.style.backgroundColor = "transparent";
+            } else {
+                overlayScreen.style.boxShadow = "0 0 0";
+            }
         }
-    }
 
+    }
+    
     if (mainVideoVolumeDuringCommercials == 0) {
         if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
             document.querySelector('[aria-label="Unmute (m)"]').click();
@@ -300,14 +331,24 @@ function startCommercialMode() {
 
         isCommercialState = true;
 
-        chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
+        if (overlayVideoType == 'spotify') {
 
-        if (mainVideoFade > 0) {
-            if (commercialDetectionMode != 'auto') {
-                overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
-            } else {
-                overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+        } else {
+
+            chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
+
+            if (mainVideoFade > 0) {
+                if (commercialDetectionMode != 'auto') {
+                    overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
+                } else {
+                    overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+                }
             }
+
+            overlayVideo.style.visibility = "visible";
+
         }
 
         if (mainVideoVolumeDuringCommercials == 0) {
@@ -318,8 +359,6 @@ function startCommercialMode() {
         } else if (mainVideoVolumeDuringCommercials < 1) {
             mainVideo.volume = mainVideoVolumeDuringCommercials;
         } //else do nothing for 100
-
-        overlayVideo.style.visibility = "visible";
 
     }
 
@@ -343,6 +382,8 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                     //TODO: grab user set variables here - except I need overlay host name earlier
 
+                    chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
+
                     //setting up for pixel selection for auto mode or continuing run for manual
                     if (commercialDetectionMode == 'auto') {
 
@@ -350,7 +391,10 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                             isAutoModeInitiated = true;
 
-                            startViewingTab();
+                            windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+                            startViewingTab(windowDimensions);
+
+                            //TODO: open spotify here instead so it has time to load before it is needed
 
                             document.addEventListener('fullscreenchange', abortPixelSelection);
 
@@ -400,25 +444,13 @@ chrome.runtime.onMessage.addListener(function (message) {
 });
 
 
-//sets text over top of every video on the page letting the user know that they need to be fullscreen for the extension to work
+//lets the user know that they need to be fullscreen for the extension to work
+//TODO: does this need modified or removed now that everything pauses?
 function setNotFullscreenAlerts() {
 
-    if (!fullScreenAlertSet && document.getElementsByTagName('video')[0]) {
+    if (!fullScreenAlertSet) {
 
-        let potentialVideos = document.getElementsByTagName('video');
-
-        for (let i = 0; i < potentialVideos.length; i++) {
-
-            let elm = document.createElement('div');
-            elm.className = "not-full-screen-alert";
-            elm.textContent = 'Video must be full screen for YTOC extension to work.'
-
-            let insertLocation = potentialVideos[i].parentNode;
-            insertLocation = insertLocation.parentNode;
-            insertLocation.insertBefore(elm, null);
-
-        }
-
+        addMessageAlertToMainVideo('Video must be full screen for YTOC extension to work.');
         fullScreenAlertSet = true;
 
     }
@@ -429,8 +461,32 @@ function setNotFullscreenAlerts() {
 //remove all full screen alerts if previously set
 function removeNotFullscreenAlerts() {
 
-    removeElementsByClass('not-full-screen-alert');
+    removeElementsByClass('ytoc-main-video-message-alert');
     fullScreenAlertSet = false;
+
+}
+
+
+//sets specific message over top of every video on the page
+function addMessageAlertToMainVideo(message) {
+
+    if (document.getElementsByTagName('video')[0]) {
+
+        let potentialVideos = document.getElementsByTagName('video');
+
+        for (let i = 0; i < potentialVideos.length; i++) {
+
+            let elm = document.createElement('div');
+            elm.className = "ytoc-main-video-message-alert";
+            elm.textContent = message;
+
+            let insertLocation = potentialVideos[i].parentNode;
+            insertLocation = insertLocation.parentNode;
+            insertLocation.insertBefore(elm, null);
+
+        }
+
+    }
 
 }
 
@@ -569,7 +625,7 @@ function captureOriginalPixelColor(selectedPixel) {
     getPixelColor(selectedPixel).then(function (pixelColor) {
 
         //establish original pixel color
-        const originalPixelColor = pixelColor;
+        originalPixelColor = pixelColor;
 
         logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
         //deciding whether to set text as white or black based on background color
@@ -581,7 +637,12 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
-            logoBox.textContent = 'YTOC';
+            if (overlayVideoType != 'spotify' || isDebugMode) {
+                logoBoxText = 'YTOC';
+            } else {
+                logoBoxText = 'Loading Spotify...';
+            }
+            logoBox.textContent = logoBoxText;
             if (!isDebugMode) { logoBox.style.display = 'none'; }
             removeElementsByClass('ytoc-selection-indicator');
         }, 2000);
@@ -599,7 +660,7 @@ function captureOriginalPixelColor(selectedPixel) {
 //checks the color of the user set pixel and compares it to the original color in intervals and initiates commercial or non-commercial mode accordingly
 function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
-    setInterval(() => {
+    monitorIntervalID = setInterval(() => {
         //TODO: set some sort of pause on this interval if user leaves full screen
 
         getPixelColor(selectedPixel).then(function (pixelColor) {
@@ -614,6 +675,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 greenDifference > colorDifferenceMatchingThreshold ||
                 blueDifference > colorDifferenceMatchingThreshold
             ) {
+                //color mismatch
 
                 mismatchCount++;
                 matchCount = 0;
@@ -626,14 +688,20 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         logoBox.textContent = cooldownCountRemaining;
                         logoBox.style.display = 'block';
+                        countdownOngoing = true;
 
                     } else if (logoCountdownMismatchesRemaining >= 1) {
 
                         logoBox.textContent = logoCountdownMismatchesRemaining;
                         logoBox.style.display = 'block';
+                        countdownOngoing = true;
 
+                    } else {
+                        countdownOngoing = false;
                     }
 
+                } else {
+                    countdownOngoing = false;
                 }
 
                 if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
@@ -644,13 +712,17 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         startCommercialMode();
 
-                        logoBox.textContent = "YTOC"
+                        logoBox.textContent = logoBoxText;
                         logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         logoBox.style.display = 'block';
-                        if (!isDebugMode) {
+                        if (!isDebugMode && overlayVideoType != 'spotify') {
+
                             setTimeout(() => {
+
                                 logoBox.style.display = 'none';
+                                
                             }, 5000);
+
                         }
 
                     }
@@ -661,18 +733,32 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 }
 
             } else {
+                //color match
 
                 matchCount++;
                 mismatchCount = 0;
 
-                if (!isDebugMode) { logoBox.style.display = 'none'; }
-                logoBox.textContent = "YTOC"
+                if (!isDebugMode && overlayVideoType != 'spotify') {
+                    logoBox.style.display = 'none';
+                }
+
+                countdownOngoing = false;
+                logoBox.textContent = logoBoxText;
 
                 if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
 
                     if (isCommercialState) {
 
                         if (isDebugMode) { console.log('commercial undetected'); }
+
+                        if (overlayVideoType == 'spotify') {
+                            if (isDebugMode) {
+                                logoBoxText = 'YTOC';
+                                logoBox.textContent = logoBoxText;
+                            } else {
+                                logoBox.style.display = 'none';
+                            }
+                        }
 
                         endCommercialMode();
 
@@ -734,7 +820,8 @@ function setCommercialDetectedIndicator(selectedPixel) {
 
     logoBox = document.createElement('div');
     logoBox.className = "ytoc-logo";
-    logoBox.textContent = 'PIXEL SELECTED!';
+    logoBoxText = 'PIXEL SELECTED!';
+    logoBox.textContent = logoBoxText;
     logoBox.style.display = 'block';
 
     let windowWidth = window.innerWidth;
@@ -768,9 +855,7 @@ function inIFrame() {
 
 //TODO: figure out peacock refresh
 //calls background.js to create an offscreen document and grabs the getMediaStreamId of the tab to send to the offscreen document which then starts recording the tab
-function startViewingTab() {
-
-    let windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+function startViewingTab(windowDimensions) {
 
     chrome.runtime.sendMessage({ action: "view-tab", windowDimensions: windowDimensions });
 
@@ -779,10 +864,9 @@ function startViewingTab() {
 }
 
 
-//TODO: maybe have this close the offscreen doc instead and get rid of the fancy offscreen management
 function stopViewingTab() {
 
-    //close offscreen.js
+    //close offscreen
     chrome.runtime.sendMessage({
         target: "offscreen",
         action: "close"
@@ -793,15 +877,62 @@ function stopViewingTab() {
 }
 
 
+//note: should use stopViewingTab() instead to close offscreen
+function pauseViewingTab() {
+
+    chrome.runtime.sendMessage({
+        target: "offscreen",
+        action: "stop-viewing"
+    });
+
+}
+
+
+//note: does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
+function resumeViewingTab() {
+
+    chrome.runtime.sendMessage({
+        target: "offscreen",
+        action: "resume-viewing"
+    });
+
+}
+
 
 function fullscreenChanged() {
-    if (!document.fullscreenElement) {
-        //TODO: Make this temporarily pause extension and not show overlay video until user is back in full screen and without offscreen.js self destructing
-        document.removeEventListener('fullscreenchange', fullscreenChanged);
 
-        alert('Note: To enter full screen again, attempt to do so like normal, but then hit F11 on keyboard.');
-        
+    if (!document.fullscreenElement) {
+
+        pauseAutoMode();
+        if (isCommercialState && overlayVideoType != 'spotify') {
+            endCommercialMode();
+        }
+
+    } else if (document.fullscreenElement) {
+
+        resumeAutoMode();
+
     }
+
+}
+
+
+function pauseAutoMode() {
+
+    clearInterval(monitorIntervalID);
+    stopViewingTab();
+    addMessageAlertToMainVideo('YTOC extension paused until back to fullscreen. Set video to fullscreen or refresh tab to remove message.');
+
+}
+
+
+function resumeAutoMode() {
+
+    pixelColorMatchMonitor(originalPixelColor, selectedPixel);
+    startViewingTab(windowDimensions);
+    removeElementsByClass('ytoc-main-video-message-alert');
+    cooldownCountRemaining = 8; //give a chance for video UI to go away
+
 }
 
 
@@ -849,3 +980,46 @@ function indicateSelectedPixel(selectedPixel) {
     insertLocation.insertBefore(selectedPixelRing, null);
 
 }
+
+
+function closeSpotify() {
+    chrome.runtime.sendMessage({ action: "close_spotify" });
+}
+
+
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action == 'content_update_logo_text') {
+
+        if (commercialDetectionMode == 'auto') {
+
+            logoBoxText = message.text;
+
+            //strangley, an unnecessary delay feels smoother here
+            setTimeout(() => {
+                if (!countdownOngoing) {
+                    logoBox.textContent = logoBoxText;
+                }
+            }, 2000);
+
+            if (isCommercialState) {
+
+                logoBox.style.display = 'block';
+                if (!isDebugMode) {
+                    setTimeout(() => {
+                        logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
+                        logoBox.textContent = logoBoxText;
+                    }, 10000);
+                }
+
+            }
+
+        } //else no need to update logo if not in auto mode
+
+    } else if (message.action == 'show_resume_fullscreen_message') {
+
+        //TODO: add removeElementsByClass('ytoc-main-video-message-alert') into addMessageAlertToMainVideo() function
+        removeElementsByClass('ytoc-main-video-message-alert');
+        addMessageAlertToMainVideo('Success! You may now resume fullscreen and enjoy :)');
+
+    }
+});

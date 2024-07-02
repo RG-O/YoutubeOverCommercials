@@ -14,6 +14,9 @@ chrome.runtime.onMessage.addListener(function (message) {
             startViewing(constraints);
         } else if (message.action == 'stop-viewing') {
             stopViewing();
+        } else if (message.action == 'resume-viewing') {
+            //does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
+            startViewing(constraints);
         } else if (message.action == 'close') {
             window.close();
         }
@@ -24,8 +27,6 @@ chrome.runtime.onMessage.addListener(function (message) {
 async function startViewing(constraints) {
 
     if (!viewing) {
-
-        viewing = true;
 
         media = await navigator.mediaDevices.getUserMedia(constraints);
 
@@ -40,6 +41,8 @@ async function startViewing(constraints) {
         //canvas.width = 30; //debug-high
         //canvas.height = 30; //debug-high
         ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        viewing = true;
 
     }
 
@@ -64,7 +67,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             } else {
 
-                startViewing(constraints);
+                //startViewing(constraints);
 
                 //return pixel color as white
                 let pixelColor = { r: 255, g: 255, b: 255 };
@@ -88,7 +91,10 @@ function stopViewing() {
 
         media.getTracks().forEach(function (track) {
             track.stop();
+            //track.enabled = false;
         });
+
+        //media = undefined;
 
     }
 
