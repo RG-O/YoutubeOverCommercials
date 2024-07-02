@@ -28,7 +28,7 @@
     pointer-events: none !important;
 }
 
-.not-full-screen-alert {
+.ytoc-main-video-message-alert {
     color: red !important;
     font-size: 30px !important;
     text-align: center !important;
@@ -85,6 +85,6 @@
     border-color: red !important;*/
     outline: 2px solid red !important;
     outline-offset: 0px !important;
-    background-color: rgba(0, 0, 0, 0, 0) !important;
+    background-color: rgba(0, 0, 0, 0) !important;
     pointer-events: none !important;
 }
