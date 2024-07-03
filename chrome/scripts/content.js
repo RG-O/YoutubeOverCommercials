@@ -738,8 +738,10 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 matchCount++;
                 mismatchCount = 0;
 
-                if (!isDebugMode && overlayVideoType != 'spotify') {
-                    logoBox.style.display = 'none';
+                if (!isDebugMode) {
+                    if (overlayVideoType != 'spotify' || !isCommercialState) {
+                        logoBox.style.display = 'none';
+                    }
                 }
 
                 countdownOngoing = false;
