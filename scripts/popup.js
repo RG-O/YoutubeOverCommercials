@@ -32,17 +32,17 @@ chrome.storage.sync.get([
     optionsForm.otherLiveURL.value = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
-    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 50;
+    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 55;
     optionsForm.videoOverlayWidth.value = result.videoOverlayWidth ?? 75;
     optionsForm.videoOverlayHeight.value = result.videoOverlayHeight ?? 75;
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
     optionsForm.commercialDetectionMode.value = result.commercialDetectionMode ?? 'auto';
-    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 2;
+    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 8;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 20;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
@@ -96,6 +96,7 @@ document.getElementById("save-button").onclick = function () {
         }
 
         //save the values to the users chrome profile, close the extension window, and then give them message telling them they might need to refresh
+        //NOTE!! when adding new values, don't forget about forceSave() below
         chrome.storage.sync.set({
             overlayVideoType: optionsForm.overlayVideoType.value,
             ytPlaylistID: optionsForm.ytPlaylistID.value,
@@ -126,7 +127,6 @@ document.getElementById("save-button").onclick = function () {
     } else {
         alert('Field missing. Please input all fields.');
     }
-
 
 }
 
@@ -165,4 +165,49 @@ function toggleModeInstructionsVisability() {
         modeInstructions[i].style.display = 'none';
     }
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
+}
+
+document.getElementById("overlayVideoType-spotify").onclick = function () {
+
+    alert(`Note: In order for this function to work smoothly, you must be signed in to Spotify on this browser and set to play Spotify from an existing tab, the desktop app, or somewhere else.`);
+    forceSave();
+    chrome.runtime.sendMessage({ action: "open_spotify_simple" });
+}
+
+
+function forceSave() {
+
+    let overlayHostName;
+    if (optionsForm.overlayVideoType.value === "other-video") {
+        overlayHostName = new URL(optionsForm.otherVideoURL.value).hostname;
+    } else if (optionsForm.overlayVideoType.value === "other-live") {
+        overlayHostName = new URL(optionsForm.otherLiveURL.value).hostname;
+    } else {
+        overlayHostName = 'www.youtube.com';
+    }
+
+    chrome.storage.sync.set({
+        overlayVideoType: optionsForm.overlayVideoType.value ?? 'yt-playlist',
+        ytPlaylistID: optionsForm.ytPlaylistID.value ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB',
+        ytVideoID: optionsForm.ytVideoID.value ?? '5AMQbxBZohY',
+        ytLiveID: optionsForm.ytLiveID.value ?? 'QhJcIlE0NAQ',
+        otherVideoURL: optionsForm.otherVideoURL.value ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+        otherLiveURL: optionsForm.otherLiveURL.value ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8',
+        overlayHostName: overlayHostName,
+        overlayVideoLocationHorizontal: optionsForm.overlayVideoLocationHorizontal.value ?? 'middle',
+        overlayVideoLocationVertical: optionsForm.overlayVideoLocationVertical.value ?? 'middle',
+        mainVideoFade: optionsForm.mainVideoFade.value ?? 55,
+        videoOverlayWidth: optionsForm.videoOverlayWidth.value ?? 75,
+        videoOverlayHeight: optionsForm.videoOverlayHeight.value ?? 75,
+        mainVideoVolumeDuringCommercials: optionsForm.mainVideoVolumeDuringCommercials.value ?? 0,
+        mainVideoVolumeDuringNonCommercials: optionsForm.mainVideoVolumeDuringNonCommercials.value ?? 100,
+        shouldHideYTBackground: optionsForm.shouldHideYTBackground.checked ?? true,
+        commercialDetectionMode: optionsForm.commercialDetectionMode.value ?? 'auto',
+        mismatchCountThreshold: optionsForm.mismatchCountThreshold.value ?? 8,
+        matchCountThreshold: optionsForm.matchCountThreshold.value ?? 2,
+        colorDifferenceMatchingThreshold: optionsForm.colorDifferenceMatchingThreshold.value ?? 12,
+        manualOverrideCooldown: optionsForm.manualOverrideCooldown.value ?? 30,
+        isDebugMode: optionsForm.isDebugMode.checked ?? false
+    });
+
 }

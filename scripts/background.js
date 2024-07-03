@@ -48,8 +48,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
-        
-
     } else if (message.action === "execute_overlay_video_commercial_state") {
 
         //grab user set values
@@ -66,6 +64,148 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
 
         });
+
+    } else if (message.action === "open_spotify") {
+
+        //open spotify in an inactive pinned tab
+        chrome.tabs.create({
+            pinned: true,
+            active: false,
+            url: 'https://open.spotify.com/',
+        },
+            (tab) => {
+
+                //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+                chrome.storage.sync.set({ spotifyTabID: tab.id });
+
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id, allFrames: true },
+                    files: ["scripts/spotify.js"]
+                });
+                
+            }
+        );
+
+    } else if (message.action === "close_spotify") {
+
+        chrome.storage.sync.get(['spotifyTabID'], (result) => {
+
+            if (result.spotifyTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                    if (exists) {
+                        chrome.tabs.remove(result.spotifyTabID);
+                    }
+
+                });
+                
+            }
+
+        });
+
+    } else if (message.action === "initial_execute_music_interaction") {
+
+        //grab user set values
+        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
+
+            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+
+            if (overlayVideoType == 'spotify') {
+
+                if (result.spotifyTabID) {
+
+                    chrome.tabs.query({}, function (tabs) {
+
+                        let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                        if (exists) {
+
+                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "initial_play_spotify" });
+
+                        }
+
+                    });
+
+                }
+
+            }
+
+        });
+
+    } else if (message.action === "execute_music_non_commercial_state") {
+
+        //grab user set values
+        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
+
+            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+
+            if (overlayVideoType == 'spotify') {
+
+                if (result.spotifyTabID) {
+
+                    chrome.tabs.query({}, function (tabs) {
+
+                        let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                        if (exists) {
+
+                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "pause_spotify" });
+
+                        }
+
+                    });
+
+                }
+
+            }
+
+        });
+
+    } else if (message.action === "execute_music_commercial_state") {
+
+        //grab user set values
+        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
+
+            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+
+            if (overlayVideoType == 'spotify') {
+
+                if (result.spotifyTabID) {
+
+                    chrome.tabs.query({}, function (tabs) {
+
+                        let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                        if (exists) {
+
+                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "play_spotify" });
+
+                        }
+
+                    });
+
+                }
+
+            }
+
+        });
+
+    } else if (message.action === "open_spotify_simple") {
+
+        //open spotify in an active tab
+        chrome.tabs.create({
+            pinned: false,
+            active: true,
+            url: 'https://open.spotify.com/',
+        },
+            (tab) => {
+
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id, allFrames: true },
+                    func: simpleSpotifyBanner
+                });
+
+            }
+        );
 
     }
 });
@@ -91,7 +231,13 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
         } else if (overlayHostName != 'tv.youtube.com') {
             document.getElementsByTagName('video')[0].play();
         } //else do nothing because yttv plays automatically
-        
+
+        //set marker on overlay video so the Live Thread Ticker browser extension knows not to apply
+        if (document.getElementsByTagName('body')[0]) {
+            let lttBlocker = document.createElement("span");
+            lttBlocker.id = 'YTOC-LTT-Blocker';
+            document.getElementsByTagName('body')[0].appendChild(lttBlocker);
+        }
 
         if (shouldHideYTBackground) {
 
@@ -129,7 +275,8 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
                 }
 
             }
-            
+
+            //TODO: add button on top of overlay video  if in live mode that asks if user would like video to play PiP while main video is not commercial, disapear if not clicked after x time
             
             //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
             if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
@@ -292,35 +439,189 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 }
 
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+    if (message.action === "view-tab") {
 
-    if (request.action === 'capture-screenshot') {
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['USER_MEDIA'],
+            justification: 'Recording tab in order to extract user selected pixel color'
+        });
 
-        console.log('message received for background.js to take screenshot') //debug
-        console.log(`Selected screenshot location: (${request.rect.x}, ${request.rect.y})`); //debug
+        const streamId = await chrome.tabCapture.getMediaStreamId({
+            targetTabId: sender.tab.id
+        });
 
-        //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
-        chrome.tabs.captureVisibleTab(
+        const constraints = {
+            video: {
+                mandatory: {
+                    chromeMediaSource: 'tab',
+                    chromeMediaSourceId: streamId,
+                    maxFrameRate: 4,
+                    minFrameRate: 4,
+                    maxWidth: message.windowDimensions.x,
+                    maxHeight: message.windowDimensions.y,
+                    minWidth: message.windowDimensions.x,
+                    minHeight: message.windowDimensions.y
+                }
+            }
+        }
 
-            sender.tab.windowId, //debug - replace with just null if this doesn't work
-            {
-                format: 'png'
-                , rect: request.rect
-            },
-            function (dataUrl) {
+        chrome.runtime.sendMessage({
+            target: 'offscreen',
+            action: 'start-viewing',
+            constraints: constraints
+        });
 
-                console.log('dataUrl = ' + dataUrl); //debug
-                sendResponse({ imgSrc: dataUrl });
-                console.log('screenshot captured?'); //debug
+    }
+});
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "capture_main_video_tab_id") {
+
+        //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+        chrome.storage.sync.set({ mainVideoTabID: sender.tab.id });
+
+    }
+});
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "glimpse_spotify") {
+
+        chrome.tabs.update(sender.tab.id, { active: true });
+
+    } else if (message.action === "background_update_logo_text") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, {
+                            action: "content_update_logo_text",
+                            text: message.text
+                        });
+
+                    }
+
+                });
 
             }
 
-        );
+        });
+
+    } else if (message.action === "glimpse_main_tab") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+                
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.update(result.mainVideoTabID, { active: true });
+                        chrome.tabs.sendMessage(result.mainVideoTabID, { action: "show_resume_fullscreen_message" });
+
+                    }
+
+                });
+
+            }
+
+        });
+
+    }
+});
+
+
+function simpleSpotifyBanner() {
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', addBannerInstructions);
+    } else {
+        addBannerInstructions();
+    }
+
+    function addBannerInstructions() {
+
+        var link = document.createElement('link');
+        link.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap';
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+
+        var banner = document.createElement('div');
+        banner.id = 'custom-banner';
+
+        banner.innerText = 'Message from YTOC Extension: Click play and then pause to set the Spotify playing location as here or close this tab and do the same elsewhere like the Spotify Desktop App.';
+
+        banner.style.position = 'fixed';
+        banner.style.top = '0';
+        banner.style.left = '0';
+        banner.style.width = '100%';
+        banner.style.backgroundColor = 'black';
+        banner.style.color = 'red';
+        banner.style.textAlign = 'center';
+        banner.style.padding = '5px';
+        banner.style.zIndex = '1000';
+        banner.style.fontSize = '20px';
+        banner.style.fontFamily = 'Roboto, Arial, sans-serif';
+        banner.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+
+        document.body.style.marginTop = '35px';
+
+        document.body.appendChild(banner);
+
+        //TODO: add some sort of listener instead of waiting 2 seconds
+        setTimeout(() => {
+
+            //wait for user to play and then pause 
+            waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]').then(() => {
+
+                waitForElement('[aria-label="Play"][data-testid="control-button-playpause"]').then(() => {
+
+                    banner.innerText = 'Great! Now keep this tab open. In a different or new tab, you may now go to the video stream you would like Spotify to play over the commercials for, set video to fullscreen, click the keyboard shortcut, and then if in auto mode, follow the instructions from there.';
+
+                });
+
+            });
+
+        }, 2000);
 
     }
 
-    //TODO: figure out why I added this here
-    return true;
-    
+
+    function waitForElement(target) {
+
+        return new Promise(resolve => {
+
+            if (document.querySelector(target)) {
+                return resolve(document.querySelector(target));
+            }
+
+            const observer = new MutationObserver(mutations => {
+
+                if (document.querySelector(target)) {
+                    observer.disconnect();
+                    resolve(document.querySelector(target));
+                }
+
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+        });
+
     }
-);
+
+}
