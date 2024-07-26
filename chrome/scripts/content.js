@@ -1,4 +1,3 @@
-//TODO: Add instrutions for manual mode
 
 //establish variables
 var isCommercialState = false;
@@ -84,7 +83,7 @@ chrome.storage.sync.get([
     otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     overlayHostName = result.overlayHostName ?? 'www.youtube.com';
     mainVideoFade = result.mainVideoFade ?? 55;
-    if (overlayVideoType != 'spotify') {
+    if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
         overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
         overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
         videoOverlayWidth = result.videoOverlayWidth ?? 75;
@@ -233,12 +232,22 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    if (overlayVideoType != 'spotify') {
+    if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
         setOverlayVideo();
-    } else {
-        //TODO: open spotify earlier
-        chrome.runtime.sendMessage({ action: "open_spotify" });
-        window.addEventListener('beforeunload', closeSpotify);
+    }
+
+    if (commercialDetectionMode != 'auto') {
+
+        if (overlayVideoType == 'spotify') {
+            //Note: this happens in captureOriginalPixelColor() in auto mode
+            chrome.runtime.sendMessage({ action: "open_spotify" });
+            window.addEventListener('beforeunload', closeSpotify);
+        }
+
+        //TODO: should this be moved above opening spotify?
+        //Note: this happens in pixelSelection() in auto mode
+        document.addEventListener('fullscreenchange', fullscreenChanged);
+
     }
 
     mainVideo = document.getElementsByTagName('video')[0]; //TODO: grab all videos on page and loop and interaction with all of them
@@ -259,14 +268,22 @@ function initialRun() {
 
     } //else do nothing for 100
 
-    //wait a little bit for the video/spotify to load //TODO: get indicator of when completely loaded
-    setTimeout(() => {
-        if (overlayVideoType != 'spotify') {
-            chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
-        } else {
-            chrome.runtime.sendMessage({ action: "initial_execute_music_interaction" });
+    //TODO: create a new variable for music/video boolean or whatever
+    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+
+        chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+        if (overlayVideoType == 'other-tabs') {
+            window.addEventListener('beforeunload', stopMutingOtherTabs);
         }
-    }, 2000);
+
+    } else {
+        
+        //wait a little bit for the video to load //TODO: get indicator of when completely loaded
+        setTimeout(() => {
+            chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
+        }, 2000);
+    }
 
 }
 
@@ -276,7 +293,7 @@ function endCommercialMode() {
 
     isCommercialState = false;
 
-    if (overlayVideoType == 'spotify') {
+    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
 
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
 
@@ -331,7 +348,7 @@ function startCommercialMode() {
 
         isCommercialState = true;
 
-        if (overlayVideoType == 'spotify') {
+        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
 
             chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
 
@@ -393,8 +410,6 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                             windowDimensions = { x: window.innerWidth, y: window.innerHeight };
                             startViewingTab(windowDimensions);
-
-                            //TODO: open spotify here instead so it has time to load before it is needed
 
                             document.addEventListener('fullscreenchange', abortPixelSelection);
 
@@ -637,15 +652,28 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
-            if (overlayVideoType != 'spotify' || isDebugMode) {
+            if ((overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') || isDebugMode) {
                 logoBoxText = 'YTOC';
-            } else {
+            } else if (overlayVideoType == 'spotify') {
                 logoBoxText = 'Loading Spotify...';
+            } else if (overlayVideoType == 'other-tabs') {
+                logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
             }
             logoBox.textContent = logoBoxText;
             if (!isDebugMode) { logoBox.style.display = 'none'; }
             removeElementsByClass('ytoc-selection-indicator');
         }, 2000);
+
+        if (overlayVideoType == 'spotify') {
+            //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
+            setTimeout(() => {
+                chrome.runtime.sendMessage({ action: "open_spotify" });
+                window.addEventListener('beforeunload', closeSpotify);
+            }, 2000);
+        } else if (overlayVideoType == 'other-tabs') {
+            //if user has extension set to other-tabs, mute the other tabs now
+            chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+        }
 
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
 
@@ -715,7 +743,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                         logoBox.textContent = logoBoxText;
                         logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         logoBox.style.display = 'block';
-                        if (!isDebugMode && overlayVideoType != 'spotify') {
+                        if (!isDebugMode && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
 
                             setTimeout(() => {
 
@@ -738,7 +766,8 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 matchCount++;
                 mismatchCount = 0;
 
-                if (!isDebugMode && overlayVideoType != 'spotify') {
+                //TODO: is this the best way to do this considering audio and video options?
+                if (!isDebugMode && !isCommercialState) {
                     logoBox.style.display = 'none';
                 }
 
@@ -751,7 +780,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isDebugMode) { console.log('commercial undetected'); }
 
-                        if (overlayVideoType == 'spotify') {
+                        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
                             if (isDebugMode) {
                                 logoBoxText = 'YTOC';
                                 logoBox.textContent = logoBoxText;
@@ -903,14 +932,32 @@ function fullscreenChanged() {
 
     if (!document.fullscreenElement) {
 
-        pauseAutoMode();
-        if (isCommercialState && overlayVideoType != 'spotify') {
+        if (commercialDetectionMode == 'auto') {
+            logoBox.style.display = 'none';
+            pauseAutoMode();
+        }
+
+        if (isCommercialState && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
             endCommercialMode();
+        }
+
+        //TODO: should I be doing it this way?
+        if (overlayVideoType == 'other-tabs') {
+            chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
         }
 
     } else if (document.fullscreenElement) {
 
-        resumeAutoMode();
+        removeElementsByClass('ytoc-main-video-message-alert');
+
+        if (commercialDetectionMode == 'auto') {
+            resumeAutoMode();
+            if (isDebugMode) { logoBox.style.display = 'block'; }
+        }
+        
+        if ((overlayVideoType == 'spotify' && !isCommercialState) || overlayVideoType == 'other-tabs') {
+            chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+        }
 
     }
 
@@ -930,7 +977,6 @@ function resumeAutoMode() {
 
     pixelColorMatchMonitor(originalPixelColor, selectedPixel);
     startViewingTab(windowDimensions);
-    removeElementsByClass('ytoc-main-video-message-alert');
     cooldownCountRemaining = 8; //give a chance for video UI to go away
 
 }
@@ -1023,3 +1069,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
     }
 });
+
+
+function stopMutingOtherTabs() {
+
+    chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+}
