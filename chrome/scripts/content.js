@@ -655,7 +655,7 @@ function captureOriginalPixelColor(selectedPixel) {
             if ((overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') || isDebugMode) {
                 logoBoxText = 'YTOC';
             } else if (overlayVideoType == 'spotify') {
-                logoBoxText = 'Loading Spotify...';
+                logoBoxText = 'Playing Spotify';
             } else if (overlayVideoType == 'other-tabs') {
                 logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
             }

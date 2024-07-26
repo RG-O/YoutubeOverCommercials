@@ -145,20 +145,23 @@ function initialSetup() {
 
                 playButton = document.querySelector('[data-testid="control-button-playpause"]');
 
-                if (document.querySelector('[data-testid="now-playing-widget"]')) {
-
-                    nowPlayingWidget = document.querySelector('[data-testid="now-playing-widget"]');
-                    nowPlayingWidgetObserver(nowPlayingWidget);
-
-                }
-
                 waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]:not([disabled])').then(() => {
+
+                    
 
                     //wait a split sec so things feel smoother
                     setTimeout(() => {
+
+                        if (document.querySelector('[data-testid="now-playing-widget"]')) {
+
+                            nowPlayingWidget = document.querySelector('[data-testid="now-playing-widget"]');
+                            nowPlayingWidgetObserver(nowPlayingWidget);
+
+                        }
+
                         chrome.runtime.sendMessage({ action: "glimpse_main_tab" });
-                        //shipNowPlaying(); //TODO: should I do this here?
                         banner.innerText = 'Tab opened for use of the YTOC extension. Do not close until you are done using YTOC extension.';
+
                     }, 500);
 
                 });
