@@ -1,4 +1,3 @@
-//TODO: Add instrutions for manual mode
 
 //establish variables
 var isCommercialState = false;
@@ -49,69 +48,6 @@ var isDebugMode;
 var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
 
-//grab all user set values
-//note: this is an async function
-chrome.storage.sync.get([
-    'overlayVideoType',
-    'ytPlaylistID',
-    'ytVideoID',
-    'ytLiveID',
-    'otherVideoURL',
-    'otherLiveURL',
-    'overlayHostName',
-    'mainVideoFade',
-    'videoOverlayWidth',
-    'videoOverlayHeight',
-    'overlayVideoLocationHorizontal',
-    'overlayVideoLocationVertical',
-    'mainVideoVolumeDuringCommercials',
-    'mainVideoVolumeDuringNonCommercials',
-    'shouldHideYTBackground',
-    'commercialDetectionMode',
-    'mismatchCountThreshold',
-    'matchCountThreshold',
-    'colorDifferenceMatchingThreshold',
-    'manualOverrideCooldown',
-    'isDebugMode'
-], (result) => {
-
-    //set them to default if not set by user yet
-    overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
-    ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
-    ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
-    ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
-    otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
-    otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
-    overlayHostName = result.overlayHostName ?? 'www.youtube.com';
-    mainVideoFade = result.mainVideoFade ?? 55;
-    if (overlayVideoType != 'spotify') {
-        overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
-        overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
-        videoOverlayWidth = result.videoOverlayWidth ?? 75;
-        videoOverlayHeight = result.videoOverlayHeight ?? 75;
-    } else {
-        overlayVideoLocationHorizontal = 'middle';
-        overlayVideoLocationVertical = 'middle';
-        videoOverlayWidth = 50;
-        videoOverlayHeight = 50;
-    }
-    mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
-    mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
-    if (mainVideoVolumeDuringCommercials > 0) {
-        mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
-    }
-    if (mainVideoVolumeDuringNonCommercials > 0) {
-        mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
-    }
-    shouldHideYTBackground = result.shouldHideYTBackground ?? true;
-    commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
-    mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
-    matchCountThreshold = result.matchCountThreshold ?? 2;
-    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
-    manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
-    isDebugMode = result.isDebugMode ?? false;
-
-});
 
 //function that is responsible for loading the video iframe over top of the main/background video
 function setOverlayVideo() {
@@ -233,12 +169,22 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    if (overlayVideoType != 'spotify') {
+    if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
         setOverlayVideo();
-    } else {
-        //TODO: open spotify earlier
-        chrome.runtime.sendMessage({ action: "open_spotify" });
-        window.addEventListener('beforeunload', closeSpotify);
+    }
+
+    if (commercialDetectionMode != 'auto') {
+
+        if (overlayVideoType == 'spotify') {
+            //Note: this happens in captureOriginalPixelColor() in auto mode
+            chrome.runtime.sendMessage({ action: "open_spotify" });
+            window.addEventListener('beforeunload', closeSpotify);
+        }
+
+        //TODO: should this be moved above opening spotify?
+        //Note: this happens in pixelSelection() in auto mode
+        document.addEventListener('fullscreenchange', fullscreenChanged);
+
     }
 
     mainVideo = document.getElementsByTagName('video')[0]; //TODO: grab all videos on page and loop and interaction with all of them
@@ -259,14 +205,22 @@ function initialRun() {
 
     } //else do nothing for 100
 
-    //wait a little bit for the video/spotify to load //TODO: get indicator of when completely loaded
-    setTimeout(() => {
-        if (overlayVideoType != 'spotify') {
-            chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
-        } else {
-            chrome.runtime.sendMessage({ action: "initial_execute_music_interaction" });
+    //TODO: create a new variable for music/video boolean or whatever
+    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+
+        chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+        if (overlayVideoType == 'other-tabs') {
+            window.addEventListener('beforeunload', stopMutingOtherTabs);
         }
-    }, 2000);
+
+    } else {
+        
+        //wait a little bit for the video to load //TODO: get indicator of when completely loaded
+        setTimeout(() => {
+            chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
+        }, 2000);
+    }
 
 }
 
@@ -276,7 +230,7 @@ function endCommercialMode() {
 
     isCommercialState = false;
 
-    if (overlayVideoType == 'spotify') {
+    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
 
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
 
@@ -331,7 +285,7 @@ function startCommercialMode() {
 
         isCommercialState = true;
 
-        if (overlayVideoType == 'spotify') {
+        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
 
             chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
 
@@ -374,52 +328,115 @@ chrome.runtime.onMessage.addListener(function (message) {
         //special actions for the very first time this is initiated on a page
         if (isFirstRun) {
 
-            //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
-            if (document.fullscreenElement) {
+            //get overlayHostName
+            //note: getting all other user set values later
+            chrome.storage.sync.get(['overlayHostName'], (result) => {
 
-                //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
-                if (document.fullscreenElement.nodeName != 'IFRAME') {
+                overlayHostName = result.overlayHostName ?? 'www.youtube.com';
 
-                    //TODO: grab user set variables here - except I need overlay host name earlier
+                //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
+                if (document.fullscreenElement) {
 
-                    chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
+                    //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
+                    if (document.fullscreenElement.nodeName != 'IFRAME') {
 
-                    //setting up for pixel selection for auto mode or continuing run for manual
-                    if (commercialDetectionMode == 'auto') {
+                        //grab all user set values
+                        chrome.storage.sync.get([
+                            'overlayVideoType',
+                            'ytPlaylistID',
+                            'ytVideoID',
+                            'ytLiveID',
+                            'otherVideoURL',
+                            'otherLiveURL',
+                            'mainVideoFade',
+                            'videoOverlayWidth',
+                            'videoOverlayHeight',
+                            'overlayVideoLocationHorizontal',
+                            'overlayVideoLocationVertical',
+                            'mainVideoVolumeDuringCommercials',
+                            'mainVideoVolumeDuringNonCommercials',
+                            'commercialDetectionMode',
+                            'mismatchCountThreshold',
+                            'matchCountThreshold',
+                            'colorDifferenceMatchingThreshold',
+                            'manualOverrideCooldown',
+                            'isDebugMode'
+                        ], (result) => {
 
-                        if (!isAutoModeInitiated) {
+                            //set them to default if not set by user yet
+                            overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+                            ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
+                            ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
+                            ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
+                            otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
+                            otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
+                            mainVideoFade = result.mainVideoFade ?? 55;
+                            if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+                                overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                                overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                                videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                                videoOverlayHeight = result.videoOverlayHeight ?? 75;
+                            } else {
+                                overlayVideoLocationHorizontal = 'middle';
+                                overlayVideoLocationVertical = 'middle';
+                                videoOverlayWidth = 50;
+                                videoOverlayHeight = 50;
+                            }
+                            mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
+                            mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
+                            if (mainVideoVolumeDuringCommercials > 0) {
+                                mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
+                            }
+                            if (mainVideoVolumeDuringNonCommercials > 0) {
+                                mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
+                            }
+                            commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
+                            mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
+                            matchCountThreshold = result.matchCountThreshold ?? 2;
+                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
+                            manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                            isDebugMode = result.isDebugMode ?? false;
 
-                            isAutoModeInitiated = true;
+                            chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
 
-                            windowDimensions = { x: window.innerWidth, y: window.innerHeight };
-                            startViewingTab(windowDimensions);
+                            //setting up for pixel selection for auto mode or continuing run for manual
+                            if (commercialDetectionMode == 'auto') {
 
-                            //TODO: open spotify here instead so it has time to load before it is needed
+                                if (!isAutoModeInitiated) {
 
-                            document.addEventListener('fullscreenchange', abortPixelSelection);
+                                    isAutoModeInitiated = true;
 
-                            //give a split sec for recording to start before asking user to pick a pixel
-                            setTimeout(() => {
-                                setBlockersAndPixelSelectionInstructions();
-                                document.addEventListener('click', pixelSelection);
-                            }, 500);
+                                    windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+                                    startViewingTab(windowDimensions);
 
-                        } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
+                                    document.addEventListener('fullscreenchange', abortPixelSelection);
 
-                    } else {
+                                    //give a split sec for recording to start before asking user to pick a pixel
+                                    setTimeout(() => {
+                                        setBlockersAndPixelSelectionInstructions();
+                                        document.addEventListener('click', pixelSelection);
+                                    }, 500);
 
-                        initialRun();
+                                } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
 
-                    }
+                            } else {
 
-                } //else do nothing for when nodeName is IFRAME
+                                initialRun();
 
-            } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
-                //since user was not in full screen, instruct them that they need to be
+                            }
 
-                setNotFullscreenAlerts();
+                        });
 
-            }
+                    } //else do nothing for when nodeName is IFRAME
+
+                } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
+                    //since user was not in full screen, instruct them that they need to be
+
+                    setNotFullscreenAlerts();
+
+                }
+
+            });
             
         } else {
 
@@ -637,15 +654,28 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
-            if (overlayVideoType != 'spotify' || isDebugMode) {
+            if ((overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') || isDebugMode) {
                 logoBoxText = 'YTOC';
-            } else {
-                logoBoxText = 'Loading Spotify...';
+            } else if (overlayVideoType == 'spotify') {
+                logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
+            } else if (overlayVideoType == 'other-tabs') {
+                logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
             }
             logoBox.textContent = logoBoxText;
             if (!isDebugMode) { logoBox.style.display = 'none'; }
             removeElementsByClass('ytoc-selection-indicator');
         }, 2000);
+
+        if (overlayVideoType == 'spotify') {
+            //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
+            setTimeout(() => {
+                chrome.runtime.sendMessage({ action: "open_spotify" });
+                window.addEventListener('beforeunload', closeSpotify);
+            }, 2000);
+        } else if (overlayVideoType == 'other-tabs') {
+            //if user has extension set to other-tabs, mute the other tabs now
+            chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+        }
 
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
 
@@ -715,7 +745,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                         logoBox.textContent = logoBoxText;
                         logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         logoBox.style.display = 'block';
-                        if (!isDebugMode && overlayVideoType != 'spotify') {
+                        if (!isDebugMode && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
 
                             setTimeout(() => {
 
@@ -738,10 +768,9 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 matchCount++;
                 mismatchCount = 0;
 
-                if (!isDebugMode) {
-                    if (overlayVideoType != 'spotify' || !isCommercialState) {
-                        logoBox.style.display = 'none';
-                    }
+                //TODO: is this the best way to do this considering audio and video options?
+                if (!isDebugMode && !isCommercialState) {
+                    logoBox.style.display = 'none';
                 }
 
                 countdownOngoing = false;
@@ -753,7 +782,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isDebugMode) { console.log('commercial undetected'); }
 
-                        if (overlayVideoType == 'spotify') {
+                        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
                             if (isDebugMode) {
                                 logoBoxText = 'YTOC';
                                 logoBox.textContent = logoBoxText;
@@ -905,14 +934,32 @@ function fullscreenChanged() {
 
     if (!document.fullscreenElement) {
 
-        pauseAutoMode();
-        if (isCommercialState && overlayVideoType != 'spotify') {
+        if (commercialDetectionMode == 'auto') {
+            logoBox.style.display = 'none';
+            pauseAutoMode();
+        }
+
+        if (isCommercialState && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
             endCommercialMode();
+        }
+
+        //TODO: should I be doing it this way?
+        if (overlayVideoType == 'other-tabs') {
+            chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
         }
 
     } else if (document.fullscreenElement) {
 
-        resumeAutoMode();
+        removeElementsByClass('ytoc-main-video-message-alert');
+
+        if (commercialDetectionMode == 'auto') {
+            resumeAutoMode();
+            if (isDebugMode) { logoBox.style.display = 'block'; }
+        }
+        
+        if ((overlayVideoType == 'spotify' && !isCommercialState) || overlayVideoType == 'other-tabs') {
+            chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+        }
 
     }
 
@@ -932,7 +979,6 @@ function resumeAutoMode() {
 
     pixelColorMatchMonitor(originalPixelColor, selectedPixel);
     startViewingTab(windowDimensions);
-    removeElementsByClass('ytoc-main-video-message-alert');
     cooldownCountRemaining = 8; //give a chance for video UI to go away
 
 }
@@ -1023,5 +1069,39 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         removeElementsByClass('ytoc-main-video-message-alert');
         addMessageAlertToMainVideo('Success! You may now resume fullscreen and enjoy :)');
 
+    } else if (message.action == 'content_update_preferences') {
+
+        if (!isFirstRun) {
+
+            //grab all user set values
+            //note: this is an async function
+            //TODO: figure out how to update all the preferences that I'm not updating here after extension has already been initiated
+            chrome.storage.sync.get([
+                'mismatchCountThreshold',
+                'matchCountThreshold',
+                'colorDifferenceMatchingThreshold',
+                'manualOverrideCooldown'
+            ], (result) => {
+
+                //set them to default if not set by user yet
+                mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
+                matchCountThreshold = result.matchCountThreshold ?? 2;
+                colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
+                manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+
+                //removeElementsByClass('ytoc-main-video-message-alert');
+                //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
+
+            });
+
+        } //else do not update preferences because this gets updated on first run anyway
+
     }
 });
+
+
+function stopMutingOtherTabs() {
+
+    chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+}

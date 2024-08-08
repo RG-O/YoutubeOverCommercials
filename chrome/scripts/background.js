@@ -70,7 +70,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         //open spotify in an inactive pinned tab
         chrome.tabs.create({
             pinned: true,
-            active: false,
+            active: true,
             url: 'https://open.spotify.com/',
         },
             (tab) => {
@@ -105,34 +105,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
-    } else if (message.action === "initial_execute_music_interaction") {
-
-        //grab user set values
-        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
-
-            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
-
-            if (overlayVideoType == 'spotify') {
-
-                if (result.spotifyTabID) {
-
-                    chrome.tabs.query({}, function (tabs) {
-
-                        let exists = tabs.some(tab => tab.id === result.spotifyTabID);
-                        if (exists) {
-
-                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "initial_play_spotify" });
-
-                        }
-
-                    });
-
-                }
-
-            }
-
-        });
-
     } else if (message.action === "execute_music_non_commercial_state") {
 
         //grab user set values
@@ -156,6 +128,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     });
 
                 }
+
+            } else if (overlayVideoType == 'other-tabs') {
+
+                //mute all unmuted tabs that aren't the main video one
+                chrome.tabs.query({ muted: false }, (tabs) => {
+                    tabs.forEach((tab) => {
+                        if (tab.id !== sender.tab.id) {
+                            chrome.tabs.update(tab.id, { muted: true });
+                        }
+                    });
+                    
+                });
+
+                //TODO: Decide if I want to mute/unmute the main tab - something to consider: when somebody sets the volume to go lower instead of completey muted
+                //chrome.tabs.update(sender.tab.id, { muted: false });
 
             }
 
@@ -185,27 +172,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                 }
 
+            } else if (overlayVideoType == 'other-tabs') {
+
+                //unmute all mutted tabs that aren't the main video one
+                chrome.tabs.query({ muted: true }, (tabs) => {
+                    tabs.forEach((tab) => {
+                        if (tab.id !== sender.tab.id) {
+                            chrome.tabs.update(tab.id, { muted: false });
+                        }
+                    });
+
+                });
+
+                //TODO: Decide if I want to mute/unmute the main tab - something else to consider: need some sort of unmute all tabs for beforeunload
+                //chrome.tabs.update(sender.tab.id, { muted: true });
+
             }
 
         });
-
-    } else if (message.action === "open_spotify_simple") {
-
-        //open spotify in an active tab
-        chrome.tabs.create({
-            pinned: false,
-            active: true,
-            url: 'https://open.spotify.com/',
-        },
-            (tab) => {
-
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
-                    func: simpleSpotifyBanner
-                });
-
-            }
-        );
 
     }
 });
@@ -483,6 +467,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
         chrome.storage.sync.set({ mainVideoTabID: sender.tab.id });
 
+    } else if (message.action === "background_update_preferences") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, { action: "content_update_preferences" });
+
+                    }
+
+                });
+
+            }
+
+        });
+
     }
 });
 
@@ -541,87 +546,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-
-function simpleSpotifyBanner() {
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', addBannerInstructions);
-    } else {
-        addBannerInstructions();
-    }
-
-    function addBannerInstructions() {
-
-        var link = document.createElement('link');
-        link.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap';
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
-
-        var banner = document.createElement('div');
-        banner.id = 'custom-banner';
-
-        banner.innerText = 'Message from YTOC Extension: Click play and then pause to set the Spotify playing location as here or close this tab and do the same elsewhere like the Spotify Desktop App.';
-
-        banner.style.position = 'fixed';
-        banner.style.top = '0';
-        banner.style.left = '0';
-        banner.style.width = '100%';
-        banner.style.backgroundColor = 'black';
-        banner.style.color = 'red';
-        banner.style.textAlign = 'center';
-        banner.style.padding = '5px';
-        banner.style.zIndex = '1000';
-        banner.style.fontSize = '20px';
-        banner.style.fontFamily = 'Roboto, Arial, sans-serif';
-        banner.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-
-        document.body.style.marginTop = '35px';
-
-        document.body.appendChild(banner);
-
-        //TODO: add some sort of listener instead of waiting 2 seconds
-        setTimeout(() => {
-
-            //wait for user to play and then pause 
-            waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]').then(() => {
-
-                waitForElement('[aria-label="Play"][data-testid="control-button-playpause"]').then(() => {
-
-                    banner.innerText = 'Great! Now keep this tab open. In a different or new tab, you may now go to the video stream you would like Spotify to play over the commercials for, set video to fullscreen, click the keyboard shortcut, and then if in auto mode, follow the instructions from there.';
-
-                });
-
-            });
-
-        }, 2000);
-
-    }
-
-
-    function waitForElement(target) {
-
-        return new Promise(resolve => {
-
-            if (document.querySelector(target)) {
-                return resolve(document.querySelector(target));
-            }
-
-            const observer = new MutationObserver(mutations => {
-
-                if (document.querySelector(target)) {
-                    observer.disconnect();
-                    resolve(document.querySelector(target));
-                }
-
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
-        });
-
-    }
-
-}
