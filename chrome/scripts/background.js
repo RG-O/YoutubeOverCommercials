@@ -467,6 +467,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
         chrome.storage.sync.set({ mainVideoTabID: sender.tab.id });
 
+    } else if (message.action === "background_update_preferences") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, { action: "content_update_preferences" });
+
+                    }
+
+                });
+
+            }
+
+        });
+
     }
 });
 

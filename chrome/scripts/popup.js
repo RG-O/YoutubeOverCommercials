@@ -120,8 +120,13 @@ document.getElementById("save-button").onclick = function () {
             manualOverrideCooldown: optionsForm.manualOverrideCooldown.value,
             isDebugMode: optionsForm.isDebugMode.checked
         }, function () {
+
             window.close();
-            alert("Changes saved successfully! Note: May need to refresh page to have all updates take effect.");
+            //TODO: only show this message if one of these values have been updated and extension has already been initiated
+            //TODO: get these values to update after extension has already been initiated
+            alert("Changes saved successfully! Note: If extension has alread been initiated, you may need to refresh page for some updates take effect.");
+            chrome.runtime.sendMessage({ action: "background_update_preferences" });
+
         });
 
     } else {

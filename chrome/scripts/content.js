@@ -48,69 +48,6 @@ var isDebugMode;
 var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
 
-//grab all user set values
-//note: this is an async function
-chrome.storage.sync.get([
-    'overlayVideoType',
-    'ytPlaylistID',
-    'ytVideoID',
-    'ytLiveID',
-    'otherVideoURL',
-    'otherLiveURL',
-    'overlayHostName',
-    'mainVideoFade',
-    'videoOverlayWidth',
-    'videoOverlayHeight',
-    'overlayVideoLocationHorizontal',
-    'overlayVideoLocationVertical',
-    'mainVideoVolumeDuringCommercials',
-    'mainVideoVolumeDuringNonCommercials',
-    'shouldHideYTBackground',
-    'commercialDetectionMode',
-    'mismatchCountThreshold',
-    'matchCountThreshold',
-    'colorDifferenceMatchingThreshold',
-    'manualOverrideCooldown',
-    'isDebugMode'
-], (result) => {
-
-    //set them to default if not set by user yet
-    overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
-    ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
-    ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
-    ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
-    otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
-    otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
-    overlayHostName = result.overlayHostName ?? 'www.youtube.com';
-    mainVideoFade = result.mainVideoFade ?? 55;
-    if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
-        overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
-        overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
-        videoOverlayWidth = result.videoOverlayWidth ?? 75;
-        videoOverlayHeight = result.videoOverlayHeight ?? 75;
-    } else {
-        overlayVideoLocationHorizontal = 'middle';
-        overlayVideoLocationVertical = 'middle';
-        videoOverlayWidth = 50;
-        videoOverlayHeight = 50;
-    }
-    mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
-    mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
-    if (mainVideoVolumeDuringCommercials > 0) {
-        mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
-    }
-    if (mainVideoVolumeDuringNonCommercials > 0) {
-        mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
-    }
-    shouldHideYTBackground = result.shouldHideYTBackground ?? true;
-    commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
-    mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
-    matchCountThreshold = result.matchCountThreshold ?? 2;
-    colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
-    manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
-    isDebugMode = result.isDebugMode ?? false;
-
-});
 
 //function that is responsible for loading the video iframe over top of the main/background video
 function setOverlayVideo() {
@@ -391,50 +328,115 @@ chrome.runtime.onMessage.addListener(function (message) {
         //special actions for the very first time this is initiated on a page
         if (isFirstRun) {
 
-            //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
-            if (document.fullscreenElement) {
+            //get overlayHostName
+            //note: getting all other user set values later
+            chrome.storage.sync.get(['overlayHostName'], (result) => {
 
-                //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
-                if (document.fullscreenElement.nodeName != 'IFRAME') {
+                overlayHostName = result.overlayHostName ?? 'www.youtube.com';
 
-                    //TODO: grab user set variables here - except I need overlay host name earlier
+                //extension can only be initiated for the first time if user is in full screen mode, this is needed to find out where to place the overlay video
+                if (document.fullscreenElement) {
 
-                    chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
+                    //TODO: look into why this would ever return iframe and why I'm stopping because of it - I think it is because if the iframe is fullscreened then that means something inside of it would also count as fullscreened, see espn.com/watch for example
+                    if (document.fullscreenElement.nodeName != 'IFRAME') {
 
-                    //setting up for pixel selection for auto mode or continuing run for manual
-                    if (commercialDetectionMode == 'auto') {
+                        //grab all user set values
+                        chrome.storage.sync.get([
+                            'overlayVideoType',
+                            'ytPlaylistID',
+                            'ytVideoID',
+                            'ytLiveID',
+                            'otherVideoURL',
+                            'otherLiveURL',
+                            'mainVideoFade',
+                            'videoOverlayWidth',
+                            'videoOverlayHeight',
+                            'overlayVideoLocationHorizontal',
+                            'overlayVideoLocationVertical',
+                            'mainVideoVolumeDuringCommercials',
+                            'mainVideoVolumeDuringNonCommercials',
+                            'commercialDetectionMode',
+                            'mismatchCountThreshold',
+                            'matchCountThreshold',
+                            'colorDifferenceMatchingThreshold',
+                            'manualOverrideCooldown',
+                            'isDebugMode'
+                        ], (result) => {
 
-                        if (!isAutoModeInitiated) {
+                            //set them to default if not set by user yet
+                            overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+                            ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
+                            ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
+                            ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
+                            otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
+                            otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
+                            mainVideoFade = result.mainVideoFade ?? 55;
+                            if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+                                overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                                overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                                videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                                videoOverlayHeight = result.videoOverlayHeight ?? 75;
+                            } else {
+                                overlayVideoLocationHorizontal = 'middle';
+                                overlayVideoLocationVertical = 'middle';
+                                videoOverlayWidth = 50;
+                                videoOverlayHeight = 50;
+                            }
+                            mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
+                            mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
+                            if (mainVideoVolumeDuringCommercials > 0) {
+                                mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
+                            }
+                            if (mainVideoVolumeDuringNonCommercials > 0) {
+                                mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
+                            }
+                            commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
+                            mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
+                            matchCountThreshold = result.matchCountThreshold ?? 2;
+                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
+                            manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                            isDebugMode = result.isDebugMode ?? false;
 
-                            isAutoModeInitiated = true;
+                            chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
 
-                            windowDimensions = { x: window.innerWidth, y: window.innerHeight };
-                            startViewingTab(windowDimensions);
+                            //setting up for pixel selection for auto mode or continuing run for manual
+                            if (commercialDetectionMode == 'auto') {
 
-                            document.addEventListener('fullscreenchange', abortPixelSelection);
+                                if (!isAutoModeInitiated) {
 
-                            //give a split sec for recording to start before asking user to pick a pixel
-                            setTimeout(() => {
-                                setBlockersAndPixelSelectionInstructions();
-                                document.addEventListener('click', pixelSelection);
-                            }, 500);
+                                    isAutoModeInitiated = true;
 
-                        } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
+                                    windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+                                    startViewingTab(windowDimensions);
 
-                    } else {
+                                    document.addEventListener('fullscreenchange', abortPixelSelection);
 
-                        initialRun();
+                                    //give a split sec for recording to start before asking user to pick a pixel
+                                    setTimeout(() => {
+                                        setBlockersAndPixelSelectionInstructions();
+                                        document.addEventListener('click', pixelSelection);
+                                    }, 500);
 
-                    }
+                                } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
 
-                } //else do nothing for when nodeName is IFRAME
+                            } else {
 
-            } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
-                //since user was not in full screen, instruct them that they need to be
+                                initialRun();
 
-                setNotFullscreenAlerts();
+                            }
 
-            }
+                        });
+
+                    } //else do nothing for when nodeName is IFRAME
+
+                } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
+                    //since user was not in full screen, instruct them that they need to be
+
+                    setNotFullscreenAlerts();
+
+                }
+
+            });
             
         } else {
 
@@ -655,7 +657,7 @@ function captureOriginalPixelColor(selectedPixel) {
             if ((overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') || isDebugMode) {
                 logoBoxText = 'YTOC';
             } else if (overlayVideoType == 'spotify') {
-                logoBoxText = 'Playing Spotify';
+                logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
             } else if (overlayVideoType == 'other-tabs') {
                 logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
             }
@@ -1066,6 +1068,33 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         //TODO: add removeElementsByClass('ytoc-main-video-message-alert') into addMessageAlertToMainVideo() function
         removeElementsByClass('ytoc-main-video-message-alert');
         addMessageAlertToMainVideo('Success! You may now resume fullscreen and enjoy :)');
+
+    } else if (message.action == 'content_update_preferences') {
+
+        if (!isFirstRun) {
+
+            //grab all user set values
+            //note: this is an async function
+            //TODO: figure out how to update all the preferences that I'm not updating here after extension has already been initiated
+            chrome.storage.sync.get([
+                'mismatchCountThreshold',
+                'matchCountThreshold',
+                'colorDifferenceMatchingThreshold',
+                'manualOverrideCooldown'
+            ], (result) => {
+
+                //set them to default if not set by user yet
+                mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
+                matchCountThreshold = result.matchCountThreshold ?? 2;
+                colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
+                manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+
+                //removeElementsByClass('ytoc-main-video-message-alert');
+                //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
+
+            });
+
+        } //else do not update preferences because this gets updated on first run anyway
 
     }
 });

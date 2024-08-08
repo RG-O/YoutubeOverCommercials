@@ -147,8 +147,6 @@ function initialSetup() {
 
                 waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]:not([disabled])').then(() => {
 
-                    
-
                     //wait a split sec so things feel smoother
                     setTimeout(() => {
 
