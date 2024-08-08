@@ -32,17 +32,17 @@ chrome.storage.sync.get([
     optionsForm.otherLiveURL.value = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
-    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 50;
+    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 55;
     optionsForm.videoOverlayWidth.value = result.videoOverlayWidth ?? 75;
     optionsForm.videoOverlayHeight.value = result.videoOverlayHeight ?? 75;
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
     optionsForm.commercialDetectionMode.value = result.commercialDetectionMode ?? 'auto';
-    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 2;
+    optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 8;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 20;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
@@ -96,6 +96,7 @@ document.getElementById("save-button").onclick = function () {
         }
 
         //save the values to the users chrome profile, close the extension window, and then give them message telling them they might need to refresh
+        //NOTE!! when adding new values, don't forget about forceSave() below
         chrome.storage.sync.set({
             overlayVideoType: optionsForm.overlayVideoType.value,
             ytPlaylistID: optionsForm.ytPlaylistID.value,
@@ -119,14 +120,18 @@ document.getElementById("save-button").onclick = function () {
             manualOverrideCooldown: optionsForm.manualOverrideCooldown.value,
             isDebugMode: optionsForm.isDebugMode.checked
         }, function () {
+
             window.close();
-            alert("Changes saved successfully! Note: May need to refresh page to have all updates take effect.");
+            //TODO: only show this message if one of these values have been updated and extension has already been initiated
+            //TODO: get these values to update after extension has already been initiated
+            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            chrome.runtime.sendMessage({ action: "background_update_preferences" });
+
         });
 
     } else {
         alert('Field missing. Please input all fields.');
     }
-
 
 }
 
@@ -165,4 +170,8 @@ function toggleModeInstructionsVisability() {
         modeInstructions[i].style.display = 'none';
     }
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
+}
+
+document.getElementById("overlayVideoType-spotify").onclick = function () {
+    alert(`Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.`);
 }

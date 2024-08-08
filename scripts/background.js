@@ -48,8 +48,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
-        
-
     } else if (message.action === "execute_overlay_video_commercial_state") {
 
         //grab user set values
@@ -64,6 +62,132 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 func: startCommercialState,
                 args: [overlayVideoType, overlayHostName]
             });
+
+        });
+
+    } else if (message.action === "open_spotify") {
+
+        //open spotify in an inactive pinned tab
+        chrome.tabs.create({
+            pinned: true,
+            active: true,
+            url: 'https://open.spotify.com/',
+        },
+            (tab) => {
+
+                //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+                chrome.storage.sync.set({ spotifyTabID: tab.id });
+
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id, allFrames: true },
+                    files: ["scripts/spotify.js"]
+                });
+                
+            }
+        );
+
+    } else if (message.action === "close_spotify") {
+
+        chrome.storage.sync.get(['spotifyTabID'], (result) => {
+
+            if (result.spotifyTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                    if (exists) {
+                        chrome.tabs.remove(result.spotifyTabID);
+                    }
+
+                });
+                
+            }
+
+        });
+
+    } else if (message.action === "execute_music_non_commercial_state") {
+
+        //grab user set values
+        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
+
+            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+
+            if (overlayVideoType == 'spotify') {
+
+                if (result.spotifyTabID) {
+
+                    chrome.tabs.query({}, function (tabs) {
+
+                        let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                        if (exists) {
+
+                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "pause_spotify" });
+
+                        }
+
+                    });
+
+                }
+
+            } else if (overlayVideoType == 'other-tabs') {
+
+                //mute all unmuted tabs that aren't the main video one
+                chrome.tabs.query({ muted: false }, (tabs) => {
+                    tabs.forEach((tab) => {
+                        if (tab.id !== sender.tab.id) {
+                            chrome.tabs.update(tab.id, { muted: true });
+                        }
+                    });
+                    
+                });
+
+                //TODO: Decide if I want to mute/unmute the main tab - something to consider: when somebody sets the volume to go lower instead of completey muted
+                //chrome.tabs.update(sender.tab.id, { muted: false });
+
+            }
+
+        });
+
+    } else if (message.action === "execute_music_commercial_state") {
+
+        //grab user set values
+        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
+
+            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+
+            if (overlayVideoType == 'spotify') {
+
+                if (result.spotifyTabID) {
+
+                    chrome.tabs.query({}, function (tabs) {
+
+                        let exists = tabs.some(tab => tab.id === result.spotifyTabID);
+                        if (exists) {
+
+                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "play_spotify" });
+
+                        }
+
+                    });
+
+                }
+
+            } else if (overlayVideoType == 'other-tabs') {
+
+                //unmute all mutted tabs that aren't the main video one
+                chrome.tabs.query({ muted: true }, (tabs) => {
+                    tabs.forEach((tab) => {
+                        if (tab.id !== sender.tab.id) {
+                            chrome.tabs.update(tab.id, { muted: false });
+                        }
+                    });
+
+                });
+
+                //TODO: Decide if I want to mute/unmute the main tab - something else to consider: need some sort of unmute all tabs for beforeunload
+                //chrome.tabs.update(sender.tab.id, { muted: true });
+
+            }
 
         });
 
@@ -91,7 +215,13 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
         } else if (overlayHostName != 'tv.youtube.com') {
             document.getElementsByTagName('video')[0].play();
         } //else do nothing because yttv plays automatically
-        
+
+        //set marker on overlay video so the Live Thread Ticker browser extension knows not to apply
+        if (document.getElementsByTagName('body')[0]) {
+            let lttBlocker = document.createElement("span");
+            lttBlocker.id = 'YTOC-LTT-Blocker';
+            document.getElementsByTagName('body')[0].appendChild(lttBlocker);
+        }
 
         if (shouldHideYTBackground) {
 
@@ -129,7 +259,8 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
                 }
 
             }
-            
+
+            //TODO: add button on top of overlay video  if in live mode that asks if user would like video to play PiP while main video is not commercial, disapear if not clicked after x time
             
             //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
             if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
@@ -292,35 +423,126 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 }
 
 
-chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+    if (message.action === "view-tab") {
 
-    if (request.action === 'capture-screenshot') {
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['USER_MEDIA'],
+            justification: 'Recording tab in order to extract user selected pixel color'
+        });
 
-        console.log('message received for background.js to take screenshot') //debug
-        console.log(`Selected screenshot location: (${request.rect.x}, ${request.rect.y})`); //debug
+        const streamId = await chrome.tabCapture.getMediaStreamId({
+            targetTabId: sender.tab.id
+        });
 
-        //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
-        chrome.tabs.captureVisibleTab(
+        const constraints = {
+            video: {
+                mandatory: {
+                    chromeMediaSource: 'tab',
+                    chromeMediaSourceId: streamId,
+                    maxFrameRate: 4,
+                    minFrameRate: 4,
+                    maxWidth: message.windowDimensions.x,
+                    maxHeight: message.windowDimensions.y,
+                    minWidth: message.windowDimensions.x,
+                    minHeight: message.windowDimensions.y
+                }
+            }
+        }
 
-            sender.tab.windowId, //debug - replace with just null if this doesn't work
-            {
-                format: 'png'
-                , rect: request.rect
-            },
-            function (dataUrl) {
+        chrome.runtime.sendMessage({
+            target: 'offscreen',
+            action: 'start-viewing',
+            constraints: constraints
+        });
 
-                console.log('dataUrl = ' + dataUrl); //debug
-                sendResponse({ imgSrc: dataUrl });
-                console.log('screenshot captured?'); //debug
+    }
+});
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "capture_main_video_tab_id") {
+
+        //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+        chrome.storage.sync.set({ mainVideoTabID: sender.tab.id });
+
+    } else if (message.action === "background_update_preferences") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, { action: "content_update_preferences" });
+
+                    }
+
+                });
 
             }
 
-        );
+        });
 
     }
+});
 
-    //TODO: figure out why I added this here
-    return true;
-    
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "glimpse_spotify") {
+
+        chrome.tabs.update(sender.tab.id, { active: true });
+
+    } else if (message.action === "background_update_logo_text") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, {
+                            action: "content_update_logo_text",
+                            text: message.text
+                        });
+
+                    }
+
+                });
+
+            }
+
+        });
+
+    } else if (message.action === "glimpse_main_tab") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+                
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.update(result.mainVideoTabID, { active: true });
+                        chrome.tabs.sendMessage(result.mainVideoTabID, { action: "show_resume_fullscreen_message" });
+
+                    }
+
+                });
+
+            }
+
+        });
+
     }
-);
+});
+
