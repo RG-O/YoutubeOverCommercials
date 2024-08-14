@@ -30,7 +30,7 @@ function pause() {
         }
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
-    
+
 }
 
 

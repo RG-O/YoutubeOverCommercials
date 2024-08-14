@@ -75,13 +75,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         },
             (tab) => {
 
-                //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
-                chrome.storage.sync.set({ spotifyTabID: tab.id });
+                //waiting a little for the spotify tab to show because firefox doesn't seem to let you inject into tabs that aren't showing yet
+                setTimeout(() => {
 
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
-                    files: ["scripts/spotify.js"]
-                });
+                    //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+                    chrome.storage.sync.set({ spotifyTabID: tab.id });
+
+                    chrome.scripting.executeScript({
+                        target: { tabId: tab.id, allFrames: true },
+                        files: ["scripts/spotify.js"]
+                    });
+
+                }, 1500);
 
             }
         );
@@ -423,42 +428,49 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 }
 
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "chrome-view-tab") {
 
-        await chrome.offscreen.createDocument({
-            url: 'offscreen.html',
-            reasons: ['USER_MEDIA'],
-            justification: 'Recording tab in order to extract user selected pixel color'
-        });
-
-        const streamId = await chrome.tabCapture.getMediaStreamId({
-            targetTabId: sender.tab.id
-        });
-
-        const constraints = {
-            video: {
-                mandatory: {
-                    chromeMediaSource: 'tab',
-                    chromeMediaSourceId: streamId,
-                    maxFrameRate: 4,
-                    minFrameRate: 4,
-                    maxWidth: message.windowDimensions.x,
-                    maxHeight: message.windowDimensions.y,
-                    minWidth: message.windowDimensions.x,
-                    minHeight: message.windowDimensions.y
-                }
-            }
-        }
-
-        chrome.runtime.sendMessage({
-            target: 'offscreen',
-            action: 'start-viewing',
-            constraints: constraints
-        });
+        chromeViewTab(message, sender);
 
     }
 });
+
+
+async function chromeViewTab(message, sender) {
+
+    await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['USER_MEDIA'],
+        justification: 'Recording tab in order to extract user selected pixel color'
+    });
+
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+        targetTabId: sender.tab.id
+    });
+
+    const constraints = {
+        video: {
+            mandatory: {
+                chromeMediaSource: 'tab',
+                chromeMediaSourceId: streamId,
+                maxFrameRate: 4,
+                minFrameRate: 4,
+                maxWidth: message.windowDimensions.x,
+                maxHeight: message.windowDimensions.y,
+                minWidth: message.windowDimensions.x,
+                minHeight: message.windowDimensions.y
+            }
+        }
+    }
+
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'start-viewing',
+        constraints: constraints
+    });
+
+}
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -574,7 +586,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
 
     }
 
-    //TODO: figure out why I added this here
+    //return true to indicate that the response will be sent asynchronously
     return true;
     
     }

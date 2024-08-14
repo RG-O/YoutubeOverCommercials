@@ -43,7 +43,7 @@
         <b>Overlay Video Type and ID:</b>
         <br />
 
-        <label class="video-type-label" for="overlayVideoType-yt-playlist">YT Playlist</label>
+        <label class="video-type-label" for="overlayVideoType-yt-playlist">YT Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
         <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
         <br>
         <div id="yt-playlist" class="id-field-wrapper">
@@ -53,7 +53,7 @@
             </div>
         </div>
 
-        <label class="video-type-label" for="overlayVideoType-yt-video">Single YT Video</label>
+        <label class="video-type-label" for="overlayVideoType-yt-video">Single YT Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
         <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
         <br>
         <div id="yt-video" class="id-field-wrapper">
@@ -63,7 +63,7 @@
             </div>
         </div>
 
-        <label class="video-type-label" for="overlayVideoType-yt-live">YT Live</label>
+        <label class="video-type-label" for="overlayVideoType-yt-live">YT Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to.</span></span>
         <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
         <br>
         <div id="yt-live" class="id-field-wrapper">
@@ -73,7 +73,26 @@
             </div>
         </div>
 
-        <label class="video-type-label" for="overlayVideoType-other-video">Non-YT Video </label><span class="note">(experimental)</span>
+        <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
+        <input type="radio" id="overlayVideoType-spotify" name="overlayVideoType" value="spotify">
+        <br>
+        <div id="spotify" class="id-field-wrapper">
+            <span class="note">
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Will prompt you to select playlist from Spotify.<br />
+                <span style="color: red;">Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.</span>
+            </span>
+        </div>
+
+        <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 250px; top: -185px; left: -120px;">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
+        <input type="radio" id="overlayVideoType-other-tabs" name="overlayVideoType" value="other-tabs">
+        <br>
+        <div id="other-tabs" class="id-field-wrapper">
+            <span class="note">
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Will mute/unmute audio playing from other tabs.
+            </span>
+        </div>
+
+        <label class="video-type-label" for="overlayVideoType-other-video">Non-YT Video </label><span class="note">(experimental)</span><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 240px; top: -115px; left: -160px;">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this.'</span></span>
         <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
         <br>
         <div id="other-video" class="id-field-wrapper">
@@ -83,7 +102,7 @@
             </div>
         </div>
 
-        <label class="video-type-label" for="overlayVideoType-other-live">Non-YT Live Stream </label><span class="note">(experimental)</span>
+        <label class="video-type-label" for="overlayVideoType-other-live">Non-YT Live Stream </label><span class="note">(experimental)</span><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; top: -85px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching.</span></span>
         <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
         <br>
         <div id="other-live" class="id-field-wrapper">
