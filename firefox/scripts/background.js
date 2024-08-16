@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         files: ["scripts/spotify.js"]
                     });
 
-                }, 1500);
+                }, 2500);
 
             }
         );
@@ -563,9 +563,6 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
 
     if (request.action === 'firefox-capture-screenshot') {
 
-        //console.log('message received for background.js to take screenshot') //debug
-        //console.log(`Selected screenshot location: (${request.rect.x}, ${request.rect.y})`); //debug
-
         //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
         chrome.tabs.captureVisibleTab(
 
@@ -575,11 +572,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
                 , rect: request.rect
             },
             function (dataUrl) {
-
-                //console.log('dataUrl = ' + dataUrl); //debug
                 sendResponse({ imgSrc: dataUrl });
-                //console.log('screenshot captured?'); //debug
-
             }
 
         );

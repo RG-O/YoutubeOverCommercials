@@ -320,7 +320,7 @@ function startCommercialMode() {
 }
 
 
-//TODO: made it so the manual override works before the video ever comes up on its own
+//TODO: make it so the manual override works before the video ever comes up on its own
 //background.js is listening for user to enter in keyboard shortcut then sending a message to intiate this
 chrome.runtime.onMessage.addListener(function (message) {
 
@@ -477,6 +477,7 @@ function setNotFullscreenAlerts() {
 
 
 //remove all full screen alerts if previously set
+//TODO: rename this?
 function removeNotFullscreenAlerts() {
 
     removeElementsByClass('ytoc-main-video-message-alert');
