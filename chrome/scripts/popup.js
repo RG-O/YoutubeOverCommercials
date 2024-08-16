@@ -96,7 +96,6 @@ document.getElementById("save-button").onclick = function () {
         }
 
         //save the values to the users chrome profile, close the extension window, and then give them message telling them they might need to refresh
-        //NOTE!! when adding new values, don't forget about forceSave() below
         chrome.storage.sync.set({
             overlayVideoType: optionsForm.overlayVideoType.value,
             ytPlaylistID: optionsForm.ytPlaylistID.value,

@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "YouTube Over Commercials",
-  "description": "Automatically detects commercials on any streaming platform and plays YouTube, Spotify, or other media of your choice over top of them.",
+  "description": "Automatically detects commercials on any streaming platform and plays YouTube, Spotify, or other media over top of them.",
   "icons": {
     "128": "icon128.png"
   },
-  "version": "1.3",
+  "version": "1.4",
   "permissions": [
     "tabs",
     "activeTab",

@@ -423,42 +423,49 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 }
 
 
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "view-tab") {
 
-        await chrome.offscreen.createDocument({
-            url: 'offscreen.html',
-            reasons: ['USER_MEDIA'],
-            justification: 'Recording tab in order to extract user selected pixel color'
-        });
-
-        const streamId = await chrome.tabCapture.getMediaStreamId({
-            targetTabId: sender.tab.id
-        });
-
-        const constraints = {
-            video: {
-                mandatory: {
-                    chromeMediaSource: 'tab',
-                    chromeMediaSourceId: streamId,
-                    maxFrameRate: 4,
-                    minFrameRate: 4,
-                    maxWidth: message.windowDimensions.x,
-                    maxHeight: message.windowDimensions.y,
-                    minWidth: message.windowDimensions.x,
-                    minHeight: message.windowDimensions.y
-                }
-            }
-        }
-
-        chrome.runtime.sendMessage({
-            target: 'offscreen',
-            action: 'start-viewing',
-            constraints: constraints
-        });
+        chromeViewTab(message, sender);
 
     }
 });
+
+
+async function chromeViewTab(message, sender) {
+
+    await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['USER_MEDIA'],
+        justification: 'Recording tab in order to extract user selected pixel color'
+    });
+
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+        targetTabId: sender.tab.id
+    });
+
+    const constraints = {
+        video: {
+            mandatory: {
+                chromeMediaSource: 'tab',
+                chromeMediaSourceId: streamId,
+                maxFrameRate: 4,
+                minFrameRate: 4,
+                maxWidth: message.windowDimensions.x,
+                maxHeight: message.windowDimensions.y,
+                minWidth: message.windowDimensions.x,
+                minHeight: message.windowDimensions.y
+            }
+        }
+    }
+
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'start-viewing',
+        constraints: constraints
+    });
+
+}
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
