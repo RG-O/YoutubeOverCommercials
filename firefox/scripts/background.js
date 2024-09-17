@@ -355,6 +355,15 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 
                 }
 
+            } else if (overlayHostName == 'tv.youtube.com') {
+
+                if (document.querySelector('[aria-label="Play (k)"]')) {
+
+                    document.querySelector('[aria-label="Play (k)"]').click();
+
+                }
+
+
             } else {
 
                 if (document.getElementsByTagName('video')[0].paused) {
@@ -410,6 +419,15 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
                     document.getElementsByTagName('video')[0].muted = true;
 
                 }
+
+            } else if (overlayHostName == 'tv.youtube.com') {
+
+                if (document.querySelector('[aria-label="Pause (k)"]')) {
+
+                    document.querySelector('[aria-label="Pause (k)"]').click();
+
+                }
+                
 
             } else {
 
