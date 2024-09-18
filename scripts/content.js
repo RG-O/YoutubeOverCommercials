@@ -218,14 +218,20 @@ function muteMainVideo() {
     if (mainVideoVolumeDuringCommercials == 0) {
 
         //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+        if (window.location.hostname == 'tv.youtube.com') {
 
-            document.querySelector('[aria-label="Mute (m)"]').click();
+            if (document.querySelector('[aria-label="Mute (m)"]')) {
 
-        }
+                document.querySelector('[aria-label="Mute (m)"]').click();
 
-        for (let i = 0; i < mainVideoCollection.length; i++) {
-            mainVideoCollection[i].muted = true; // Mute each video
+            }
+
+        } else {
+
+            for (let i = 0; i < mainVideoCollection.length; i++) {
+                mainVideoCollection[i].muted = true; // Mute each video
+            }
+
         }
 
     } else if (mainVideoVolumeDuringCommercials < 1) {
@@ -243,14 +249,20 @@ function unmuteMainVideo() {
 
     if (mainVideoVolumeDuringCommercials == 0) {
 
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
+        if (window.location.hostname == 'tv.youtube.com') {
 
-            document.querySelector('[aria-label="Unmute (m)"]').click();
+            if (document.querySelector('[aria-label="Unmute (m)"]')) {
 
-        }
+                document.querySelector('[aria-label="Unmute (m)"]').click();
 
-        for (let i = 0; i < mainVideoCollection.length; i++) {
-            mainVideoCollection[i].muted = false; // Mute each video
+            }
+
+        } else {
+
+            for (let i = 0; i < mainVideoCollection.length; i++) {
+                mainVideoCollection[i].muted = false; // Mute each video
+            }
+
         }
 
     } else if (mainVideoVolumeDuringCommercials < 1) {
