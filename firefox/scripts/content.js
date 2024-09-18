@@ -3,7 +3,7 @@ var isFirefox = true; //********************
 
 var isCommercialState = false;
 var firstClick = true;
-var mainVideo;
+var mainVideoCollection;
 var isFirstRun = true;
 var fullScreenAlertSet = false;
 var overlayScreen;
@@ -188,23 +188,9 @@ function initialRun() {
 
     }
 
-    mainVideo = document.getElementsByTagName('video')[0]; //TODO: grab all videos on page and loop and interaction with all of them
+    mainVideoCollection = document.getElementsByTagName('video'); //TODO: grab all videos on page and loop and interaction with all of them
 
-    //muting main/background video
-    if (mainVideoVolumeDuringCommercials == 0) {
-
-        //using the actually controls to mute YTTV because for whatever reason, it will unmute itself
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
-            document.querySelector('[aria-label="Mute (m)"]').click();
-        }
-
-        mainVideo.muted = true;
-
-    } else if (mainVideoVolumeDuringCommercials < 1) {
-
-        mainVideo.volume = mainVideoVolumeDuringCommercials;
-
-    } //else do nothing for 100
+    muteMainVideo();
 
     //TODO: create a new variable for music/video boolean or whatever
     if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
@@ -222,6 +208,58 @@ function initialRun() {
             chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
         }, 2000);
     }
+
+}
+
+
+function muteMainVideo() {
+
+    //muting main/background video
+    if (mainVideoVolumeDuringCommercials == 0) {
+
+        //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
+        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+
+            document.querySelector('[aria-label="Mute (m)"]').click();
+
+        }
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].muted = true; // Mute each video
+        }
+
+    } else if (mainVideoVolumeDuringCommercials < 1) {
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].volume = mainVideoVolumeDuringCommercials;
+        }
+
+    } //else do nothing for 100
+
+}
+
+
+function unmuteMainVideo() {
+
+    if (mainVideoVolumeDuringCommercials == 0) {
+
+        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
+
+            document.querySelector('[aria-label="Unmute (m)"]').click();
+
+        }
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].muted = false; // Mute each video
+        }
+
+    } else if (mainVideoVolumeDuringCommercials < 1) {
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].volume = mainVideoVolumeDuringNonCommercials;
+        }
+
+    } //else do nothing for 100
 
 }
 
@@ -251,14 +289,7 @@ function endCommercialMode() {
 
     }
 
-    if (mainVideoVolumeDuringCommercials == 0) {
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
-            document.querySelector('[aria-label="Unmute (m)"]').click();
-        }
-        mainVideo.muted = false;
-    } else if (mainVideoVolumeDuringCommercials < 1) {
-        mainVideo.volume = mainVideoVolumeDuringNonCommercials;
-    } //else do nothing for 100
+    unmuteMainVideo();
 
 }
 
@@ -306,14 +337,7 @@ function startCommercialMode() {
 
         }
 
-        if (mainVideoVolumeDuringCommercials == 0) {
-            if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
-                document.querySelector('[aria-label="Mute (m)"]').click();
-            }
-            mainVideo.muted = true;
-        } else if (mainVideoVolumeDuringCommercials < 1) {
-            mainVideo.volume = mainVideoVolumeDuringCommercials;
-        } //else do nothing for 100
+        muteMainVideo();
 
     }
 
@@ -371,7 +395,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
-                            mainVideoFade = result.mainVideoFade ?? 55;
+                            mainVideoFade = result.mainVideoFade ?? 65;
                             if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
                                 overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
                                 overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
@@ -927,7 +951,7 @@ function startViewingTab(windowDimensions) {
 
     if (!isFirefox) {
 
-        chrome.runtime.sendMessage({ action: "view-tab", windowDimensions: windowDimensions });
+        chrome.runtime.sendMessage({ action: "chrome-view-tab", windowDimensions: windowDimensions });
         window.addEventListener('beforeunload', stopViewingTab);
 
     }

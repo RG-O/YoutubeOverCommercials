@@ -32,7 +32,7 @@ chrome.storage.sync.get([
     optionsForm.otherLiveURL.value = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
-    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 55;
+    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 65;
     optionsForm.videoOverlayWidth.value = result.videoOverlayWidth ?? 75;
     optionsForm.videoOverlayHeight.value = result.videoOverlayHeight ?? 75;
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
@@ -56,7 +56,7 @@ chrome.storage.sync.get([
     for (let i = 0, max = videoTypeRadios.length; i < max; i++) {
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
     }
-    
+
 });
 
 
@@ -169,8 +169,4 @@ function toggleModeInstructionsVisability() {
         modeInstructions[i].style.display = 'none';
     }
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
-}
-
-document.getElementById("overlayVideoType-spotify").onclick = function () {
-    alert(`Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.`);
 }

@@ -1,8 +1,9 @@
 
-//establish variables
+var isFirefox = false; //********************
+
 var isCommercialState = false;
 var firstClick = true;
-var mainVideo;
+var mainVideoCollection;
 var isFirstRun = true;
 var fullScreenAlertSet = false;
 var overlayScreen;
@@ -138,7 +139,7 @@ function addOverlayFade(insertLocation) {
             //setting mainVideoFade to 0 to effectively shut it off since it is auto detection mode but I don't know where to put the hole
             mainVideoFade = 0;
         }
-        
+
     }
 
 }
@@ -187,23 +188,9 @@ function initialRun() {
 
     }
 
-    mainVideo = document.getElementsByTagName('video')[0]; //TODO: grab all videos on page and loop and interaction with all of them
-    
-    //muting main/background video
-    if (mainVideoVolumeDuringCommercials == 0) {
+    mainVideoCollection = document.getElementsByTagName('video'); //TODO: grab all videos on page and loop and interaction with all of them
 
-        //using the actually controls to mute YTTV because for whatever reason, it will unmute itself
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
-            document.querySelector('[aria-label="Mute (m)"]').click();
-        }
-
-        mainVideo.muted = true;
-
-    } else if (mainVideoVolumeDuringCommercials < 1) {
-
-        mainVideo.volume = mainVideoVolumeDuringCommercials;
-
-    } //else do nothing for 100
+    muteMainVideo();
 
     //TODO: create a new variable for music/video boolean or whatever
     if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
@@ -215,12 +202,64 @@ function initialRun() {
         }
 
     } else {
-        
+
         //wait a little bit for the video to load //TODO: get indicator of when completely loaded
         setTimeout(() => {
             chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
         }, 2000);
     }
+
+}
+
+
+function muteMainVideo() {
+
+    //muting main/background video
+    if (mainVideoVolumeDuringCommercials == 0) {
+
+        //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
+        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+
+            document.querySelector('[aria-label="Mute (m)"]').click();
+
+        }
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].muted = true; // Mute each video
+        }
+
+    } else if (mainVideoVolumeDuringCommercials < 1) {
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].volume = mainVideoVolumeDuringCommercials;
+        }
+
+    } //else do nothing for 100
+
+}
+
+
+function unmuteMainVideo() {
+
+    if (mainVideoVolumeDuringCommercials == 0) {
+
+        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
+
+            document.querySelector('[aria-label="Unmute (m)"]').click();
+
+        }
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].muted = false; // Mute each video
+        }
+
+    } else if (mainVideoVolumeDuringCommercials < 1) {
+
+        for (let i = 0; i < mainVideoCollection.length; i++) {
+            mainVideoCollection[i].volume = mainVideoVolumeDuringNonCommercials;
+        }
+
+    } //else do nothing for 100
 
 }
 
@@ -249,15 +288,8 @@ function endCommercialMode() {
         }
 
     }
-    
-    if (mainVideoVolumeDuringCommercials == 0) {
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
-            document.querySelector('[aria-label="Unmute (m)"]').click();
-        }
-        mainVideo.muted = false;
-    } else if (mainVideoVolumeDuringCommercials < 1) {
-        mainVideo.volume = mainVideoVolumeDuringNonCommercials;
-    } //else do nothing for 100
+
+    unmuteMainVideo();
 
 }
 
@@ -305,21 +337,14 @@ function startCommercialMode() {
 
         }
 
-        if (mainVideoVolumeDuringCommercials == 0) {
-            if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
-                document.querySelector('[aria-label="Mute (m)"]').click();
-            }
-            mainVideo.muted = true;
-        } else if (mainVideoVolumeDuringCommercials < 1) {
-            mainVideo.volume = mainVideoVolumeDuringCommercials;
-        } //else do nothing for 100
+        muteMainVideo();
 
     }
 
 }
 
 
-//TODO: made it so the manual override works before the video ever comes up on its own
+//TODO: make it so the manual override works before the video ever comes up on its own
 //background.js is listening for user to enter in keyboard shortcut then sending a message to intiate this
 chrome.runtime.onMessage.addListener(function (message) {
 
@@ -370,7 +395,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
-                            mainVideoFade = result.mainVideoFade ?? 55;
+                            mainVideoFade = result.mainVideoFade ?? 65;
                             if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
                                 overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
                                 overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
@@ -437,7 +462,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                 }
 
             });
-            
+
         } else {
 
             //TODO: set the mismatch and match counts to some negative number in here
@@ -476,6 +501,7 @@ function setNotFullscreenAlerts() {
 
 
 //remove all full screen alerts if previously set
+//TODO: rename this?
 function removeNotFullscreenAlerts() {
 
     removeElementsByClass('ytoc-main-video-message-alert');
@@ -617,8 +643,12 @@ function pixelSelection(event) {
     //TODO: figure out if this check is really necessary
     if (!selectedPixel) {
 
-        //subtracting by 1 so it doesn't accidentally capture the cursor if it still happens to be showing
-        selectedPixel = { x: (event.clientX - 1), y: (event.clientY - 2) };
+        if (isFirefox) {
+            selectedPixel = { x: event.clientX, y: event.clientY };
+        } else {
+            //subtracting by a couple so it doesn't accidentally capture the cursor in chromium
+            selectedPixel = { x: (event.clientX - 1), y: (event.clientY - 2) };
+        }
 
         removeBlockersListenersAndPixelSelectionInstructions();
 
@@ -680,9 +710,9 @@ function captureOriginalPixelColor(selectedPixel) {
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
 
     })
-    .catch(function (error) {
-        console.error(error);
-    });
+        .catch(function (error) {
+            console.error(error);
+        });
 
 }
 
@@ -750,7 +780,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                             setTimeout(() => {
 
                                 logoBox.style.display = 'none';
-                                
+
                             }, 5000);
 
                         }
@@ -807,9 +837,9 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
             cooldownCountRemaining--;
 
         })
-        .catch(function (error) {
-            console.error(error);
-        });
+            .catch(function (error) {
+                console.error(error);
+            });
 
     }, 1000);
 
@@ -821,19 +851,50 @@ function getPixelColor(coordinates) {
 
     return new Promise(function (resolve, reject) {
 
-        chrome.runtime.sendMessage({
-            target: "offscreen",
-            action: "capture-screenshot",
-            coordinates: coordinates
-        }, function (response) {
-            
-            //console.log(response.myCoordinates); //debug-high
-            //console.log(response.pixelColor); //debug-high
-            //console.log(response.image); //debug-high
+        if (isFirefox) {
 
-            resolve(response.pixelColor);
+            let rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
 
-        });
+            chrome.runtime.sendMessage({ action: "firefox-capture-screenshot", rect: rect }, function (response) {
+
+                let image = new Image();
+                image.src = response.imgSrc;
+
+                image.addEventListener('load', function () {
+
+                    let canvas = document.createElement('canvas');
+                    let context = canvas.getContext('2d');
+
+                    canvas.width = image.width; //TODO: figure out is this necessary with setting it in draw image?
+                    canvas.height = image.height;
+                    context.drawImage(image, 0, 0);
+
+                    let pixelColor = context.getImageData(0, 0, 1, 1).data;
+                    pixelColor = { r: pixelColor[0], g: pixelColor[1], b: pixelColor[2] };
+
+                    resolve(pixelColor); // Resolve the promise with pixelColor value
+
+                });
+
+            });
+
+        } else {
+
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "capture-screenshot",
+                coordinates: coordinates
+            }, function (response) {
+
+                //console.log(response.myCoordinates); //debug-high
+                //console.log(response.pixelColor); //debug-high
+                //console.log(response.image); //debug-high
+
+                resolve(response.pixelColor);
+
+            });
+
+        }
 
     });
 
@@ -888,22 +949,29 @@ function inIFrame() {
 //calls background.js to create an offscreen document and grabs the getMediaStreamId of the tab to send to the offscreen document which then starts recording the tab
 function startViewingTab(windowDimensions) {
 
-    chrome.runtime.sendMessage({ action: "view-tab", windowDimensions: windowDimensions });
+    if (!isFirefox) {
 
-    window.addEventListener('beforeunload', stopViewingTab);
+        chrome.runtime.sendMessage({ action: "chrome-view-tab", windowDimensions: windowDimensions });
+        window.addEventListener('beforeunload', stopViewingTab);
+
+    }
 
 }
 
 
 function stopViewingTab() {
 
-    //close offscreen
-    chrome.runtime.sendMessage({
-        target: "offscreen",
-        action: "close"
-    });
+    if (!isFirefox) {
 
-    window.removeEventListener('beforeunload', stopViewingTab);
+        //close offscreen
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "close"
+        });
+
+        window.removeEventListener('beforeunload', stopViewingTab);
+
+    }
 
 }
 
@@ -911,10 +979,14 @@ function stopViewingTab() {
 //note: should use stopViewingTab() instead to close offscreen
 function pauseViewingTab() {
 
-    chrome.runtime.sendMessage({
-        target: "offscreen",
-        action: "stop-viewing"
-    });
+    if (!isFirefox) {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "stop-viewing"
+        });
+
+    }
 
 }
 
@@ -922,10 +994,14 @@ function pauseViewingTab() {
 //note: does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
 function resumeViewingTab() {
 
-    chrome.runtime.sendMessage({
-        target: "offscreen",
-        action: "resume-viewing"
-    });
+    if (!isFirefox) {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "resume-viewing"
+        });
+
+    }
 
 }
 
@@ -956,7 +1032,7 @@ function fullscreenChanged() {
             resumeAutoMode();
             if (isDebugMode) { logoBox.style.display = 'block'; }
         }
-        
+
         if ((overlayVideoType == 'spotify' && !isCommercialState) || overlayVideoType == 'other-tabs') {
             chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
         }

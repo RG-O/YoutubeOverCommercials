@@ -32,7 +32,7 @@ chrome.storage.sync.get([
     optionsForm.otherLiveURL.value = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
     optionsForm.overlayVideoLocationHorizontal.value = result.overlayVideoLocationHorizontal ?? 'middle';
     optionsForm.overlayVideoLocationVertical.value = result.overlayVideoLocationVertical ?? 'middle';
-    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 55;
+    optionsForm.mainVideoFade.value = result.mainVideoFade ?? 65;
     optionsForm.videoOverlayWidth.value = result.videoOverlayWidth ?? 75;
     optionsForm.videoOverlayHeight.value = result.videoOverlayHeight ?? 75;
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
