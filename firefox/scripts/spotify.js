@@ -160,6 +160,12 @@ function initialSetup() {
                         chrome.runtime.sendMessage({ action: "glimpse_main_tab" });
                         banner.innerText = 'Tab opened for use of the YTOC extension. Do not close until you are done using YTOC extension.';
 
+                        setTimeout(() => {
+
+                            pause();
+
+                        }, 500);
+
                     }, 500);
 
                 });

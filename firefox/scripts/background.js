@@ -204,8 +204,9 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideo !== 'undefined') {
-            if (mainVideo == document.getElementsByTagName('video')[0]) {
+        if (typeof mainVideoCollection !== 'undefined') {
+            //TODO: is this second check necessary if we already know mainVideoCollection is defined? would the frames share this variable?
+            if (mainVideoCollection == document.getElementsByTagName('video')) {
                 return;
             }
         }
@@ -320,8 +321,8 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideo !== 'undefined') {
-            if (mainVideo == document.getElementsByTagName('video')[0]) {
+        if (typeof mainVideoCollection !== 'undefined') {
+            if (mainVideoCollection == document.getElementsByTagName('video')) {
                 return;
             }
         }
@@ -355,13 +356,13 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 
                 }
 
-            } else {
+            } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Play (k)"]')) {
 
-                if (document.getElementsByTagName('video')[0].paused) {
+                document.querySelector('[aria-label="Play (k)"]').click();
 
-                    document.getElementsByTagName('video')[0].play();
+            } else if (document.getElementsByTagName('video')[0].paused) {
 
-                }
+                document.getElementsByTagName('video')[0].play();
 
             }
 
@@ -376,8 +377,8 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideo !== 'undefined') {
-            if (mainVideo == document.getElementsByTagName('video')[0]) {
+        if (typeof mainVideoCollection !== 'undefined') {
+            if (mainVideoCollection == document.getElementsByTagName('video')) {
                 return;
             }
         }
@@ -411,13 +412,13 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 
                 }
 
-            } else {
+            } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Pause (k)"]')) {
 
-                if (!document.getElementsByTagName('video')[0].paused) {
+                document.querySelector('[aria-label="Pause (k)"]').click();
+                
+            } else if (!document.getElementsByTagName('video')[0].paused) {
 
-                    document.getElementsByTagName('video')[0].pause();
-
-                }
+                document.getElementsByTagName('video')[0].pause();
 
             }
 

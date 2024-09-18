@@ -75,14 +75,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         },
             (tab) => {
 
-                //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
-                chrome.storage.sync.set({ spotifyTabID: tab.id });
+                //waiting a little for the spotify tab to show because firefox doesn't seem to let you inject into tabs that aren't showing yet
+                setTimeout(() => {
 
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
-                    files: ["scripts/spotify.js"]
-                });
-                
+                    //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+                    chrome.storage.sync.set({ spotifyTabID: tab.id });
+
+                    chrome.scripting.executeScript({
+                        target: { tabId: tab.id, allFrames: true },
+                        files: ["scripts/spotify.js"]
+                    });
+
+                }, 2500);
+
             }
         );
 
@@ -100,7 +105,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     }
 
                 });
-                
+
             }
 
         });
@@ -138,7 +143,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             chrome.tabs.update(tab.id, { muted: true });
                         }
                     });
-                    
+
                 });
 
                 //TODO: Decide if I want to mute/unmute the main tab - something to consider: when somebody sets the volume to go lower instead of completey muted
@@ -199,8 +204,9 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideo !== 'undefined') {
-            if (mainVideo == document.getElementsByTagName('video')[0]) {
+        if (typeof mainVideoCollection !== 'undefined') {
+            //TODO: is this second check necessary if we already know mainVideoCollection is defined? would the frames share this variable?
+            if (mainVideoCollection == document.getElementsByTagName('video')) {
                 return;
             }
         }
@@ -261,7 +267,7 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
             }
 
             //TODO: add button on top of overlay video  if in live mode that asks if user would like video to play PiP while main video is not commercial, disapear if not clicked after x time
-            
+
             //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
             if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
 
@@ -301,11 +307,11 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
                     }, 15000);
 
                 }, 15000);
-                
+
             }
 
         }, 2500);
-        
+
     } //else do nothing, most likely script was injected into wrong frame
 
 }
@@ -315,8 +321,8 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideo !== 'undefined') {
-            if (mainVideo == document.getElementsByTagName('video')[0]) {
+        if (typeof mainVideoCollection !== 'undefined') {
+            if (mainVideoCollection == document.getElementsByTagName('video')) {
                 return;
             }
         }
@@ -350,13 +356,13 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 
                 }
 
-            } else {
+            } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Play (k)"]')) {
 
-                if (document.getElementsByTagName('video')[0].paused) {
+                document.querySelector('[aria-label="Play (k)"]').click();
 
-                    document.getElementsByTagName('video')[0].play();
+            } else if (document.getElementsByTagName('video')[0].paused) {
 
-                }
+                document.getElementsByTagName('video')[0].play();
 
             }
 
@@ -371,8 +377,8 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideo !== 'undefined') {
-            if (mainVideo == document.getElementsByTagName('video')[0]) {
+        if (typeof mainVideoCollection !== 'undefined') {
+            if (mainVideoCollection == document.getElementsByTagName('video')) {
                 return;
             }
         }
@@ -406,13 +412,13 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 
                 }
 
-            } else {
+            } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Pause (k)"]')) {
 
-                if (!document.getElementsByTagName('video')[0].paused) {
+                document.querySelector('[aria-label="Pause (k)"]').click();
+                
+            } else if (!document.getElementsByTagName('video')[0].paused) {
 
-                    document.getElementsByTagName('video')[0].pause();
-
-                }
+                document.getElementsByTagName('video')[0].pause();
 
             }
 
@@ -424,7 +430,7 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
 
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "view-tab") {
+    if (message.action === "chrome-view-tab") {
 
         chromeViewTab(message, sender);
 
@@ -533,7 +539,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         chrome.storage.sync.get(['mainVideoTabID'], (result) => {
 
             if (result.mainVideoTabID) {
-                
+
                 chrome.tabs.query({}, function (tabs) {
 
                     let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
@@ -553,3 +559,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
+
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+
+    if (request.action === 'firefox-capture-screenshot') {
+
+        //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
+        chrome.tabs.captureVisibleTab(
+
+            sender.tab.windowId, //debug - replace with just null if this doesn't work
+            {
+                format: 'png'
+                , rect: request.rect
+            },
+            function (dataUrl) {
+                sendResponse({ imgSrc: dataUrl });
+            }
+
+        );
+
+    }
+
+    //return true to indicate that the response will be sent asynchronously
+    return true;
+    
+    }
+);
