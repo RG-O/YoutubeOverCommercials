@@ -1,5 +1,5 @@
 
-var isFirefox = true; //********************
+var isFirefox = false; //********************
 
 var isCommercialState = false;
 var firstClick = true;
