@@ -243,6 +243,18 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
 
         }
 
+        //hide scrollbar in case it shows for some non YT site because it might if the iframe is too small
+        if (overlayHostName != 'www.youtube.com') {
+
+            let hideScollStyle = document.createElement("style");
+            hideScollStyle.textContent = `
+                ::-webkit-scrollbar {
+                    display: none;
+                }`
+            insertLocation.appendChild(hideScollStyle);
+
+        }
+
         //waiting a second for video to load to run some checks and stuff
         setTimeout(() => {
 

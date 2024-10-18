@@ -20,6 +20,13 @@ var windowDimensions;
 var logoBoxText;
 var countdownOngoing = false;
 
+//111
+var isPiPMode = true;
+var pipLocationHorizontal = 'right';
+var pipLocationVertical = 'top';
+var pipHeight = 25;
+var pipWidth = 25;
+
 var overlayVideoType;
 var ytPlaylistID;
 var ytVideoID;
@@ -48,6 +55,10 @@ var manualOverrideCooldown;
 var isDebugMode;
 var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
+var isAudioOnlyOverlay;
+var isLiveOverlayVideo;
+var pipBlocker;
+var pipBlockerText;
 
 
 //function that is responsible for loading the video iframe over top of the main/background video
@@ -63,26 +74,10 @@ function setOverlayVideo() {
 
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
-    //TODO: replace firstChild with null since the last items is actually most likely to show on top?
     insertLocation.insertBefore(overlayVideo, null);
     overlayVideo.style.visibility = "visible";
-    overlayVideo.style.setProperty("width", videoOverlayWidth + "%", "important");
-    overlayVideo.style.setProperty("height", videoOverlayHeight + "%", "important");
 
-    //setting overlay video in user set location
-    if (overlayVideoLocationHorizontal == 'left' || overlayVideoLocationHorizontal == 'middle') {
-        overlayVideo.style.setProperty("left", "0", "important");
-    }
-    if (overlayVideoLocationHorizontal == 'right' || overlayVideoLocationHorizontal == 'middle') {
-        overlayVideo.style.setProperty("right", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'top' || overlayVideoLocationVertical == 'middle') {
-        overlayVideo.style.setProperty("top", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'bottom' || overlayVideoLocationVertical == 'middle') {
-        overlayVideo.style.setProperty("bottom", "0", "important");
-    }
-
+    setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
     let url;
     if (overlayVideoType == 'yt-playlist') {
@@ -170,7 +165,7 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+    if (!isAudioOnlyOverlay) {
         setOverlayVideo();
     }
 
@@ -192,8 +187,7 @@ function initialRun() {
 
     muteMainVideo();
 
-    //TODO: create a new variable for music/video boolean or whatever
-    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+    if (isAudioOnlyOverlay) {
 
         chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
 
@@ -218,14 +212,20 @@ function muteMainVideo() {
     if (mainVideoVolumeDuringCommercials == 0) {
 
         //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+        if (window.location.hostname == 'tv.youtube.com') {
 
-            document.querySelector('[aria-label="Mute (m)"]').click();
+            if (document.querySelector('[aria-label="Mute (m)"]')) {
 
-        }
+                document.querySelector('[aria-label="Mute (m)"]').click();
 
-        for (let i = 0; i < mainVideoCollection.length; i++) {
-            mainVideoCollection[i].muted = true; // Mute each video
+            }
+
+        } else {
+
+            for (let i = 0; i < mainVideoCollection.length; i++) {
+                mainVideoCollection[i].muted = true; // Mute each video
+            }
+
         }
 
     } else if (mainVideoVolumeDuringCommercials < 1) {
@@ -243,14 +243,20 @@ function unmuteMainVideo() {
 
     if (mainVideoVolumeDuringCommercials == 0) {
 
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
+        if (window.location.hostname == 'tv.youtube.com') {
 
-            document.querySelector('[aria-label="Unmute (m)"]').click();
+            if (document.querySelector('[aria-label="Unmute (m)"]')) {
 
-        }
+                document.querySelector('[aria-label="Unmute (m)"]').click();
 
-        for (let i = 0; i < mainVideoCollection.length; i++) {
-            mainVideoCollection[i].muted = false; // Mute each video
+            }
+
+        } else {
+
+            for (let i = 0; i < mainVideoCollection.length; i++) {
+                mainVideoCollection[i].muted = false; // Mute each video
+            }
+
         }
 
     } else if (mainVideoVolumeDuringCommercials < 1) {
@@ -269,7 +275,7 @@ function endCommercialMode() {
 
     isCommercialState = false;
 
-    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+    if (isAudioOnlyOverlay) {
 
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
 
@@ -277,7 +283,12 @@ function endCommercialMode() {
 
         chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
 
-        overlayVideo.style.visibility = "hidden";
+        //111
+        if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
+            enterPiPMode();
+        } else {
+            overlayVideo.style.visibility = "hidden";
+        }
 
         if (mainVideoFade > 0) {
             if (commercialDetectionMode != 'auto') {
@@ -331,6 +342,11 @@ function startCommercialMode() {
                 } else {
                     overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
                 }
+            }
+
+            //111
+            if (isPiPMode && isLiveOverlayVideo) {
+                exitPiPMode();
             }
 
             overlayVideo.style.visibility = "visible";
@@ -390,13 +406,23 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                             //set them to default if not set by user yet
                             overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+                            if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+                                isAudioOnlyOverlay = true;
+                                isLiveOverlayVideo = false;
+                            } else if (overlayVideoType == 'yt-live' || overlayVideoType == 'other-live') {
+                                isAudioOnlyOverlay = false;
+                                isLiveOverlayVideo = true;
+                            } else {
+                                isAudioOnlyOverlay = false;
+                                isLiveOverlayVideo = true;
+                            }
                             ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
                             ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
                             ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
                             mainVideoFade = result.mainVideoFade ?? 65;
-                            if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+                            if (!isAudioOnlyOverlay) {
                                 overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
                                 overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
                                 videoOverlayWidth = result.videoOverlayWidth ?? 75;
@@ -567,28 +593,33 @@ function setBlockersAndPixelSelectionInstructions() {
 
     }
 
+    //111
+    if (isPiPMode) {
+
+        pipBlocker = document.createElement('div');
+        pipBlocker.className = "ytoc-overlay-instructions";
+        pipBlocker.style.backgroundColor = "black";
+        
+        insertLocationFullscreenElm.insertBefore(pipBlocker, null);
+        pipBlockerText = document.createElement('div');
+        pipBlockerText.style.color = "white";
+        pipBlockerText.style.fontSize = "16px";
+        if (pipLocationVertical == 'bottom') {
+            pipBlockerText.style.position = "absolute";
+            pipBlockerText.style.bottom = "0";
+        }
+        pipBlockerText.textContent = "PiP Location - Change PiP location in extension settings if covering desired logo/graphic.";
+        pipBlocker.appendChild(pipBlockerText);
+        setOverlaySizeAndLocation(pipBlocker, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "5px");
+
+    }
+
     overlayInstructions = document.createElement('div');
     overlayInstructions.className = "ytoc-overlay-instructions";
     insertLocationFullscreenElm.insertBefore(overlayInstructions, null);
-
     overlayInstructions.style.visibility = "visible";
-    overlayInstructions.style.setProperty("width", videoOverlayWidth + "%", "important");
-    overlayInstructions.style.setProperty("height", videoOverlayHeight + "%", "important");
     //overlayInstructions.style.setProperty("border", "3px red solid", "important");
-
-    //setting overlay video in user set location
-    if (overlayVideoLocationHorizontal == 'left' || overlayVideoLocationHorizontal == 'middle') {
-        overlayInstructions.style.setProperty("left", "0", "important");
-    }
-    if (overlayVideoLocationHorizontal == 'right' || overlayVideoLocationHorizontal == 'middle') {
-        overlayInstructions.style.setProperty("right", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'top' || overlayVideoLocationVertical == 'middle') {
-        overlayInstructions.style.setProperty("top", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'bottom' || overlayVideoLocationVertical == 'middle') {
-        overlayInstructions.style.setProperty("bottom", "0", "important");
-    }
+    setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
     //hide verticle scrollbar if video placed on bottom
     if (overlayVideoLocationVertical == 'bottom') {
@@ -600,7 +631,7 @@ function setBlockersAndPixelSelectionInstructions() {
         insertLocation.appendChild(hideScollStyle);
     }
 
-    //TODO: fix issue where if user places video at bottom of some sites like peacock, it adds scrollbar to whole page
+    //TODO: fix issue where if user places video at bottom of some sites like peacock, it adds scrollbar to whole page - I think this has been fixed?
     let iFrame = document.createElement('iframe');
     iFrame.src = chrome.runtime.getURL('pixel-select-instructions.html');
     iFrame.width = "100%";
@@ -684,7 +715,7 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
-            if ((overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') || isDebugMode) {
+            if (!isAudioOnlyOverlay || isDebugMode) {
                 logoBoxText = 'YTOC';
             } else if (overlayVideoType == 'spotify') {
                 logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
@@ -775,7 +806,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                         logoBox.textContent = logoBoxText;
                         logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         logoBox.style.display = 'block';
-                        if (!isDebugMode && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+                        if (!isDebugMode && !isAudioOnlyOverlay) {
 
                             setTimeout(() => {
 
@@ -812,7 +843,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isDebugMode) { console.log('commercial undetected'); }
 
-                        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+                        if (isAudioOnlyOverlay) {
                             if (isDebugMode) {
                                 logoBoxText = 'YTOC';
                                 logoBox.textContent = logoBoxText;
@@ -1015,7 +1046,7 @@ function fullscreenChanged() {
             pauseAutoMode();
         }
 
-        if (isCommercialState && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+        if (isCommercialState && !isAudioOnlyOverlay) {
             endCommercialMode();
         }
 
@@ -1179,5 +1210,71 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 function stopMutingOtherTabs() {
 
     chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+}
+
+
+function setOverlaySizeAndLocation(overlay, widthPercentage, heightPercentage, xLocation, yLocation, spacerStyleValue) {
+
+    overlay.style.setProperty("width", widthPercentage + "%", "important");
+    overlay.style.setProperty("height", heightPercentage + "%", "important");
+
+    if (xLocation == 'left' || xLocation == 'middle') {
+        overlay.style.setProperty("left", spacerStyleValue, "important");
+    }
+    if (xLocation == 'right' || xLocation == 'middle') {
+        overlay.style.setProperty("right", spacerStyleValue, "important");
+    }
+    if (yLocation == 'top' || yLocation == 'middle') {
+        overlay.style.setProperty("top", spacerStyleValue, "important");
+    }
+    if (yLocation == 'bottom' || yLocation == 'middle') {
+        overlay.style.setProperty("bottom", spacerStyleValue, "important");
+    }
+
+}
+
+
+//tries to mimic browser PiP mode as firefox does not have a PiP API and chrome's only works when triggered by user action
+function enterPiPMode() {
+
+    //overlayVideo.style.setProperty("width", pipWidth + "%", "important");
+    //overlayVideo.style.setProperty("height", pipHeight + "%", "important");
+
+    //if (pipLocationCorner.includes('left')) {
+    //    overlayVideo.style.removeProperty("right");
+    //    overlayVideo.style.setProperty("left", "5px", "important");
+    //}
+    //if (pipLocationCorner.includes('right')) {
+    //    overlayVideo.style.removeProperty("left");
+    //    overlayVideo.style.setProperty("right", "5px", "important");
+    //}
+    //if (pipLocationCorner.includes('top')) {
+    //    overlayVideo.style.removeProperty("bottom");
+    //    overlayVideo.style.setProperty("top", "5px", "important");
+    //}
+    //if (pipLocationCorner.includes('bottom')) {
+    //    overlayVideo.style.removeProperty("top");
+    //    overlayVideo.style.setProperty("bottom", "5px", "important");
+    //}
+
+    overlayVideo.style.removeProperty("right");
+    overlayVideo.style.removeProperty("left");
+    overlayVideo.style.removeProperty("bottom");
+    overlayVideo.style.removeProperty("top");
+
+    setOverlaySizeAndLocation(overlayVideo, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "5px");
+
+}
+
+
+function exitPiPMode() {
+
+    overlayVideo.style.removeProperty("right");
+    overlayVideo.style.removeProperty("left");
+    overlayVideo.style.removeProperty("bottom");
+    overlayVideo.style.removeProperty("top");
+
+    setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
 }
