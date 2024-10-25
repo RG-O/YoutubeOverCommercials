@@ -87,6 +87,10 @@ button {
         display: block;
     }
 
+.pip-fields-wrapper {
+    display: none;
+}
+
 .commercial-detection-mode-instructions-wrapper {
     display: none;
     margin-left: 22px;

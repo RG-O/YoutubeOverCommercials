@@ -322,52 +322,6 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
 
             }
 
-            //111
-            //TODO: add user preference to even prompt for this
-            //TODO: have button go away on its own after x amount of time
-            let button = document.createElement("button");
-            button.textContent = "PiP Mode";
-            button.style.setProperty("color", "red", "important");
-            button.style.setProperty("background-color", "white", "important");
-            button.style.setProperty("z-index", "2147483647", "important");
-            button.style.setProperty("position", "absolute", "important");
-
-            document.getElementsByTagName('body')[0].appendChild(button);
-
-            let fillerPiP = document.createElement("video");
-            fillerPiP.id = 'YTOC-PiP-Filler';
-            fillerPiP.style.setProperty("z-index", "-1000", "important");
-            fillerPiP.style.setProperty("position", "absolute", "important");
-
-            const canvas = document.createElement('canvas');
-            canvas.width = 640;
-            canvas.height = 360;
-            const ctx = canvas.getContext('2d');
-
-            ctx.fillStyle = "grey";
-            ctx.font = "30px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-
-            //TODO: show clock here or something interesting instead of wasted space
-            const text = "YTOC";
-            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-            const stream = canvas.captureStream(1);
-
-            fillerPiP.width = canvas.width;
-            fillerPiP.height = canvas.height;
-            fillerPiP.autoplay = true;
-            fillerPiP.srcObject = stream;
-            
-            document.getElementsByTagName('body')[0].appendChild(fillerPiP);
-
-            button.addEventListener('click', () => {
-                fillerPiP.requestPictureInPicture();
-                button.remove();
-            });
-            //111
-
         }, 2500);
 
     } //else do nothing, most likely script was injected into wrong frame
@@ -426,14 +380,6 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 
         }
 
-        //111
-        if (document.pictureInPictureElement) {
-            document.getElementById('YTOC-PiP-Filler').requestPictureInPicture();
-        } else {
-            console.log('PiP gone, add reshow button prompt here if user pref is enabled.');
-        }
-        //111
-
     } //else do nothing
 
 }
@@ -489,20 +435,6 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
             }
 
         }
-
-        //111
-        let myYTOCVideo;
-        if (overlayHostName == 'tv.youtube.com') {
-            myYTOCVideo = document.getElementsByClassName('video-stream html5-main-video')[0];
-        } else {
-            myYTOCVideo = document.getElementsByTagName('video')[0];
-        }
-        if (document.pictureInPictureElement) {
-            myYTOCVideo.requestPictureInPicture();
-        } else {
-            console.log('PiP gone, add reshow button prompt here if user pref is enabled. - well maybe not on end commercial state');
-        }
-        //111
 
     } //else do nothing
 

@@ -19,13 +19,9 @@ var originalPixelColor;
 var windowDimensions;
 var logoBoxText;
 var countdownOngoing = false;
-
 //111
-var isPiPMode = true;
-var pipLocationHorizontal = 'right';
-var pipLocationVertical = 'top';
-var pipHeight = 25;
-var pipWidth = 25;
+var pipBlocker;
+var pipBlockerText;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -57,8 +53,15 @@ var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
 var isAudioOnlyOverlay;
 var isLiveOverlayVideo;
-var pipBlocker;
-var pipBlockerText;
+//111
+var isPiPMode = true;
+var pipLocationHorizontal = 'right';
+var pipLocationVertical = 'top';
+var pipHeight = 25;
+var pipWidth = 25;
+//TODO: Add user preference for spotify to have it go to a new song everytime it plays
+//TODO: Add user preference for spotify to have audio come in gradually
+
 
 
 //function that is responsible for loading the video iframe over top of the main/background video
@@ -401,7 +404,12 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'matchCountThreshold',
                             'colorDifferenceMatchingThreshold',
                             'manualOverrideCooldown',
-                            'isDebugMode'
+                            'isDebugMode',
+                            'isPiPMode',
+                            'pipLocationHorizontal',
+                            'pipLocationVertical',
+                            'pipHeight',
+                            'pipWidth'
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -414,7 +422,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isLiveOverlayVideo = true;
                             } else {
                                 isAudioOnlyOverlay = false;
-                                isLiveOverlayVideo = true;
+                                isLiveOverlayVideo = false;
                             }
                             ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
                             ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
@@ -447,6 +455,11 @@ chrome.runtime.onMessage.addListener(function (message) {
                             colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                             manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
                             isDebugMode = result.isDebugMode ?? false;
+                            isPiPMode = result.isPiPMode ?? false;
+                            pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
+                            pipLocationVertical = result.pipLocationVertical ?? 'left';
+                            pipHeight = result.pipHeight ?? 25;
+                            pipWidth = result.pipWidth ?? 25;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
 
@@ -594,7 +607,7 @@ function setBlockersAndPixelSelectionInstructions() {
     }
 
     //111
-    if (isPiPMode) {
+    if (isPiPMode && isLiveOverlayVideo) {
 
         pipBlocker = document.createElement('div');
         pipBlocker.className = "ytoc-overlay-instructions";
@@ -775,7 +788,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
                 if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
 
-                    if (cooldownCountRemaining >= 1) {
+                    if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
 
                         logoBox.textContent = cooldownCountRemaining;
                         logoBox.style.display = 'block';

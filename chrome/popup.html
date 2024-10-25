@@ -63,7 +63,7 @@
             </div>
         </div>
 
-        <label class="video-type-label" for="overlayVideoType-yt-live">YT Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to.</span></span>
+        <label class="video-type-label" for="overlayVideoType-yt-live">YT Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try with enabling PiP mode down below!</span></span>
         <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
         <br>
         <div id="yt-live" class="id-field-wrapper">
@@ -102,7 +102,7 @@
             </div>
         </div>
 
-        <label class="video-type-label" for="overlayVideoType-other-live">Non-YT Live Stream </label><span class="note">(experimental)</span><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; top: -85px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching.</span></span>
+        <label class="video-type-label" for="overlayVideoType-other-live">Non-YT Live Stream </label><span class="note">(experimental)</span><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; top: -85px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try with enabling PiP mode down below!</span></span>
         <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
         <br>
         <div id="other-live" class="id-field-wrapper">
@@ -160,8 +160,43 @@
 
 
             <input type="checkbox" name="shouldHideYTBackground" id="shouldHideYTBackground">
-            <label class="checkbox-label" for="shouldHideYTBackground">Hide Black YT Video Background?</label><br>
+            <label class="checkbox-label" for="shouldHideYTBackground">Hide Black YT Video Background</label><br>
+
+
+            <input type="checkbox" name="isPiPMode" id="isPiPMode">
+            <label class="checkbox-label" for="isPiPMode">Display live videos while not in commercial in PiP</label><br>
             <br>
+
+            <div class="pip-fields-wrapper">
+
+                <b>PiP Width (%):</b>
+                <input type="number" name="pipWidth" id="pipWidth" min="1" max="50"><br>
+                <br>
+
+                <b>PiP Height (%):</b>
+                <input type="number" name="pipHeight" id="pipHeight" min="1" max="50"><br>
+                <br>
+
+
+                <b>PiP X Display:</b>
+                <label class="display-location" for="pipLocationHorizontal-right">Right</label>
+                <input class="display-location" type="radio" id="pipLocationHorizontal-right" name="pipLocationHorizontal" value="right">
+
+                <label class="display-location" for="pipLocationHorizontal-left">Left</label>
+                <input class="display-location" type="radio" id="pipLocationHorizontal-left" name="pipLocationHorizontal" value="left">
+                <br>
+                <br>
+
+
+                <b>PiP Y Display:</b>
+                <label class="display-location" for="pipLocationVertical-top">Top</label>
+                <input class="display-location" type="radio" id="pipLocationVertical-top" name="pipLocationVertical" value="top"><br>
+
+                <label class="display-location" for="pipLocationVertical-bottom">Bottom</label>
+                <input class="display-location" type="radio" id="pipLocationVertical-bottom" name="pipLocationVertical" value="bottom"><br>
+                <br>
+
+            </div>
 
 
             <b>Main/Background Video Volume:</b>

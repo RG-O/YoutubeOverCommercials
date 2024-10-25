@@ -20,7 +20,12 @@ chrome.storage.sync.get([
     'matchCountThreshold',
     'colorDifferenceMatchingThreshold',
     'manualOverrideCooldown',
-    'isDebugMode'
+    'isDebugMode',
+    'isPiPMode',
+    'pipLocationHorizontal',
+    'pipLocationVertical',
+    'pipHeight',
+    'pipWidth'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -44,6 +49,11 @@ chrome.storage.sync.get([
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
     optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
+    optionsForm.isPiPMode.checked = result.isPiPMode ?? false;
+    optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
+    optionsForm.pipLocationVertical.value = result.pipLocationVertical ?? 'top';
+    optionsForm.pipHeight.value = result.pipHeight ?? 25;
+    optionsForm.pipWidth.value = result.pipWidth ?? 25;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -56,6 +66,9 @@ chrome.storage.sync.get([
     for (let i = 0, max = videoTypeRadios.length; i < max; i++) {
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
     }
+
+    togglePiPFieldsVisability();
+    document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
 
 });
 
@@ -83,7 +96,11 @@ document.getElementById("save-button").onclick = function () {
         optionsForm.mismatchCountThreshold.value &&
         optionsForm.matchCountThreshold.value &&
         optionsForm.colorDifferenceMatchingThreshold.value &&
-        optionsForm.manualOverrideCooldown.value
+        optionsForm.manualOverrideCooldown.value &&
+        optionsForm.pipLocationHorizontal.value &&
+        optionsForm.pipLocationVertical.value &&
+        optionsForm.pipHeight.value &&
+        optionsForm.pipWidth.value
     ) {
 
         let overlayHostName;
@@ -117,7 +134,12 @@ document.getElementById("save-button").onclick = function () {
             matchCountThreshold: optionsForm.matchCountThreshold.value,
             colorDifferenceMatchingThreshold: optionsForm.colorDifferenceMatchingThreshold.value,
             manualOverrideCooldown: optionsForm.manualOverrideCooldown.value,
-            isDebugMode: optionsForm.isDebugMode.checked
+            isDebugMode: optionsForm.isDebugMode.checked,
+            isPiPMode: optionsForm.isPiPMode.checked,
+            pipLocationHorizontal: optionsForm.pipLocationHorizontal.value,
+            pipLocationVertical: optionsForm.pipLocationVertical.value,
+            pipHeight: optionsForm.pipHeight.value,
+            pipWidth: optionsForm.pipWidth.value
         }, function () {
 
             window.close();
@@ -169,4 +191,16 @@ function toggleModeInstructionsVisability() {
         modeInstructions[i].style.display = 'none';
     }
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
+}
+
+
+//show/hide PiP fields when PiP mode checkbox is checked/unchecked
+function togglePiPFieldsVisability() {
+
+    if (optionsForm.isPiPMode.checked) {
+        document.getElementsByClassName('pip-fields-wrapper')[0].style.display = 'block';
+    } else {
+        document.getElementsByClassName('pip-fields-wrapper')[0].style.display = 'none';
+    }
+
 }
