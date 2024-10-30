@@ -156,9 +156,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "execute_music_commercial_state") {
 
         //grab user set values
-        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID'], (result) => {
+        chrome.storage.sync.get(['overlayVideoType', 'spotifyTabID', 'shouldClickNextOnPlaySpotify'], (result) => {
 
             let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+            let shouldClickNextOnPlaySpotify = result.shouldClickNextOnPlaySpotify ?? true;
 
             if (overlayVideoType == 'spotify') {
 
@@ -169,7 +170,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                         let exists = tabs.some(tab => tab.id === result.spotifyTabID);
                         if (exists) {
 
-                            chrome.tabs.sendMessage(result.spotifyTabID, { action: "play_spotify" });
+                            if (shouldClickNextOnPlaySpotify) {
+                                chrome.tabs.sendMessage(result.spotifyTabID, { action: "next_spotify" });
+                            } else {
+                                chrome.tabs.sendMessage(result.spotifyTabID, { action: "play_spotify" });
+                            }
 
                         }
 

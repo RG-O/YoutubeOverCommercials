@@ -1,6 +1,8 @@
 
 var playButton;
+var nextButton;
 var nowPlayingWidget;
+
 
 //run initialSetup() as soon as DOM is loaded
 if (document.readyState === 'loading') {
@@ -15,6 +17,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         pause();
     } else if (message.action == 'play_spotify') {
         play();
+    } else if (message.action == 'next_spotify') {
+        next();
     }
 });
 
@@ -38,6 +42,31 @@ function play() {
 
     if (playButton != null) {
 
+        if (playButton.ariaLabel == 'Play') {
+
+            playButton.click();
+
+        }
+
+        shipNowPlaying();
+
+    } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
+
+}
+
+
+function next() {
+
+    if (nextButton != null) {
+
+        //note: only need to hit next button because as of 10/29/24 spotify automatically starts playing after next button is clicked
+        nextButton.click();
+
+        //note: don't need to run shipNowPlaying() because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
+
+    } else if (playButton != null) {
+
+        //just play if nextButton is broken. would rather have the extension be half broken instead of full broken
         if (playButton.ariaLabel == 'Play') {
 
             playButton.click();
@@ -144,6 +173,7 @@ function initialSetup() {
             setTimeout(() => {
 
                 playButton = document.querySelector('[data-testid="control-button-playpause"]');
+                nextButton = document.querySelector('[data-testid="control-button-skip-forward"]');
 
                 waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]:not([disabled])').then(() => {
 

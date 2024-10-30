@@ -25,7 +25,8 @@ chrome.storage.sync.get([
     'pipLocationHorizontal',
     'pipLocationVertical',
     'pipHeight',
-    'pipWidth'
+    'pipWidth',
+    'shouldClickNextOnPlaySpotify'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -54,6 +55,7 @@ chrome.storage.sync.get([
     optionsForm.pipLocationVertical.value = result.pipLocationVertical ?? 'top';
     optionsForm.pipHeight.value = result.pipHeight ?? 25;
     optionsForm.pipWidth.value = result.pipWidth ?? 25;
+    optionsForm.shouldClickNextOnPlaySpotify.checked = result.shouldClickNextOnPlaySpotify ?? true;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -139,12 +141,13 @@ document.getElementById("save-button").onclick = function () {
             pipLocationHorizontal: optionsForm.pipLocationHorizontal.value,
             pipLocationVertical: optionsForm.pipLocationVertical.value,
             pipHeight: optionsForm.pipHeight.value,
-            pipWidth: optionsForm.pipWidth.value
+            pipWidth: optionsForm.pipWidth.value,
+            shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked
         }, function () {
 
             window.close();
             //TODO: only show this message if one of these values have been updated and extension has already been initiated
-            //TODO: get these values to update after extension has already been initiated
+            //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
 

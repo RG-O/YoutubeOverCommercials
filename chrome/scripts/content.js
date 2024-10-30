@@ -1200,7 +1200,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'mismatchCountThreshold',
                 'matchCountThreshold',
                 'colorDifferenceMatchingThreshold',
-                'manualOverrideCooldown'
+                'manualOverrideCooldown',
+                'pipLocationHorizontal',
+                'pipLocationVertical',
+                'pipHeight',
+                'pipWidth'
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -1208,6 +1212,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 matchCountThreshold = result.matchCountThreshold ?? 2;
                 colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                 manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
+                pipLocationVertical = result.pipLocationVertical ?? 'left';
+                pipHeight = result.pipHeight ?? 25;
+                pipWidth = result.pipWidth ?? 25;
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
