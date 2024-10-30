@@ -122,3 +122,7 @@ button {
     .tooltip:hover .tooltiptext {
         visibility: visible;
     }
+
+.keyboard-shortcut {
+    color: red;
+}

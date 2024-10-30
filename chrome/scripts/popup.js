@@ -1,4 +1,7 @@
 
+var isFirefox = false; //********************
+
+
 //grab all user set values
 chrome.storage.sync.get([
     'overlayVideoType',
@@ -69,6 +72,7 @@ chrome.storage.sync.get([
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
     }
 
+    setKeyboardShortcutText();
     togglePiPFieldsVisability();
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
 
@@ -199,11 +203,19 @@ function toggleModeInstructionsVisability() {
 
 //show/hide PiP fields when PiP mode checkbox is checked/unchecked
 function togglePiPFieldsVisability() {
-
     if (optionsForm.isPiPMode.checked) {
         document.getElementsByClassName('pip-fields-wrapper')[0].style.display = 'block';
     } else {
         document.getElementsByClassName('pip-fields-wrapper')[0].style.display = 'none';
     }
+}
 
+
+function setKeyboardShortcutText() {
+    if (isFirefox) {
+        let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
+        for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
+            keyboardShortcuts[i].innerText = "Ctrl + Alt + C";
+        }
+    }
 }

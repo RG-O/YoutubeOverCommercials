@@ -19,7 +19,6 @@ var originalPixelColor;
 var windowDimensions;
 var logoBoxText;
 var countdownOngoing = false;
-//111
 var pipBlocker;
 var pipBlockerText;
 
@@ -53,15 +52,12 @@ var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
 var isAudioOnlyOverlay;
 var isLiveOverlayVideo;
-//111
 var isPiPMode = true;
 var pipLocationHorizontal = 'right';
 var pipLocationVertical = 'top';
 var pipHeight = 25;
 var pipWidth = 25;
-//TODO: Add user preference for spotify to have it go to a new song everytime it plays
 //TODO: Add user preference for spotify to have audio come in gradually
-
 
 
 //function that is responsible for loading the video iframe over top of the main/background video
@@ -286,7 +282,6 @@ function endCommercialMode() {
 
         chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
 
-        //111
         if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
             enterPiPMode();
         } else {
@@ -347,7 +342,6 @@ function startCommercialMode() {
                 }
             }
 
-            //111
             if (isPiPMode && isLiveOverlayVideo) {
                 exitPiPMode();
             }
@@ -606,7 +600,6 @@ function setBlockersAndPixelSelectionInstructions() {
 
     }
 
-    //111
     if (isPiPMode && isLiveOverlayVideo) {
 
         pipBlocker = document.createElement('div');
