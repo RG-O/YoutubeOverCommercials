@@ -1,4 +1,7 @@
 
+var isFirefox = false; //********************
+
+
 //grab all user set values
 chrome.storage.sync.get([
     'overlayVideoType',
@@ -20,7 +23,13 @@ chrome.storage.sync.get([
     'matchCountThreshold',
     'colorDifferenceMatchingThreshold',
     'manualOverrideCooldown',
-    'isDebugMode'
+    'isDebugMode',
+    'isPiPMode',
+    'pipLocationHorizontal',
+    'pipLocationVertical',
+    'pipHeight',
+    'pipWidth',
+    'shouldClickNextOnPlaySpotify'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -44,6 +53,12 @@ chrome.storage.sync.get([
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
     optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
+    optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
+    optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
+    optionsForm.pipLocationVertical.value = result.pipLocationVertical ?? 'top';
+    optionsForm.pipHeight.value = result.pipHeight ?? 20;
+    optionsForm.pipWidth.value = result.pipWidth ?? 20;
+    optionsForm.shouldClickNextOnPlaySpotify.checked = result.shouldClickNextOnPlaySpotify ?? true;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -56,6 +71,10 @@ chrome.storage.sync.get([
     for (let i = 0, max = videoTypeRadios.length; i < max; i++) {
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
     }
+
+    setKeyboardShortcutText();
+    togglePiPFieldsVisability();
+    document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
 
 });
 
@@ -83,7 +102,11 @@ document.getElementById("save-button").onclick = function () {
         optionsForm.mismatchCountThreshold.value &&
         optionsForm.matchCountThreshold.value &&
         optionsForm.colorDifferenceMatchingThreshold.value &&
-        optionsForm.manualOverrideCooldown.value
+        optionsForm.manualOverrideCooldown.value &&
+        optionsForm.pipLocationHorizontal.value &&
+        optionsForm.pipLocationVertical.value &&
+        optionsForm.pipHeight.value &&
+        optionsForm.pipWidth.value
     ) {
 
         let overlayHostName;
@@ -117,14 +140,24 @@ document.getElementById("save-button").onclick = function () {
             matchCountThreshold: optionsForm.matchCountThreshold.value,
             colorDifferenceMatchingThreshold: optionsForm.colorDifferenceMatchingThreshold.value,
             manualOverrideCooldown: optionsForm.manualOverrideCooldown.value,
-            isDebugMode: optionsForm.isDebugMode.checked
+            isDebugMode: optionsForm.isDebugMode.checked,
+            isPiPMode: optionsForm.isPiPMode.checked,
+            pipLocationHorizontal: optionsForm.pipLocationHorizontal.value,
+            pipLocationVertical: optionsForm.pipLocationVertical.value,
+            pipHeight: optionsForm.pipHeight.value,
+            pipWidth: optionsForm.pipWidth.value,
+            shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked
         }, function () {
 
-            window.close();
-            //TODO: only show this message if one of these values have been updated and extension has already been initiated
-            //TODO: get these values to update after extension has already been initiated
-            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
+            //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
+            window.close();
+            //TODO: get this message to actually display correctly for firefox
+            if (!isFirefox) {
+                //TODO: only show this message if one of these values have been updated and extension has already been initiated
+                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            }
 
         });
 
@@ -169,4 +202,24 @@ function toggleModeInstructionsVisability() {
         modeInstructions[i].style.display = 'none';
     }
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
+}
+
+
+//show/hide PiP fields when PiP mode checkbox is checked/unchecked
+function togglePiPFieldsVisability() {
+    if (optionsForm.isPiPMode.checked) {
+        document.getElementsByClassName('pip-fields-wrapper')[0].style.display = 'block';
+    } else {
+        document.getElementsByClassName('pip-fields-wrapper')[0].style.display = 'none';
+    }
+}
+
+
+function setKeyboardShortcutText() {
+    if (isFirefox) {
+        let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
+        for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
+            keyboardShortcuts[i].innerText = "Ctrl + Alt + C";
+        }
+    }
 }
