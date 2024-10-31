@@ -149,11 +149,13 @@ document.getElementById("save-button").onclick = function () {
             shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked
         }, function () {
 
-            window.close();
-            //TODO: only show this message if one of these values have been updated and extension has already been initiated
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
-            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
+            //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
+            window.close();
+            //TODO: get this message to actually display correctly for firefox
+            //TODO: only show this message if one of these values have been updated and extension has already been initiated
+            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
 
         });
 

@@ -19,6 +19,8 @@ var originalPixelColor;
 var windowDimensions;
 var logoBoxText;
 var countdownOngoing = false;
+var pipBlocker;
+var pipBlockerText;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -48,6 +50,14 @@ var manualOverrideCooldown;
 var isDebugMode;
 var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
+var isAudioOnlyOverlay;
+var isLiveOverlayVideo;
+var isPiPMode;
+var pipLocationHorizontal;
+var pipLocationVertical;
+var pipHeight;
+var pipWidth;
+//TODO: Add user preference for spotify to have audio come in gradually
 
 
 //function that is responsible for loading the video iframe over top of the main/background video
@@ -63,26 +73,10 @@ function setOverlayVideo() {
 
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
-    //TODO: replace firstChild with null since the last items is actually most likely to show on top?
     insertLocation.insertBefore(overlayVideo, null);
     overlayVideo.style.visibility = "visible";
-    overlayVideo.style.setProperty("width", videoOverlayWidth + "%", "important");
-    overlayVideo.style.setProperty("height", videoOverlayHeight + "%", "important");
 
-    //setting overlay video in user set location
-    if (overlayVideoLocationHorizontal == 'left' || overlayVideoLocationHorizontal == 'middle') {
-        overlayVideo.style.setProperty("left", "0", "important");
-    }
-    if (overlayVideoLocationHorizontal == 'right' || overlayVideoLocationHorizontal == 'middle') {
-        overlayVideo.style.setProperty("right", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'top' || overlayVideoLocationVertical == 'middle') {
-        overlayVideo.style.setProperty("top", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'bottom' || overlayVideoLocationVertical == 'middle') {
-        overlayVideo.style.setProperty("bottom", "0", "important");
-    }
-
+    setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
     let url;
     if (overlayVideoType == 'yt-playlist') {
@@ -170,7 +164,7 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+    if (!isAudioOnlyOverlay) {
         setOverlayVideo();
     }
 
@@ -192,8 +186,7 @@ function initialRun() {
 
     muteMainVideo();
 
-    //TODO: create a new variable for music/video boolean or whatever
-    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+    if (isAudioOnlyOverlay) {
 
         chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
 
@@ -218,14 +211,20 @@ function muteMainVideo() {
     if (mainVideoVolumeDuringCommercials == 0) {
 
         //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
+        if (window.location.hostname == 'tv.youtube.com') {
 
-            document.querySelector('[aria-label="Mute (m)"]').click();
+            if (document.querySelector('[aria-label="Mute (m)"]')) {
 
-        }
+                document.querySelector('[aria-label="Mute (m)"]').click();
 
-        for (let i = 0; i < mainVideoCollection.length; i++) {
-            mainVideoCollection[i].muted = true; // Mute each video
+            }
+
+        } else {
+
+            for (let i = 0; i < mainVideoCollection.length; i++) {
+                mainVideoCollection[i].muted = true; // Mute each video
+            }
+
         }
 
     } else if (mainVideoVolumeDuringCommercials < 1) {
@@ -243,14 +242,20 @@ function unmuteMainVideo() {
 
     if (mainVideoVolumeDuringCommercials == 0) {
 
-        if (window.location.hostname == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
+        if (window.location.hostname == 'tv.youtube.com') {
 
-            document.querySelector('[aria-label="Unmute (m)"]').click();
+            if (document.querySelector('[aria-label="Unmute (m)"]')) {
 
-        }
+                document.querySelector('[aria-label="Unmute (m)"]').click();
 
-        for (let i = 0; i < mainVideoCollection.length; i++) {
-            mainVideoCollection[i].muted = false; // Mute each video
+            }
+
+        } else {
+
+            for (let i = 0; i < mainVideoCollection.length; i++) {
+                mainVideoCollection[i].muted = false; // Mute each video
+            }
+
         }
 
     } else if (mainVideoVolumeDuringCommercials < 1) {
@@ -269,7 +274,7 @@ function endCommercialMode() {
 
     isCommercialState = false;
 
-    if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+    if (isAudioOnlyOverlay) {
 
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
 
@@ -277,7 +282,11 @@ function endCommercialMode() {
 
         chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
 
-        overlayVideo.style.visibility = "hidden";
+        if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
+            enterPiPMode();
+        } else {
+            overlayVideo.style.visibility = "hidden";
+        }
 
         if (mainVideoFade > 0) {
             if (commercialDetectionMode != 'auto') {
@@ -333,6 +342,10 @@ function startCommercialMode() {
                 }
             }
 
+            if (isPiPMode && isLiveOverlayVideo) {
+                exitPiPMode();
+            }
+
             overlayVideo.style.visibility = "visible";
 
         }
@@ -385,18 +398,33 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'matchCountThreshold',
                             'colorDifferenceMatchingThreshold',
                             'manualOverrideCooldown',
-                            'isDebugMode'
+                            'isDebugMode',
+                            'isPiPMode',
+                            'pipLocationHorizontal',
+                            'pipLocationVertical',
+                            'pipHeight',
+                            'pipWidth'
                         ], (result) => {
 
                             //set them to default if not set by user yet
                             overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+                            if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+                                isAudioOnlyOverlay = true;
+                                isLiveOverlayVideo = false;
+                            } else if (overlayVideoType == 'yt-live' || overlayVideoType == 'other-live') {
+                                isAudioOnlyOverlay = false;
+                                isLiveOverlayVideo = true;
+                            } else {
+                                isAudioOnlyOverlay = false;
+                                isLiveOverlayVideo = false;
+                            }
                             ytPlaylistID = result.ytPlaylistID ?? 'PLt982az5t-dVn-HDI4D7fnvMXt8T9_OGB';
                             ytVideoID = result.ytVideoID ?? '5AMQbxBZohY';
                             ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
                             mainVideoFade = result.mainVideoFade ?? 65;
-                            if (overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+                            if (!isAudioOnlyOverlay) {
                                 overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
                                 overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
                                 videoOverlayWidth = result.videoOverlayWidth ?? 75;
@@ -421,6 +449,11 @@ chrome.runtime.onMessage.addListener(function (message) {
                             colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                             manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
                             isDebugMode = result.isDebugMode ?? false;
+                            isPiPMode = result.isPiPMode ?? true;
+                            pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
+                            pipLocationVertical = result.pipLocationVertical ?? 'left';
+                            pipHeight = result.pipHeight ?? 20;
+                            pipWidth = result.pipWidth ?? 20;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
 
@@ -567,40 +600,53 @@ function setBlockersAndPixelSelectionInstructions() {
 
     }
 
+    if (isPiPMode && isLiveOverlayVideo) {
+
+        pipBlocker = document.createElement('div');
+        pipBlocker.className = "ytoc-overlay-instructions";
+        pipBlocker.style.backgroundColor = "black";
+        
+        insertLocationFullscreenElm.insertBefore(pipBlocker, null);
+        pipBlockerText = document.createElement('div');
+        pipBlockerText.style.color = "white";
+        pipBlockerText.style.fontSize = "16px";
+        if (pipLocationVertical == 'bottom') {
+            pipBlockerText.style.position = "absolute";
+            pipBlockerText.style.bottom = "0";
+        }
+        pipBlockerText.textContent = "PiP Location - Disable PiP or change PiP location/size in extension settings (advanced) if covering desired logo/graphic.";
+        pipBlocker.appendChild(pipBlockerText);
+        setOverlaySizeAndLocation(pipBlocker, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "5px");
+
+    }
+
     overlayInstructions = document.createElement('div');
     overlayInstructions.className = "ytoc-overlay-instructions";
     insertLocationFullscreenElm.insertBefore(overlayInstructions, null);
-
     overlayInstructions.style.visibility = "visible";
-    overlayInstructions.style.setProperty("width", videoOverlayWidth + "%", "important");
-    overlayInstructions.style.setProperty("height", videoOverlayHeight + "%", "important");
     //overlayInstructions.style.setProperty("border", "3px red solid", "important");
-
-    //setting overlay video in user set location
-    if (overlayVideoLocationHorizontal == 'left' || overlayVideoLocationHorizontal == 'middle') {
-        overlayInstructions.style.setProperty("left", "0", "important");
-    }
-    if (overlayVideoLocationHorizontal == 'right' || overlayVideoLocationHorizontal == 'middle') {
-        overlayInstructions.style.setProperty("right", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'top' || overlayVideoLocationVertical == 'middle') {
-        overlayInstructions.style.setProperty("top", "0", "important");
-    }
-    if (overlayVideoLocationVertical == 'bottom' || overlayVideoLocationVertical == 'middle') {
-        overlayInstructions.style.setProperty("bottom", "0", "important");
-    }
+    setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
     //hide verticle scrollbar if video placed on bottom
     if (overlayVideoLocationVertical == 'bottom') {
         let hideScollStyle = document.createElement("style");
         hideScollStyle.textContent = `
-        ::-webkit-scrollbar {
-            display: none;
-        }`
+            ::-webkit-scrollbar {
+                display: none;
+            }
+        `;
         insertLocation.appendChild(hideScollStyle);
+        if (isFirefox) {
+            if (document.getElementsByTagName('html')[0]) {
+                //TODO: I believe scrollbar-width is experimental and not supported with all firefox versions, I should try to find something else
+                document.getElementsByTagName('html')[0].style.scrollbarWidth = "none";
+            }
+            if (document.getElementsByTagName('body')[0]) {
+                document.getElementsByTagName('body')[0].style.scrollbarWidth = "none";
+            }
+        }
     }
 
-    //TODO: fix issue where if user places video at bottom of some sites like peacock, it adds scrollbar to whole page
     let iFrame = document.createElement('iframe');
     iFrame.src = chrome.runtime.getURL('pixel-select-instructions.html');
     iFrame.width = "100%";
@@ -684,7 +730,7 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
-            if ((overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') || isDebugMode) {
+            if (!isAudioOnlyOverlay || isDebugMode) {
                 logoBoxText = 'YTOC';
             } else if (overlayVideoType == 'spotify') {
                 logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
@@ -744,7 +790,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
                 if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
 
-                    if (cooldownCountRemaining >= 1) {
+                    if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
 
                         logoBox.textContent = cooldownCountRemaining;
                         logoBox.style.display = 'block';
@@ -775,7 +821,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                         logoBox.textContent = logoBoxText;
                         logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         logoBox.style.display = 'block';
-                        if (!isDebugMode && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+                        if (!isDebugMode && !isAudioOnlyOverlay) {
 
                             setTimeout(() => {
 
@@ -812,7 +858,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isDebugMode) { console.log('commercial undetected'); }
 
-                        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+                        if (isAudioOnlyOverlay) {
                             if (isDebugMode) {
                                 logoBoxText = 'YTOC';
                                 logoBox.textContent = logoBoxText;
@@ -1015,8 +1061,12 @@ function fullscreenChanged() {
             pauseAutoMode();
         }
 
-        if (isCommercialState && overlayVideoType != 'spotify' && overlayVideoType != 'other-tabs') {
+        if (isCommercialState && !isAudioOnlyOverlay) {
             endCommercialMode();
+        }
+
+        if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
+            overlayVideo.style.visibility = "hidden";
         }
 
         //TODO: should I be doing it this way?
@@ -1156,7 +1206,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'mismatchCountThreshold',
                 'matchCountThreshold',
                 'colorDifferenceMatchingThreshold',
-                'manualOverrideCooldown'
+                'manualOverrideCooldown',
+                'pipLocationHorizontal',
+                'pipLocationVertical',
+                'pipHeight',
+                'pipWidth'
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -1164,6 +1218,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 matchCountThreshold = result.matchCountThreshold ?? 2;
                 colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                 manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                pipLocationHorizontal = result.pipLocationHorizontal ?? 'left';
+                pipLocationVertical = result.pipLocationVertical ?? 'top';
+                pipHeight = result.pipHeight ?? 20;
+                pipWidth = result.pipWidth ?? 20;
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
@@ -1179,5 +1237,52 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 function stopMutingOtherTabs() {
 
     chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+}
+
+
+function setOverlaySizeAndLocation(overlay, widthPercentage, heightPercentage, xLocation, yLocation, spacerStyleValue) {
+
+    overlay.style.setProperty("width", widthPercentage + "%", "important");
+    overlay.style.setProperty("height", heightPercentage + "%", "important");
+
+    if (xLocation == 'left' || xLocation == 'middle') {
+        overlay.style.setProperty("left", spacerStyleValue, "important");
+    }
+    if (xLocation == 'right' || xLocation == 'middle') {
+        overlay.style.setProperty("right", spacerStyleValue, "important");
+    }
+    if (yLocation == 'top' || yLocation == 'middle') {
+        overlay.style.setProperty("top", spacerStyleValue, "important");
+    }
+    if (yLocation == 'bottom' || yLocation == 'middle') {
+        overlay.style.setProperty("bottom", spacerStyleValue, "important");
+    }
+
+}
+
+
+//tries to mimic browser PiP mode as firefox does not have a PiP API and chrome's only works when triggered by user action
+function enterPiPMode() {
+
+    overlayVideo.style.removeProperty("right");
+    overlayVideo.style.removeProperty("left");
+    overlayVideo.style.removeProperty("bottom");
+    overlayVideo.style.removeProperty("top");
+
+    //TODO: remove the 7px gap and and then update the scrollbar hiding to account for piplocationvertical, pipmode, and islivevideo -- or make the gap a user setting?
+    setOverlaySizeAndLocation(overlayVideo, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "7px");
+
+}
+
+
+function exitPiPMode() {
+
+    overlayVideo.style.removeProperty("right");
+    overlayVideo.style.removeProperty("left");
+    overlayVideo.style.removeProperty("bottom");
+    overlayVideo.style.removeProperty("top");
+
+    setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
 }
