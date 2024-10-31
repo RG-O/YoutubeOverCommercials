@@ -2,6 +2,7 @@
 var playButton;
 var nextButton;
 var nowPlayingWidget;
+var hasFirstSongPlayed = false;
 
 
 //run initialSetup() as soon as DOM is loaded
@@ -18,7 +19,14 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     } else if (message.action == 'play_spotify') {
         play();
     } else if (message.action == 'next_spotify') {
-        next();
+        if (hasFirstSongPlayed) {
+            next();
+        } else {
+            //play first song before skipping it
+            play();
+            hasFirstSongPlayed = true;
+        }
+        
     }
 });
 
