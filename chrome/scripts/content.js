@@ -52,11 +52,11 @@ var haveLogoCountdown;
 var logoCountdownMismatchesRemaining;
 var isAudioOnlyOverlay;
 var isLiveOverlayVideo;
-var isPiPMode = true;
-var pipLocationHorizontal = 'right';
-var pipLocationVertical = 'top';
-var pipHeight = 25;
-var pipWidth = 25;
+var isPiPMode;
+var pipLocationHorizontal;
+var pipLocationVertical;
+var pipHeight;
+var pipWidth;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -449,11 +449,11 @@ chrome.runtime.onMessage.addListener(function (message) {
                             colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                             manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
                             isDebugMode = result.isDebugMode ?? false;
-                            isPiPMode = result.isPiPMode ?? false;
+                            isPiPMode = result.isPiPMode ?? true;
                             pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
                             pipLocationVertical = result.pipLocationVertical ?? 'left';
-                            pipHeight = result.pipHeight ?? 25;
-                            pipWidth = result.pipWidth ?? 25;
+                            pipHeight = result.pipHeight ?? 20;
+                            pipWidth = result.pipWidth ?? 20;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
 
@@ -614,7 +614,7 @@ function setBlockersAndPixelSelectionInstructions() {
             pipBlockerText.style.position = "absolute";
             pipBlockerText.style.bottom = "0";
         }
-        pipBlockerText.textContent = "PiP Location - Change PiP location in extension settings if covering desired logo/graphic.";
+        pipBlockerText.textContent = "PiP Location - Disable PiP or change PiP location/size in extension settings (advanced) if covering desired logo/graphic.";
         pipBlocker.appendChild(pipBlockerText);
         setOverlaySizeAndLocation(pipBlocker, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "5px");
 
@@ -631,13 +631,22 @@ function setBlockersAndPixelSelectionInstructions() {
     if (overlayVideoLocationVertical == 'bottom') {
         let hideScollStyle = document.createElement("style");
         hideScollStyle.textContent = `
-        ::-webkit-scrollbar {
-            display: none;
-        }`
+            ::-webkit-scrollbar {
+                display: none;
+            }
+        `;
         insertLocation.appendChild(hideScollStyle);
+        if (isFirefox) {
+            if (document.getElementsByTagName('html')[0]) {
+                //TODO: I believe scrollbar-width is experimental and not supported with all firefox versions, I should try to find something else
+                document.getElementsByTagName('html')[0].style.scrollbarWidth = "none";
+            }
+            if (document.getElementsByTagName('body')[0]) {
+                document.getElementsByTagName('body')[0].style.scrollbarWidth = "none";
+            }
+        }
     }
 
-    //TODO: fix issue where if user places video at bottom of some sites like peacock, it adds scrollbar to whole page - I think this has been fixed?
     let iFrame = document.createElement('iframe');
     iFrame.src = chrome.runtime.getURL('pixel-select-instructions.html');
     iFrame.width = "100%";
@@ -1056,6 +1065,10 @@ function fullscreenChanged() {
             endCommercialMode();
         }
 
+        if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
+            overlayVideo.style.visibility = "hidden";
+        }
+
         //TODO: should I be doing it this way?
         if (overlayVideoType == 'other-tabs') {
             chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
@@ -1205,10 +1218,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 matchCountThreshold = result.matchCountThreshold ?? 2;
                 colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                 manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
-                pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
-                pipLocationVertical = result.pipLocationVertical ?? 'left';
-                pipHeight = result.pipHeight ?? 25;
-                pipWidth = result.pipWidth ?? 25;
+                pipLocationHorizontal = result.pipLocationHorizontal ?? 'left';
+                pipLocationVertical = result.pipLocationVertical ?? 'top';
+                pipHeight = result.pipHeight ?? 20;
+                pipWidth = result.pipWidth ?? 20;
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
@@ -1252,32 +1265,13 @@ function setOverlaySizeAndLocation(overlay, widthPercentage, heightPercentage, x
 //tries to mimic browser PiP mode as firefox does not have a PiP API and chrome's only works when triggered by user action
 function enterPiPMode() {
 
-    //overlayVideo.style.setProperty("width", pipWidth + "%", "important");
-    //overlayVideo.style.setProperty("height", pipHeight + "%", "important");
-
-    //if (pipLocationCorner.includes('left')) {
-    //    overlayVideo.style.removeProperty("right");
-    //    overlayVideo.style.setProperty("left", "5px", "important");
-    //}
-    //if (pipLocationCorner.includes('right')) {
-    //    overlayVideo.style.removeProperty("left");
-    //    overlayVideo.style.setProperty("right", "5px", "important");
-    //}
-    //if (pipLocationCorner.includes('top')) {
-    //    overlayVideo.style.removeProperty("bottom");
-    //    overlayVideo.style.setProperty("top", "5px", "important");
-    //}
-    //if (pipLocationCorner.includes('bottom')) {
-    //    overlayVideo.style.removeProperty("top");
-    //    overlayVideo.style.setProperty("bottom", "5px", "important");
-    //}
-
     overlayVideo.style.removeProperty("right");
     overlayVideo.style.removeProperty("left");
     overlayVideo.style.removeProperty("bottom");
     overlayVideo.style.removeProperty("top");
 
-    setOverlaySizeAndLocation(overlayVideo, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "5px");
+    //TODO: remove the 7px gap and and then update the scrollbar hiding to account for piplocationvertical, pipmode, and islivevideo -- or make the gap a user setting?
+    setOverlaySizeAndLocation(overlayVideo, pipWidth, pipHeight, pipLocationHorizontal, pipLocationVertical, "7px");
 
 }
 

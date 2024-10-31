@@ -53,11 +53,11 @@ chrome.storage.sync.get([
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
     optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
-    optionsForm.isPiPMode.checked = result.isPiPMode ?? false;
+    optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
     optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
     optionsForm.pipLocationVertical.value = result.pipLocationVertical ?? 'top';
-    optionsForm.pipHeight.value = result.pipHeight ?? 25;
-    optionsForm.pipWidth.value = result.pipWidth ?? 25;
+    optionsForm.pipHeight.value = result.pipHeight ?? 20;
+    optionsForm.pipWidth.value = result.pipWidth ?? 20;
     optionsForm.shouldClickNextOnPlaySpotify.checked = result.shouldClickNextOnPlaySpotify ?? true;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
@@ -154,8 +154,10 @@ document.getElementById("save-button").onclick = function () {
             //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
             window.close();
             //TODO: get this message to actually display correctly for firefox
-            //TODO: only show this message if one of these values have been updated and extension has already been initiated
-            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            if (!isFirefox) {
+                //TODO: only show this message if one of these values have been updated and extension has already been initiated
+                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            }
 
         });
 

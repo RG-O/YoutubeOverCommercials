@@ -237,13 +237,32 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
         if (shouldHideYTBackground) {
 
             setTimeout(() => {
-                //TODO: do special background hiding for yttv
-                if (document.getElementsByClassName('html5-video-player')[0]) {
-                    document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
+
+                if (document.getElementsByTagName('html')[0]) {
+                    document.getElementsByTagName('html')[0].style.backgroundColor = "transparent";
                 }
                 if (document.getElementsByTagName('body')[0]) {
                     document.getElementsByTagName('body')[0].style.backgroundColor = "transparent";
                 }
+                //special for yt
+                if (document.getElementsByClassName('html5-video-player')[0]) {
+                    document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
+                }
+                //special for yttv
+                if (overlayHostName == 'tv.youtube.com') {
+                    if (document.getElementsByTagName('ytu-player-controller')[0]) {
+                        document.getElementsByTagName('ytu-player-controller')[0].style.backgroundColor = "transparent";
+                    }
+                    let hideYTTVBlackBackgroundStyle = document.createElement("style");
+                    hideYTTVBlackBackgroundStyle.textContent = `
+                        ytu-player-layout.ytu-player-controller {
+                            --ypl-player-video-backdrop-color: transparent !important;
+                        }
+                    `;
+                    let insertLocation = document.getElementsByTagName('body')[0];
+                    insertLocation.appendChild(hideYTTVBlackBackgroundStyle);
+                }
+
             }, 1000); //wait a little because when a video plays initially it disapears for a sec and it looks janky for it to look like it flickers
 
         }
@@ -255,8 +274,11 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
             hideScollStyle.textContent = `
                 ::-webkit-scrollbar {
                     display: none;
-                }`
+                }
+            `;
+            let insertLocation = document.getElementsByTagName('body')[0];
             insertLocation.appendChild(hideScollStyle);
+            //TODO: do special scrollbar hiding for firefox?
 
         }
 
@@ -315,8 +337,8 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
                           100% {
                             opacity: 0;
                           }
-                        }`
-
+                        }
+                    `;
                     elm.appendChild(fadeStyle);
 
                     setTimeout(() => {
