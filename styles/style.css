@@ -23,8 +23,8 @@
     border-radius: 50% !important;
     z-index: 2147483646 !important;
     position: absolute !important;
-    width: 6px !important;
-    height: 6px !important;
+    width: 10px !important;
+    height: 10px !important;
     pointer-events: none !important;
 }
 
@@ -77,8 +77,8 @@
     z-index: 2147483646 !important;
     position: absolute !important;
     display: inline-block !important;
-    width: 6px !important;
-    height: 6px !important;
+    width: 10px !important;
+    height: 10px !important;
     border-radius: 50% !important;
     /*border-style: solid !important;
     border-width: 2px !important;

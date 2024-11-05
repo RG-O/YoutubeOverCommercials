@@ -1,5 +1,5 @@
 
-var isFirefox = true; //********************
+var isFirefox = false; //********************
 
 
 //grab all user set values
