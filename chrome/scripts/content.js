@@ -57,6 +57,7 @@ var pipLocationHorizontal;
 var pipLocationVertical;
 var pipHeight;
 var pipWidth;
+var isOppositePixelDetectionMode;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -123,6 +124,11 @@ function addOverlayFade(insertLocation) {
         } else if (selectedPixel) {
 
             overlayScreen.className = "ytoc-overlay-screen-with-hole";
+            if (isFirefox) {
+                //firefox does not need as large of a hole
+                overlayScreen.style.setProperty("width", "6px", "important");
+                overlayScreen.style.setProperty("height", "6px", "important");
+            }
             //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
             overlayScreen.style.left = (selectedPixel.x - 3) + 'px';
             overlayScreen.style.top = (selectedPixel.y - 3) + 'px';
@@ -403,7 +409,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pipLocationHorizontal',
                             'pipLocationVertical',
                             'pipHeight',
-                            'pipWidth'
+                            'pipWidth',
+                            'isOppositePixelDetectionMode'
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -454,6 +461,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             pipLocationVertical = result.pipLocationVertical ?? 'left';
                             pipHeight = result.pipHeight ?? 20;
                             pipWidth = result.pipWidth ?? 20;
+                            isOppositePixelDetectionMode = result.isOppositePixelDetectionMode ?? false;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
 
@@ -648,7 +656,11 @@ function setBlockersAndPixelSelectionInstructions() {
     }
 
     let iFrame = document.createElement('iframe');
-    iFrame.src = chrome.runtime.getURL('pixel-select-instructions.html');
+    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
+    if (isOppositePixelDetectionMode) {
+        iFrameSource = iFrameSource + '?opposite_mode=true';
+    }
+    iFrame.src = iFrameSource;
     iFrame.width = "100%";
     iFrame.height = "100%";
     iFrame.allow = "autoplay; encrypted-media";
@@ -776,11 +788,18 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
             let blueDifference = Math.abs(originalPixelColor.b - pixelColor.b);
 
             //TODO: Create HSL option
+            let match;
             if (
                 redDifference > colorDifferenceMatchingThreshold ||
                 greenDifference > colorDifferenceMatchingThreshold ||
                 blueDifference > colorDifferenceMatchingThreshold
             ) {
+                match = false;
+            } else {
+                match = true;
+            }
+
+            if ((!isOppositePixelDetectionMode && !match) || (isOppositePixelDetectionMode && match)) {
                 //color mismatch
 
                 mismatchCount++;
@@ -819,7 +838,9 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                         startCommercialMode();
 
                         logoBox.textContent = logoBoxText;
-                        logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+                        if (!isOppositePixelDetectionMode) {
+                            logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+                        }
                         logoBox.style.display = 'block';
                         if (!isDebugMode && !isAudioOnlyOverlay) {
 
@@ -878,7 +899,9 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
             }
 
-            logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+            if (!isOppositePixelDetectionMode) {
+                logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+            }
 
             cooldownCountRemaining--;
 
