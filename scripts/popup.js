@@ -1,5 +1,5 @@
 
-var isFirefox = true; //********************
+var isFirefox = false; //********************
 
 
 //grab all user set values
@@ -29,7 +29,10 @@ chrome.storage.sync.get([
     'pipLocationVertical',
     'pipHeight',
     'pipWidth',
-    'shouldClickNextOnPlaySpotify'
+    'shouldClickNextOnPlaySpotify',
+    'isOverlayVideoZoomMode',
+    'isOtherSiteTroubleshootMode',
+    'isOppositePixelDetectionMode'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -59,6 +62,9 @@ chrome.storage.sync.get([
     optionsForm.pipHeight.value = result.pipHeight ?? 20;
     optionsForm.pipWidth.value = result.pipWidth ?? 20;
     optionsForm.shouldClickNextOnPlaySpotify.checked = result.shouldClickNextOnPlaySpotify ?? true;
+    optionsForm.isOverlayVideoZoomMode.checked = result.isOverlayVideoZoomMode ?? false;
+    optionsForm.isOtherSiteTroubleshootMode.checked = result.isOtherSiteTroubleshootMode ?? false;
+    optionsForm.isOppositePixelDetectionMode.checked = result.isOppositePixelDetectionMode ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -146,7 +152,10 @@ document.getElementById("save-button").onclick = function () {
             pipLocationVertical: optionsForm.pipLocationVertical.value,
             pipHeight: optionsForm.pipHeight.value,
             pipWidth: optionsForm.pipWidth.value,
-            shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked
+            shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked,
+            isOverlayVideoZoomMode: optionsForm.isOverlayVideoZoomMode.checked,
+            isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
+            isOppositePixelDetectionMode: optionsForm.isOppositePixelDetectionMode.checked
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
