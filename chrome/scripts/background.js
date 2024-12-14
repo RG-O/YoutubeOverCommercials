@@ -16,17 +16,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "initial_execute_overlay_video_interaction") {
 
         //grab user set values
-        chrome.storage.sync.get(['shouldHideYTBackground', 'overlayHostName'], (result) => {
+        chrome.storage.sync.get(['shouldHideYTBackground', 'overlayHostName', 'isOtherSiteTroubleshootMode', 'isOverlayVideoZoomMode'], (result) => {
 
             let shouldHideYTBackground = result.shouldHideYTBackground ?? true;
             let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
+            let isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
+            let isOverlayVideoZoomMode = result.isOverlayVideoZoomMode ?? false;
 
             //TODO: inject an entire js file into the overlay video and then message functions in it, would that be better?
             //injecting initialCommercialState() into all frames on the active tab
             chrome.scripting.executeScript({
                 target: { tabId: sender.tab.id, allFrames: true },
                 func: initialCommercialState,
-                args: [shouldHideYTBackground, overlayHostName]
+                args: [shouldHideYTBackground, overlayHostName, isOtherSiteTroubleshootMode, isOverlayVideoZoomMode]
             });
 
         });
@@ -34,16 +36,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "execute_overlay_video_non_commercial_state") {
 
         //grab user set values
-        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName'], (result) => {
+        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName', 'isOtherSiteTroubleshootMode'], (result) => {
 
             let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
             let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
+            let isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
 
             //injecting stopCommercialState() into all frames on the active tab
             chrome.scripting.executeScript({
                 target: { tabId: sender.tab.id, allFrames: true },
                 func: stopCommercialState,
-                args: [overlayVideoType, overlayHostName]
+                args: [overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode]
             });
 
         });
@@ -51,16 +54,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "execute_overlay_video_commercial_state") {
 
         //grab user set values
-        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName'], (result) => {
+        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName', 'isOtherSiteTroubleshootMode'], (result) => {
 
             let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
             let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
+            let isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
 
             //injecting startCommercialState() into all frames on the active tab
             chrome.scripting.executeScript({
                 target: { tabId: sender.tab.id, allFrames: true },
                 func: startCommercialState,
-                args: [overlayVideoType, overlayHostName]
+                args: [overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode]
             });
 
         });
@@ -205,7 +209,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
-function initialCommercialState(shouldHideYTBackground, overlayHostName) {
+function initialCommercialState(shouldHideYTBackground, overlayHostName, isOtherSiteTroubleshootMode, isOverlayVideoZoomMode) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -217,8 +221,35 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
         }
     }
 
+    //TODO: add second (maybe call it B) isOverlayVideoZoomMode that can zoom the video tag (user could use both)
+    if (isOverlayVideoZoomMode && window.location.hostname == overlayHostName && overlayHostName != 'www.youtube.com') {
+
+        setTimeout(() => {
+
+            if (document.getElementsByTagName('iframe')[0]) {
+
+                //making the assumed iframe with the video fit the full page
+                let videoIFrame = document.getElementsByTagName('iframe')[0];
+                videoIFrame.style.setProperty("visibility", "visible", "important");
+                videoIFrame.style.setProperty("position", "fixed", "important");
+                videoIFrame.style.setProperty("top", "0", "important");
+                videoIFrame.style.setProperty("left", "0", "important");
+                videoIFrame.style.setProperty("min-width", "0", "important");
+                videoIFrame.style.setProperty("min-height", "0", "important");
+                videoIFrame.style.setProperty("width", "100%", "important");
+                videoIFrame.style.setProperty("height", "100%", "important");
+                videoIFrame.style.setProperty("padding", "0", "important");
+                videoIFrame.style.setProperty("border-width", "0", "important");
+                videoIFrame.style.setProperty("z-index", "2147483647", "important");
+
+            }
+
+        }, 1000);
+
+    }
+
     //making sure frame has the requested hostname of the overlay video so this doesn't accidentaly impact the main/background video
-    if (window.location.hostname == overlayHostName) {
+    if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
 
         //initial click or play on the overlay video
         if (overlayHostName == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
@@ -356,7 +387,7 @@ function initialCommercialState(shouldHideYTBackground, overlayHostName) {
 }
 
 //plays or unmutes overlay video
-function startCommercialState(overlayVideoType, overlayHostName) {
+function startCommercialState(overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -367,7 +398,7 @@ function startCommercialState(overlayVideoType, overlayHostName) {
         }
     }
 
-    if (window.location.hostname == overlayHostName) {
+    if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
 
         if (overlayHostName == 'www.youtube.com') {
 
@@ -412,7 +443,7 @@ function startCommercialState(overlayVideoType, overlayHostName) {
 }
 
 //pauses or mutes overlay video
-function stopCommercialState(overlayVideoType, overlayHostName) {
+function stopCommercialState(overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode) {
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -423,7 +454,7 @@ function stopCommercialState(overlayVideoType, overlayHostName) {
         }
     }
 
-    if (window.location.hostname == overlayHostName) {
+    if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
 
         if (overlayHostName == 'www.youtube.com') {
 

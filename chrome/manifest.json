@@ -5,9 +5,8 @@
   "icons": {
     "128": "icon128.png"
   },
-  "version": "1.5",
+  "version": "1.6",
   "permissions": [
-    "tabs",
     "activeTab",
     "scripting",
     "storage",

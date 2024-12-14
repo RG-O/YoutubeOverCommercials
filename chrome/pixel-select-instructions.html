@@ -21,105 +21,148 @@
     <br />
     <h1><span style="color: red; position: relative; z-index: 100;">YouTube&trade;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span><br /><span style="color: rgb(140, 179, 210, .9);">Over Commercials</span></h1>
     <br />
-    <h2>Auto Commercial Detection Mode</h2>
-    <p>
-        This mode works by the user (you) selecting a specific pixel on a logo/graphic that only displays when your live game/sport/event/race/program/show is on. Then, the extension continuously checks to 
-        see if the pixel selected remains the same color when the logo/graphic is displayed. When the color changes, we know this is most likely due to a commercial because the logo/graphic went away and since 
-        commercials are boring, the extension starts playing your YouTube video over top of the commercial. When the logo/graphic color comes back, we know your live program/show/sport/event is most likely back on, 
-        so the extension pauses/hides your YouTube video.
-    </p>
-    <h3 style="color: red;">Quick Start Instructions:</h3>
-    <ol>
-        <li>
-            Make sure your live game/program is on (out of commercial).
-            <ol type="i">
-                <li>
-                    If this isn't going to be anytime soon, refresh the page and hit the extension keyboard shortcut when it is back.
-                </li>
-            </ol>
-        </li>
-        <li>
-            Click on a pixel outside this box that is within a non-transparent logo or graphic on your game/program (see tips/tricks below for more details).
-            <ol type="i">
-                <li>
-                    You might need to wait for any video player UI to go away.
-                </li>
-                <li>
-                    Refresh the page and then hit the extension keyboard shortcut again if you ever want to chose a different pixel location.
-                </li>
-            </ol>
-        </li>
-        <li>
-            Let the extension automatically detect the commercials and display your YouTube videos over top of them.
-            <ol type="i">
-                <li>
-                    You can also manually display/hide your YouTube video, temporarily disabling the auto-detection, at any point by hitting the extension keyboard shortcut.
-                </li>
-            </ol>
-        </li>
-    </ol>
-    <h3>Tips/Tricks:</h3>
-    <ul>
-        <li>
-            <b>Selecting a Pixel</b>: Automatically detecting commercials across all games/sports/leagues/shows/networks across all streaming platforms isn't an exact science.
-            What will make your experience the best is selecting the best pixel to monitor that you can.
-            <ul>
-                <li>
-                    You'll want to prioritize selecting a pixel within the channel logo (e.g. the NBC logo) if it is not semi-transparent.
-                    <ul>
-                        <li>
-                            Within the channel logo, you'll want to try to select a color that isn't completely white or completely black (e.g. the blue inside the NBC logo). You'll want to aim for as center mass of the color as possible.
-                            <ul>
-                                <li>
-                                    If the logo is only black or white, these will do, just prioritize white then black, the only issue you may run into with these are if a commercial has a lot of white or black in them, it could trigger
-                                    a false flag indicating that the commercials have ended when they have not.
-                                </li>
-                            </ul>
-                        </li>
-                    </ul>
-                </li>
-                <li>
-                    If the full channel logo is semi-transparent, it might not work well. Instead, try to select any color that seems to be the most consistent on a graphic over the game.
-                    <ul>
-                        <li>
-                            This is most often some part of the score graphic.
-                        </li>
-                        <li>
-                            Again, prioritize non-black/non-white colors, then white, then black.
-                        </li>
-                        <li>
-                            If you chose this to be your pixel location, make sure to set your "Color Mismatch Count Threshold" in the advanced settings of the extension settings to a higher number
-                            like 20-45, as many networks hide the score graphic while showing replays, and we don't want to accidentally play a YouTube video over top of a replay.
-                        </li>
-                    </ul>
-                </li>
-                <li>
-                    If you only have semi-transparent logo/graphic options, select from there
-                    and then crank up the Color Difference Threshold in the settings to 20 or higher to account for different colors showing through the logo/graphic.
-                </li>
-                <li>
-                    If this instruction box is blocking your desired pixel location,
-                    go into the advanced settings of the extension settings and modify the overlay video width, height, and/or X/Y display, as this is where the YouTube video is going to display.
-                </li>
-                <li>
-                    If you would like to change your
-                    pixel selection location at any point, refresh the page and hit the extension keyboard shortcut.
-                </li>
-            </ul>       
-        </li>
-        <li>
-            <b>Manual Override</b>: As mentioned above, you can manually override displaying/hiding your YouTube video and temporarily disable the auto commercial detection by hitting the extension keyboard shortcut. You may
-            need to do this semi-often if your pixel selection is inside a score graphic. This extension also has an option for manual mode, where it doesn't try to automatically detect the commercials at all, you will just need to
-            hit the extension keyboard shortcut every time a commercial begins or ends. This mode can be set in the extension settings. Regardless of if using automatic or manual mode, if your computer is hooked up to play through your TV,
-            I highly recommend downloading <i>Touch Portal</i> or <i>Deckboard</i> from the app store on your phone and setting up a shortcut for the extension keyboard shortcut, so you can control this extension on your computer
-            from your phone.
-        </li>
-        <li>
-            <b>Changing YouTube Videos</b>: You can set what YouTube video, playlist, or live video you want to play over top of the commercials by grabbing the video ID or playlist ID from YouTube and plugging it into the
-            extension settings while also selecting the overlay video type. This extension also allows some non-YouTube videos and live streams to play over top of commercials (e.g. playing a different YouTubeTV channel overtop of a YouTubeTV channel's commercials).
-            You can try some out by pasting the full URL of the desired non-YouTube video into the extension settings.
-        </li>
-    </ul>
+    <div id="regular-mode">
+        <h2>Auto Commercial Detection Mode</h2>
+        <p>
+            This mode works by the user (you) selecting a specific pixel on a logo/graphic that only displays when your live game/sport/event/race/program/show is on. Then, the extension continuously checks to
+            see if the pixel selected remains the same color when the logo/graphic is displayed. When the color changes, we know this is most likely due to a commercial because the logo/graphic went away and since
+            commercials are boring, the extension starts playing your YouTube video over top of the commercial. When the logo/graphic color comes back, we know your live program/show/sport/event is most likely back on,
+            so the extension pauses/hides your YouTube video.
+        </p>
+        <h3 style="color: red;">Quick Start Instructions:</h3>
+        <ol>
+            <li>
+                Make sure your live game/program is on (out of commercial).
+                <ol type="i">
+                    <li>
+                        If this isn't going to be anytime soon, refresh the page and hit the extension keyboard shortcut when it is back.
+                    </li>
+                </ol>
+            </li>
+            <li>
+                Click on a pixel outside this box that is within a non-transparent logo or graphic on your game/program (see tips/tricks below for more details).
+                <ol type="i">
+                    <li>
+                        You might need to wait for any video player UI to go away.
+                    </li>
+                    <li>
+                        Refresh the page and then hit the extension keyboard shortcut again if you ever want to chose a different pixel location.
+                    </li>
+                </ol>
+            </li>
+            <li>
+                Let the extension automatically detect the commercials and display your YouTube videos over top of them.
+                <ol type="i">
+                    <li>
+                        You can also manually display/hide your YouTube video, temporarily disabling the auto-detection, at any point by hitting the extension keyboard shortcut.
+                    </li>
+                </ol>
+            </li>
+        </ol>
+        <h3>Tips/Tricks:</h3>
+        <ul>
+            <li>
+                <b>Selecting a Pixel</b>: Automatically detecting commercials across all games/sports/leagues/shows/networks across all streaming platforms isn't an exact science.
+                What will make your experience the best is selecting the best pixel to monitor that you can.
+                <ul>
+                    <li>
+                        You'll want to prioritize selecting a pixel within the channel logo (e.g. the NBC logo) if it is not semi-transparent.
+                        <ul>
+                            <li>
+                                Within the channel logo, you'll want to try to select a color that isn't completely white or completely black (e.g. the blue inside the NBC logo). You'll want to aim for as center mass of the color as possible.
+                                <ul>
+                                    <li>
+                                        If the logo is only black or white, these will do, just prioritize white then black, the only issue you may run into with these are if a commercial has a lot of white or black in them, it could trigger
+                                        a false flag indicating that the commercials have ended when they have not.
+                                    </li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        If the full channel logo is semi-transparent, it might not work well. Instead, try to select any color that seems to be the most consistent on a graphic over the game.
+                        <ul>
+                            <li>
+                                This is most often some part of the score graphic.
+                            </li>
+                            <li>
+                                Again, prioritize non-black/non-white colors, then white, then black.
+                            </li>
+                            <li>
+                                If you chose this to be your pixel location, make sure to set your "Color Mismatch Count Threshold" in the advanced settings of the extension settings to a higher number
+                                like 20-45, as many networks hide the score graphic while showing replays, and we don't want to accidentally play a YouTube video over top of a replay.
+                            </li>
+                        </ul>
+                    </li>
+                    <li>
+                        If you only have semi-transparent logo/graphic options, select from there
+                        and then crank up the Color Difference Threshold in the settings to 20 or higher to account for different colors showing through the logo/graphic.
+                    </li>
+                    <li>
+                        If this instruction box is blocking your desired pixel location,
+                        go into the advanced settings of the extension settings and modify the overlay video width, height, and/or X/Y display, as this is where the YouTube video is going to display.
+                    </li>
+                    <li>
+                        If you would like to change your
+                        pixel selection location at any point, refresh the page and hit the extension keyboard shortcut.
+                    </li>
+                </ul>
+            </li>
+            <li>
+                <b>Manual Override</b>: As mentioned above, you can manually override displaying/hiding your YouTube video and temporarily disable the auto commercial detection by hitting the extension keyboard shortcut. You may
+                need to do this semi-often if your pixel selection is inside a score graphic. This extension also has an option for manual mode, where it doesn't try to automatically detect the commercials at all, you will just need to
+                hit the extension keyboard shortcut every time a commercial begins or ends. This mode can be set in the extension settings. Regardless of if using automatic or manual mode, if your computer is hooked up to play through your TV,
+                I highly recommend downloading <i>Touch Portal</i> or <i>Deckboard</i> from the app store on your phone and setting up a shortcut for the extension keyboard shortcut, so you can control this extension on your computer
+                from your phone.
+            </li>
+            <li>
+                <b>Changing YouTube Videos</b>: You can set what YouTube video, playlist, or live video you want to play over top of the commercials by grabbing the video ID or playlist ID from YouTube and plugging it into the
+                extension settings while also selecting the overlay video type. This extension also allows some non-YouTube videos and live streams to play over top of commercials (e.g. playing a different YouTubeTV channel overtop of a YouTubeTV channel's commercials).
+                You can try some out by pasting the full URL of the desired non-YouTube video into the extension settings.
+            </li>
+        </ul>
+    </div>
+
+    <div id="opposite-mode" style="display: none;">
+        <h2>Auto Commercial Detection Mode [Opposite Mode Enabled]</h2>
+        <p>
+            [Opposite Mode: This mode works great for streams that don't actually show commercials, but instead display some sort of image or looping video while the program is on commercial break. If you do not wish to be in opposite mode, it can be disabled in the advanced settings of the extension.]<br />
+            This mode works by the user (you) selecting a specific pixel on an image that only displays when your live game/sport/event/race/program/show is on commercial break. Then, the extension will play your YouTube video while continuously checking to
+            see if the pixel selected remains the same color. When the color changes, we know this is due the game being back on, so it pauses and hides the YouTube video until the color comes back again.
+        </p>
+        <h3 style="color: red;">Quick Start Instructions:</h3>
+        <ol>
+            <li>
+                Make sure your live game/program is on commercial break.
+                <ol type="i">
+                    <li>
+                        If this isn't going to be anytime soon, refresh the page and hit the extension keyboard shortcut when it is.
+                    </li>
+                </ol>
+            </li>
+            <li>
+                Click on a pixel outside this box that is a consistent color.
+                <ol type="i">
+                    <li>
+                        You might need to wait for any video player UI to go away.
+                    </li>
+                    <li>
+                        Refresh the page and then hit the extension keyboard shortcut again if you ever want to chose a different pixel location.
+                    </li>
+                </ol>
+            </li>
+            <li>
+                Let the extension automatically detect the commercials and display your YouTube videos over top of them.
+                <ol type="i">
+                    <li>
+                        You can also manually display/hide your YouTube video, temporarily disabling the auto-detection, at any point by hitting the extension keyboard shortcut.
+                    </li>
+                </ol>
+            </li>
+        </ol>
+    </div>
+
+    <script src="scripts/instructions.js"></script>
 
 </body>
 </html>
