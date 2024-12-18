@@ -454,7 +454,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
                             colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
-                            manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                            manualOverrideCooldown = result.manualOverrideCooldown ?? 55;
                             isDebugMode = result.isDebugMode ?? false;
                             isPiPMode = result.isPiPMode ?? true;
                             pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
@@ -800,7 +800,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
             }
 
             if ((!isOppositePixelDetectionMode && !match) || (isOppositePixelDetectionMode && match)) {
-                //color mismatch
+                //color indicating potential commercial break
 
                 mismatchCount++;
                 matchCount = 0;
@@ -860,7 +860,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 }
 
             } else {
-                //color match
+                //color indicating potentially out of commercial break
 
                 matchCount++;
                 mismatchCount = 0;
@@ -1170,6 +1170,11 @@ function indicateSelectedPixel(selectedPixel) {
     let selectedPixelRing = document.createElement('div');
 
     selectedPixelRing.className = "ytoc-selection-indicator";
+    if (isFirefox) {
+        //firefox does not need as large of a hole
+        selectedPixelRing.style.setProperty("width", "6px", "important");
+        selectedPixelRing.style.setProperty("height", "6px", "important");
+    }
     //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
     selectedPixelRing.style.left = (selectedPixel.x - 3) + 'px';
     selectedPixelRing.style.top = (selectedPixel.y - 3) + 'px';

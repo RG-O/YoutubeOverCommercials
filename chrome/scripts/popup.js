@@ -54,7 +54,7 @@ chrome.storage.sync.get([
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 55;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
     optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
     optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';

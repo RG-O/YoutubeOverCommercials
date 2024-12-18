@@ -29,7 +29,10 @@ chrome.storage.sync.get([
     'pipLocationVertical',
     'pipHeight',
     'pipWidth',
-    'shouldClickNextOnPlaySpotify'
+    'shouldClickNextOnPlaySpotify',
+    'isOverlayVideoZoomMode',
+    'isOtherSiteTroubleshootMode',
+    'isOppositePixelDetectionMode'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -51,7 +54,7 @@ chrome.storage.sync.get([
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 30;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 55;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
     optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
     optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
@@ -59,6 +62,9 @@ chrome.storage.sync.get([
     optionsForm.pipHeight.value = result.pipHeight ?? 20;
     optionsForm.pipWidth.value = result.pipWidth ?? 20;
     optionsForm.shouldClickNextOnPlaySpotify.checked = result.shouldClickNextOnPlaySpotify ?? true;
+    optionsForm.isOverlayVideoZoomMode.checked = result.isOverlayVideoZoomMode ?? false;
+    optionsForm.isOtherSiteTroubleshootMode.checked = result.isOtherSiteTroubleshootMode ?? false;
+    optionsForm.isOppositePixelDetectionMode.checked = result.isOppositePixelDetectionMode ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -146,7 +152,10 @@ document.getElementById("save-button").onclick = function () {
             pipLocationVertical: optionsForm.pipLocationVertical.value,
             pipHeight: optionsForm.pipHeight.value,
             pipWidth: optionsForm.pipWidth.value,
-            shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked
+            shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked,
+            isOverlayVideoZoomMode: optionsForm.isOverlayVideoZoomMode.checked,
+            isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
+            isOppositePixelDetectionMode: optionsForm.isOppositePixelDetectionMode.checked
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
