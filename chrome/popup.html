@@ -14,19 +14,37 @@
     <br />
     <form id="optionsForm">
 
-        <b>Mode:</b>
+        <b>Mode of Commercial Detection:</b>
         <br />
 
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto">Automatic Commercial Detection</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Detects when commercials occur and then automatically plays YouTube over top of the commercials.</span></span>
-        <input type="radio" id="commercialDetectionMode-auto" name="commercialDetectionMode" value="auto">
+        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="note">[Recommended]</span>
+        <input type="radio" id="commercialDetectionMode-auto-pixel-normal" name="commercialDetectionMode" value="auto-pixel-normal">
         <br>
-        <div id="auto" class="commercial-detection-mode-instructions-wrapper">
+        <div id="auto-pixel-normal" class="commercial-detection-mode-instructions-wrapper">
             <div class="note">
                 <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span> when there are no commercials on screen, and then follow the on-screen instructions presented.
             </div>
         </div>
 
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual Commercial Detection</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Manually trigger YouTube to play over top of commercials.</span></span>
+        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-opposite">Pixel Color Match</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for the presence of a selected screen graphic that only shows during commercial breaks on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
+        <input type="radio" id="commercialDetectionMode-auto-pixel-opposite" name="commercialDetectionMode" value="auto-pixel-opposite">
+        <br>
+        <div id="auto-pixel-opposite" class="commercial-detection-mode-instructions-wrapper">
+            <div class="note">
+                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span> when there is a commercial break on screen, and then follow the on-screen instructions presented.
+            </div>
+        </div>
+
+        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-audio">Audio Level Low</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercial breaks occur by detecting a set duration of volume lower than a set threshold on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
+        <input type="radio" id="commercialDetectionMode-auto-audio" name="commercialDetectionMode" value="auto-audio">
+        <br>
+        <div id="auto-audio" class="commercial-detection-mode-instructions-wrapper">
+            <div class="note">
+                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span>
+            </div>
+        </div>
+
+        <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials.</span></span>
         <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
         <br>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
@@ -40,7 +58,7 @@
         <br>
 
 
-        <b>Overlay Type and ID:</b>
+        <b>Overlay Type:</b>
         <br />
 
         <label class="video-type-label" for="overlayVideoType-yt-playlist">YT Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
@@ -78,7 +96,7 @@
         <br>
         <div id="spotify" class="id-field-wrapper">
             <span class="note">
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Will prompt you to select playlist from Spotify.<br />
+                Will prompt you to select playlist from Spotify.<br />
                 <span style="color: red;">Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.</span>
             </span>
         </div>
@@ -88,7 +106,7 @@
         <br>
         <div id="other-tabs" class="id-field-wrapper">
             <span class="note">
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Will mute/unmute audio playing from other tabs.
+                Will mute/unmute audio playing from other tabs.
             </span>
         </div>
 
@@ -171,9 +189,6 @@
             <input type="checkbox" name="isOtherSiteTroubleshootMode" id="isOtherSiteTroubleshootMode">
             <label class="checkbox-label" for="isOtherSiteTroubleshootMode">Non-YT Video Troubleshoot</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trying to play a non YouTube video over commercials and the video will not mute/unmute or play/pause when it is supposed to? Try enabling this setting to fix it!</span></span><br>
 
-            <input type="checkbox" name="isOppositePixelDetectionMode" id="isOppositePixelDetectionMode">
-            <label class="checkbox-label" for="isOppositePixelDetectionMode">Reverse Pixel Detection Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Instead of detecting commercial breaks when a pixel is not a specific color, this mode detects the breaks by the pixel being a specific color. This mode works great for streams that don't actually show commercials, but instead display some sort of image or looping video while the program is on commercial break.</span></span><br>
-
             <input type="checkbox" name="isPiPMode" id="isPiPMode">
             <label class="checkbox-label" for="isPiPMode">PiP Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span><br>
             <br>
@@ -248,6 +263,10 @@
 
             <b>Override Cooldown Time (sec):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
             <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1"><br>
+            <br>
+
+            <b>Audio Level Threshold (%):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Audio Commercial Detection Mode Only. Level that audio needs to be under before declaring a commercial break.</span></span>
+            <input type="number" name="audioLevelThreshold" id="audioLevelThreshold" min="1" max="100"><br>
             <br>
 
             <input type="checkbox" name="isDebugMode" id="isDebugMode">

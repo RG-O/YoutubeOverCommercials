@@ -57,7 +57,10 @@ var pipLocationHorizontal;
 var pipLocationVertical;
 var pipHeight;
 var pipWidth;
-var isOppositePixelDetectionMode;
+var audioLevelThreshold;
+var audioLevelIndicatorContainer;
+var audioLevelBar;
+var audioLevelThresholdLine;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -77,6 +80,7 @@ function setOverlayVideo() {
     insertLocation.insertBefore(overlayVideo, null);
     overlayVideo.style.visibility = "visible";
 
+    //TODO: Add option to auto set overlay video location and size based on selected pixel location for auto-pixel mode
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
     let url;
@@ -115,7 +119,7 @@ function addOverlayFade(insertLocation) {
 
         overlayScreen = document.createElement('div');
 
-        if (commercialDetectionMode != 'auto') {
+        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
 
             overlayScreen.className = "ytoc-overlay-screen";
             overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
@@ -136,10 +140,36 @@ function addOverlayFade(insertLocation) {
             insertLocation.insertBefore(overlayScreen, null);
 
         } else {
-            //setting mainVideoFade to 0 to effectively shut it off since it is auto detection mode but I don't know where to put the hole
+            //setting mainVideoFade to 0 to effectively shut it off since it is auto-pixel detection mode but I don't know where to put the hole
             mainVideoFade = 0;
         }
 
+    }
+
+}
+
+
+function showOverlayFade() {
+
+    if (mainVideoFade > 0) {
+        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+            overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
+        } else {
+            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+        }
+    }
+
+}
+
+
+function hideOverlayFade() {
+
+    if (mainVideoFade > 0) {
+        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+            overlayScreen.style.backgroundColor = "transparent";
+        } else {
+            overlayScreen.style.boxShadow = "0 0 0";
+        }
     }
 
 }
@@ -174,10 +204,10 @@ function initialRun() {
         setOverlayVideo();
     }
 
-    if (commercialDetectionMode != 'auto') {
+    if (commercialDetectionMode.indexOf('auto') < 0) {
 
         if (overlayVideoType == 'spotify') {
-            //Note: this happens in captureOriginalPixelColor() in auto mode
+            //Note: this happens elsewhere in auto modes
             chrome.runtime.sendMessage({ action: "open_spotify" });
             window.addEventListener('beforeunload', closeSpotify);
         }
@@ -188,9 +218,9 @@ function initialRun() {
 
     }
 
-    mainVideoCollection = document.getElementsByTagName('video'); //TODO: grab all videos on page and loop and interaction with all of them
-
-    muteMainVideo();
+    if (commercialDetectionMode !== 'auto-audio') {
+        muteMainVideo();
+    }
 
     if (isAudioOnlyOverlay) {
 
@@ -202,10 +232,16 @@ function initialRun() {
 
     } else {
 
+        if (commercialDetectionMode === 'auto-audio') {
+            chrome.runtime.sendMessage({ action: "open_overlay_video_audio_tab" });
+            window.addEventListener('beforeunload', closeOverlayVideoAudioTab);
+        }
+
         //wait a little bit for the video to load //TODO: get indicator of when completely loaded
         setTimeout(() => {
             chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
         }, 2000);
+
     }
 
 }
@@ -294,17 +330,13 @@ function endCommercialMode() {
             overlayVideo.style.visibility = "hidden";
         }
 
-        if (mainVideoFade > 0) {
-            if (commercialDetectionMode != 'auto') {
-                overlayScreen.style.backgroundColor = "transparent";
-            } else {
-                overlayScreen.style.boxShadow = "0 0 0";
-            }
-        }
+        hideOverlayFade();
 
     }
 
-    unmuteMainVideo();
+    if (commercialDetectionMode !== 'auto-audio') {
+        unmuteMainVideo();
+    }
 
 }
 
@@ -312,7 +344,7 @@ function endCommercialMode() {
 //switches to commercial state which means showing the overlay video and muting the main/background video
 function startCommercialMode() {
 
-    if (commercialDetectionMode == 'auto' && isAutoModeFirstCommercial) {
+    if (commercialDetectionMode.indexOf('auto') >= 0 && isAutoModeFirstCommercial) {
 
         //check again if in full screen in case user exited
         if (document.fullscreenElement) {
@@ -320,7 +352,7 @@ function startCommercialMode() {
             isCommercialState = true;
 
             isAutoModeFirstCommercial = false;
-            //setting cooldown time so video has a chance to play for the first time
+            //setting cooldown time so video has a chance to play for the first time, also needed for overlay video audio to shift to other tab in auto-audio mode
             cooldownCountRemaining = 8;
             initialRun();
 
@@ -340,13 +372,7 @@ function startCommercialMode() {
 
             chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
 
-            if (mainVideoFade > 0) {
-                if (commercialDetectionMode != 'auto') {
-                    overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
-                } else {
-                    overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
-                }
-            }
+            showOverlayFade();
 
             if (isPiPMode && isLiveOverlayVideo) {
                 exitPiPMode();
@@ -356,7 +382,9 @@ function startCommercialMode() {
 
         }
 
-        muteMainVideo();
+        if (commercialDetectionMode !== 'auto-audio') {
+            muteMainVideo();
+        }
 
     }
 
@@ -410,7 +438,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pipLocationVertical',
                             'pipHeight',
                             'pipWidth',
-                            'isOppositePixelDetectionMode'
+                            'audioLevelThreshold'
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -431,7 +459,20 @@ chrome.runtime.onMessage.addListener(function (message) {
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
                             mainVideoFade = result.mainVideoFade ?? 65;
-                            if (!isAudioOnlyOverlay) {
+                            mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
+                            mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
+                            if (mainVideoVolumeDuringCommercials > 0) {
+                                mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
+                            }
+                            if (mainVideoVolumeDuringNonCommercials > 0) {
+                                mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
+                            }
+                            commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+                            //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings)
+                            if (commercialDetectionMode === 'auto') {
+                                commercialDetectionMode = 'auto-pixel-normal';
+                            }
+                            if (!isAudioOnlyOverlay || commercialDetectionMode === 'auto-audio') {
                                 overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
                                 overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
                                 videoOverlayWidth = result.videoOverlayWidth ?? 75;
@@ -442,15 +483,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 videoOverlayWidth = 50;
                                 videoOverlayHeight = 50;
                             }
-                            mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
-                            mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
-                            if (mainVideoVolumeDuringCommercials > 0) {
-                                mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
-                            }
-                            if (mainVideoVolumeDuringNonCommercials > 0) {
-                                mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
-                            }
-                            commercialDetectionMode = result.commercialDetectionMode ?? 'auto';
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
                             colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
@@ -461,12 +493,13 @@ chrome.runtime.onMessage.addListener(function (message) {
                             pipLocationVertical = result.pipLocationVertical ?? 'left';
                             pipHeight = result.pipHeight ?? 20;
                             pipWidth = result.pipWidth ?? 20;
-                            isOppositePixelDetectionMode = result.isOppositePixelDetectionMode ?? false;
+                            audioLevelThreshold = result.audioLevelThreshold ?? 5;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
+                            mainVideoCollection = document.getElementsByTagName('video');
 
                             //setting up for pixel selection for auto mode or continuing run for manual
-                            if (commercialDetectionMode == 'auto') {
+                            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
 
                                 if (!isAutoModeInitiated) {
 
@@ -483,7 +516,32 @@ chrome.runtime.onMessage.addListener(function (message) {
                                         document.addEventListener('click', pixelSelection);
                                     }, 500);
 
-                                } //else do nothing //TODO: add else here that removes instructions and event listener and sets isAutoModeInitiated to false so if user initiated too early previously, they can try again later
+                                } else if (!selectedPixel) {
+                                    abortPixelSelection();
+                                } else {
+                                    //TODO: Have this option to manual trigger before auto triggering has a chance occur higher up as it doesn't make sense to grab user prefs and do various checks again
+                                    startCommercialMode();
+                                    cooldownCountRemaining = manualOverrideCooldown >= 8 ? manualOverrideCooldown : 8; //need to at least give a chance for video to load
+                                }
+                                
+                            } else if (commercialDetectionMode == 'auto-audio') {
+
+                                if (!isAutoModeInitiated) {
+
+                                    isAutoModeInitiated = true;
+
+                                    startListeningToTab();
+
+                                    //give a split sec for recording to start before asking user to pick a pixel
+                                    setTimeout(() => {
+                                        prepForAudioMonitor();
+                                    }, 500);
+
+                                } else {
+                                    //TODO: Have this option to manual trigger before auto triggering has a chance occur higher up as it doesn't make sense to grab user prefs and do various checks again
+                                    startCommercialMode();
+                                    cooldownCountRemaining = manualOverrideCooldown >= 8 ? manualOverrideCooldown : 8; //need to at least give a chance for video to load
+                                }
 
                             } else {
 
@@ -542,7 +600,7 @@ function setNotFullscreenAlerts() {
 
 
 //remove all full screen alerts if previously set
-//TODO: rename this?
+//TODO: rename this and set fullScreenAlertSet elsewhere?
 function removeNotFullscreenAlerts() {
 
     removeElementsByClass('ytoc-main-video-message-alert');
@@ -657,7 +715,7 @@ function setBlockersAndPixelSelectionInstructions() {
 
     let iFrame = document.createElement('iframe');
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
-    if (isOppositePixelDetectionMode) {
+    if (commercialDetectionMode === 'auto-pixel-opposite') {
         iFrameSource = iFrameSource + '?opposite_mode=true';
     }
     iFrame.src = iFrameSource;
@@ -742,14 +800,7 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
-            if (!isAudioOnlyOverlay || isDebugMode) {
-                logoBoxText = 'YTOC';
-            } else if (overlayVideoType == 'spotify') {
-                logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
-            } else if (overlayVideoType == 'other-tabs') {
-                logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
-            }
-            logoBox.textContent = logoBoxText;
+            initialLogoBoxTextUpdate();
             if (!isDebugMode) { logoBox.style.display = 'none'; }
             removeElementsByClass('ytoc-selection-indicator');
         }, 2000);
@@ -779,7 +830,6 @@ function captureOriginalPixelColor(selectedPixel) {
 function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
     monitorIntervalID = setInterval(() => {
-        //TODO: set some sort of pause on this interval if user leaves full screen
 
         getPixelColor(selectedPixel).then(function (pixelColor) {
 
@@ -799,7 +849,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                 match = true;
             }
 
-            if ((!isOppositePixelDetectionMode && !match) || (isOppositePixelDetectionMode && match)) {
+            if ((commercialDetectionMode === 'auto-pixel-normal' && !match) || (commercialDetectionMode === 'auto-pixel-opposite' && match)) {
                 //color indicating potential commercial break
 
                 mismatchCount++;
@@ -838,7 +888,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                         startCommercialMode();
 
                         logoBox.textContent = logoBoxText;
-                        if (!isOppositePixelDetectionMode) {
+                        if (commercialDetectionMode === 'auto-pixel-normal') {
                             logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         }
                         logoBox.style.display = 'block';
@@ -899,7 +949,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
             }
 
-            if (!isOppositePixelDetectionMode) {
+            if (commercialDetectionMode === 'auto-pixel-normal') {
                 logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
             }
 
@@ -970,6 +1020,239 @@ function getPixelColor(coordinates) {
 }
 
 
+function prepForAudioMonitor() {
+
+    setAudioLevelIndicator();
+
+    //wait a sec to remove initiated message to let the user read message before replacing with logo
+    setTimeout(() => {
+        initialLogoBoxTextUpdate();
+        if (!isDebugMode) { audioLevelIndicatorContainer.style.display = 'none'; }
+    }, 2000);
+
+    document.addEventListener('fullscreenchange', fullscreenChanged);
+
+    if (overlayVideoType == 'spotify') {
+        //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
+        setTimeout(() => {
+            chrome.runtime.sendMessage({ action: "open_spotify" });
+            window.addEventListener('beforeunload', closeSpotify);
+        }, 2000);
+    } else if (overlayVideoType == 'other-tabs') {
+        //if user has extension set to other-tabs, mute the other tabs now
+        chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+    }
+
+    audioThresholdMonitor();
+
+}
+
+
+function setAudioLevelIndicator() {
+
+    //TODO: add check to make sure user is still in fullscreen mode
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    audioLevelIndicatorContainer = document.createElement('div');
+    audioLevelIndicatorContainer.className = "ytoc-audio-level-indicator-container";
+    audioLevelIndicatorContainer.style.display = 'flex';
+
+    //TODO: let user specifically chose location or at least give them option to disable completely
+    let audioLevelIndicatorContainerLocationHorizontal;
+    if (overlayVideoLocationHorizontal === 'middle' || overlayVideoLocationHorizontal === 'right') {
+        audioLevelIndicatorContainerLocationHorizontal = 'left';
+    } else {
+        audioLevelIndicatorContainerLocationHorizontal = 'right';
+    }
+
+    let audioLevelIndicatorContainerLocationVertical;
+    if (overlayVideoLocationVertical === 'middle' || overlayVideoLocationVertical === 'bottom') {
+        audioLevelIndicatorContainerLocationVertical = 'top';
+    } else {
+        audioLevelIndicatorContainerLocationVertical = 'bottom';
+    }
+
+    setOverlaySizeAndLocation(audioLevelIndicatorContainer, false, false, audioLevelIndicatorContainerLocationHorizontal, audioLevelIndicatorContainerLocationVertical, "0")
+
+    let audioLevelIndicator = document.createElement('div');
+    audioLevelIndicator.className = "ytoc-audio-level-indicator";
+    audioLevelIndicatorContainer.appendChild(audioLevelIndicator);
+
+    audioLevelBar = document.createElement('div');
+    audioLevelBar.className = "ytoc-audio-level-indicator-bar";
+    audioLevelIndicator.appendChild(audioLevelBar);
+
+    audioLevelThresholdLine = document.createElement('div');
+    audioLevelThresholdLine.className = "ytoc-audio-level-indicator-threshold";
+    audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
+    audioLevelIndicator.appendChild(audioLevelThresholdLine);
+
+    logoBox = document.createElement('div');
+    logoBox.className = "ytoc-audio-level-indicator-countdown";
+    logoBoxText = 'YTOC Initiated';
+    logoBox.textContent = logoBoxText;
+    if (audioLevelIndicatorContainerLocationHorizontal === 'right') {
+        audioLevelIndicatorContainer.insertBefore(logoBox, audioLevelIndicator);
+    } else {
+        audioLevelIndicatorContainer.appendChild(logoBox);
+    }
+
+    insertLocation = insertLocation.parentNode;
+    insertLocation.insertBefore(audioLevelIndicatorContainer, null);
+
+}
+
+
+
+//checks the audio level and compares it to the audio level threshold and initiates commercial or non-commercial mode accordingly
+function audioThresholdMonitor() {
+
+    monitorIntervalID = setInterval(() => {
+        
+        getAudioLevel().then(function (audioLevel) {
+
+            setAudioLevelBar(audioLevel);
+
+            if (audioLevel < audioLevelThreshold) {
+                //low audio level indicating potential commercial break
+
+                mismatchCount++;
+                matchCount = 0;
+                logoCountdownMismatchesRemaining = (mismatchCountThreshold - mismatchCount);
+
+                //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
+                if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
+
+                    if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
+
+                        logoBox.textContent = cooldownCountRemaining;
+                        audioLevelIndicatorContainer.style.display = 'flex';
+                        countdownOngoing = true;
+
+                    } else if (logoCountdownMismatchesRemaining >= 1) {
+
+                        logoBox.textContent = logoCountdownMismatchesRemaining;
+                        audioLevelIndicatorContainer.style.display = 'flex';
+                        countdownOngoing = true;
+
+                    } else {
+                        countdownOngoing = false;
+                    }
+
+                } else {
+                    countdownOngoing = false;
+                }
+
+                if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
+
+                    if (!isCommercialState) {
+
+                        if (isDebugMode) { console.log('commercial detected'); }
+
+                        startCommercialMode();
+
+                        logoBox.textContent = logoBoxText;
+                        audioLevelIndicatorContainer.style.display = 'flex';
+                        if (!isDebugMode && !isAudioOnlyOverlay) {
+
+                            setTimeout(() => {
+                                audioLevelIndicatorContainer.style.display = 'flex';
+                            }, 5000);
+
+                        }
+
+                    }
+
+                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                    mismatchCount = 0;
+
+                }
+
+            } else {
+                //high audio level indicating potentially out of commercial break
+
+                matchCount++;
+                mismatchCount = 0;
+
+                if (!isDebugMode && !isCommercialState) {
+                    audioLevelIndicatorContainer.style.display = 'none';
+                }
+
+                countdownOngoing = false;
+                logoBox.textContent = logoBoxText;
+
+                if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
+
+                    if (isCommercialState) {
+
+                        if (isDebugMode) { console.log('commercial undetected'); }
+
+                        if (isAudioOnlyOverlay) {
+                            if (isDebugMode) {
+                                logoBoxText = 'YTOC';
+                                logoBox.textContent = logoBoxText;
+                            } else {
+                                audioLevelIndicatorContainer.style.display = 'none';
+                            }
+                        }
+
+                        endCommercialMode();
+
+                    }
+
+                    matchCount = 0;
+
+                }
+
+            }
+
+            cooldownCountRemaining--;
+
+        })
+        .catch(function (error) {
+            console.error(error);
+        });
+
+    }, 1000);
+
+}
+
+
+//gets current audio level of tab from offscreen
+function getAudioLevel() {
+
+    //console.log('getAudioLevel()');
+    return new Promise(function (resolve, reject) {
+
+        if (isFirefox) {
+
+            // do something
+
+        } else {
+
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "capture-audio-level"
+            }, function (response) {
+                resolve(response.audioLevel);
+                //console.log(response.audioLevel);
+            });
+
+        }
+
+    });
+
+}
+
+function setAudioLevelBar(level) {
+    audioLevelBar.style.height = level + '%';
+    audioLevelBar.style.backgroundColor = level < audioLevelThreshold ? 'rgb(140, 179, 210, 0.9)' : 'red';
+}
+
+
 //sets element to show user color differences next to selected pixel when commercial is detected
 function setCommercialDetectedIndicator(selectedPixel) {
 
@@ -1004,6 +1287,50 @@ function setCommercialDetectedIndicator(selectedPixel) {
 }
 
 
+function initialLogoBoxTextUpdate() {
+
+    if (!isAudioOnlyOverlay || isDebugMode) {
+        logoBoxText = 'YTOC';
+    } else if (overlayVideoType == 'spotify') {
+        logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
+    } else if (overlayVideoType == 'other-tabs') {
+        logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
+    }
+    logoBox.textContent = logoBoxText;
+
+}
+
+function spotifyLogoBoxUpdate(text) {
+
+    logoBoxText = text;
+
+    //strangley, an unnecessary delay feels smoother here
+    setTimeout(() => {
+        if (!countdownOngoing) {
+            logoBox.textContent = logoBoxText;
+        }
+    }, 2000);
+
+    if (isCommercialState) {
+
+        if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+            logoBox.style.display = 'block';
+        } else {
+            audioLevelIndicatorContainer.style.display = 'flex';
+        }
+        
+        if (!isDebugMode && commercialDetectionMode !== 'auto-audio') {
+            setTimeout(() => {
+                logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
+                logoBox.textContent = logoBoxText;
+            }, 10000);
+        }
+
+    }
+
+}
+
+
 //detects if content script is running inside an iframe, should work for cross domain and same domain iframes
 function inIFrame() {
     try {
@@ -1020,7 +1347,19 @@ function startViewingTab(windowDimensions) {
 
     if (!isFirefox) {
 
-        chrome.runtime.sendMessage({ action: "chrome-view-tab", windowDimensions: windowDimensions });
+        chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions });
+        window.addEventListener('beforeunload', stopViewingTab);
+
+    }
+
+}
+
+
+function startListeningToTab() {
+
+    if (!isFirefox) {
+
+        chrome.runtime.sendMessage({ action: "chrome-view-tab-audio" });
         window.addEventListener('beforeunload', stopViewingTab);
 
     }
@@ -1079,8 +1418,11 @@ function fullscreenChanged() {
 
     if (!document.fullscreenElement) {
 
-        if (commercialDetectionMode == 'auto') {
+        if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
             logoBox.style.display = 'none';
+            pauseAutoMode();
+        } else if (commercialDetectionMode == 'auto-audio') {
+            audioLevelIndicatorContainer.style.display = 'none';
             pauseAutoMode();
         }
 
@@ -1101,9 +1443,12 @@ function fullscreenChanged() {
 
         removeElementsByClass('ytoc-main-video-message-alert');
 
-        if (commercialDetectionMode == 'auto') {
+        if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
             resumeAutoMode();
             if (isDebugMode) { logoBox.style.display = 'block'; }
+        } else if (commercialDetectionMode == 'auto-audio') {
+            resumeAutoMode();
+            if (isDebugMode) { audioLevelIndicatorContainer.style.display = 'flex'; }
         }
 
         if ((overlayVideoType == 'spotify' && !isCommercialState) || overlayVideoType == 'other-tabs') {
@@ -1126,35 +1471,45 @@ function pauseAutoMode() {
 
 function resumeAutoMode() {
 
-    pixelColorMatchMonitor(originalPixelColor, selectedPixel);
-    startViewingTab(windowDimensions);
-    cooldownCountRemaining = 8; //give a chance for video UI to go away
-
+    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+        pixelColorMatchMonitor(originalPixelColor, selectedPixel);
+        startViewingTab(windowDimensions); //TODO: move this up one line?
+        cooldownCountRemaining = 8; //give a chance for video UI to go away
+    } else if (commercialDetectionMode === 'auto-audio') {
+        startListeningToTab();
+        audioThresholdMonitor();
+    }
+    
 }
 
 
 function abortPixelSelection() {
-    if (!document.fullscreenElement) {
 
-        isAutoModeInitiated = false;
+    isAutoModeInitiated = false;
 
-        removeBlockersListenersAndPixelSelectionInstructions();
+    removeBlockersListenersAndPixelSelectionInstructions();
+    
+    //close offscreen.js
+    chrome.runtime.sendMessage({
+        target: "offscreen",
+        action: "close"
+    });
 
-        //close offscreen.js
-        chrome.runtime.sendMessage({
-            target: "offscreen",
-            action: "close"
-        });
+    window.removeEventListener('beforeunload', stopViewingTab);
+    document.removeEventListener('fullscreenchange', abortPixelSelection);
 
-        window.removeEventListener('beforeunload', stopViewingTab);
-        document.removeEventListener('fullscreenchange', abortPixelSelection);
-
-        //give a split second for the other stuff to occur before temporarly freezing everything with this alert
-        setTimeout(() => {
-            alert('Pixel selection aborted! Go back to full screen and hit keyboard shortcut to start again.');
-        }, 500);
-
+    let abortMessage;
+    if (!document.fullscreen) {
+        abortMessage = 'Pixel selection aborted! Go back to full screen and hit keyboard shortcut to start again. This message will disappear shortly.';
+    } else {
+        abortMessage = 'Pixel selection aborted! Hit keyboard shortcut to start again. This message will disappear shortly.';
     }
+    addMessageAlertToMainVideo(abortMessage);
+
+    setTimeout(() => {
+        removeElementsByClass('ytoc-main-video-message-alert');
+    }, 8000);
+
 }
 
 
@@ -1184,6 +1539,11 @@ function indicateSelectedPixel(selectedPixel) {
 }
 
 
+function closeOverlayVideoAudioTab() {
+    chrome.runtime.sendMessage({ action: "close_overlay_video_audio_tab" });
+}
+
+
 function closeSpotify() {
     chrome.runtime.sendMessage({ action: "close_spotify" });
 }
@@ -1192,38 +1552,34 @@ function closeSpotify() {
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action == 'content_update_logo_text') {
 
-        if (commercialDetectionMode == 'auto') {
+        //ignore this message if not in necessary frame
+        if (!mainVideoCollection) {
+            return;
+        }
 
-            logoBoxText = message.text;
+        if (commercialDetectionMode.indexOf('auto') >= 0) {
 
-            //strangley, an unnecessary delay feels smoother here
-            setTimeout(() => {
-                if (!countdownOngoing) {
-                    logoBox.textContent = logoBoxText;
-                }
-            }, 2000);
-
-            if (isCommercialState) {
-
-                logoBox.style.display = 'block';
-                if (!isDebugMode) {
-                    setTimeout(() => {
-                        logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
-                        logoBox.textContent = logoBoxText;
-                    }, 10000);
-                }
-
-            }
+            spotifyLogoBoxUpdate(message.text);
 
         } //else no need to update logo if not in auto mode
 
     } else if (message.action == 'show_resume_fullscreen_message') {
+
+        //ignore this message if not in necessary frame
+        if (!mainVideoCollection) {
+            return;
+        }
 
         //TODO: add removeElementsByClass('ytoc-main-video-message-alert') into addMessageAlertToMainVideo() function
         removeElementsByClass('ytoc-main-video-message-alert');
         addMessageAlertToMainVideo('Success! You may now resume fullscreen and enjoy :)');
 
     } else if (message.action == 'content_update_preferences') {
+
+        //ignore this message if not in necessary frame
+        if (!mainVideoCollection) {
+            return;
+        }
 
         if (!isFirstRun) {
 
@@ -1238,7 +1594,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'pipLocationHorizontal',
                 'pipLocationVertical',
                 'pipHeight',
-                'pipWidth'
+                'pipWidth',
+                'audioLevelThreshold'
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -1250,6 +1607,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 pipLocationVertical = result.pipLocationVertical ?? 'top';
                 pipHeight = result.pipHeight ?? 20;
                 pipWidth = result.pipWidth ?? 20;
+                audioLevelThreshold = result.audioLevelThreshold ?? 5;
+
+                if (audioLevelThresholdLine) {
+                    audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
+                }
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
@@ -1271,8 +1633,12 @@ function stopMutingOtherTabs() {
 
 function setOverlaySizeAndLocation(overlay, widthPercentage, heightPercentage, xLocation, yLocation, spacerStyleValue) {
 
-    overlay.style.setProperty("width", widthPercentage + "%", "important");
-    overlay.style.setProperty("height", heightPercentage + "%", "important");
+    if (widthPercentage) {
+        overlay.style.setProperty("width", widthPercentage + "%", "important");
+    }
+    if (heightPercentage) {
+        overlay.style.setProperty("height", heightPercentage + "%", "important");
+    }
 
     if (xLocation == 'left' || xLocation == 'middle') {
         overlay.style.setProperty("left", spacerStyleValue, "important");

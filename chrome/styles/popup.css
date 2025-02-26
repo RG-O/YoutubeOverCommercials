@@ -67,12 +67,12 @@ button {
 
 .id-field-wrapper {
     display: none;
+    margin-left: 22px;
 }
 
     .id-field-wrapper label {
         float: left;
         margin-right: 5px;
-        margin-left: 22px;
     }
 
     .id-field-wrapper div {

@@ -5,6 +5,10 @@ var videoElement;
 var canvas;
 var ctx;
 var viewing = false;
+var audioContext;
+var audioSource;
+var audioAnalyzer;
+var audioDataArray;
 
 
 chrome.runtime.onMessage.addListener(function (message) {
@@ -12,6 +16,9 @@ chrome.runtime.onMessage.addListener(function (message) {
         if (message.action == 'start-viewing') {
             constraints = message.constraints;
             startViewing(constraints);
+        } else if (message.action == 'start-listening') {
+            constraints = message.constraints;
+            startListening(constraints);
         } else if (message.action == 'stop-viewing') {
             stopViewing();
         } else if (message.action == 'resume-viewing') {
@@ -49,6 +56,32 @@ async function startViewing(constraints) {
 }
 
 
+async function startListening(constraints) {
+
+    if (!viewing) {
+
+        media = await navigator.mediaDevices.getUserMedia(constraints);
+
+        audioContext = new AudioContext();
+        audioSource = audioContext.createMediaStreamSource(media);
+        audioAnalyzer = audioContext.createAnalyser();
+        audioAnalyzer.fftSize = 512;
+        audioAnalyzer.minDecibels = -127;
+        audioAnalyzer.maxDecibels = 0;
+        audioAnalyzer.smoothingTimeConstant = 0;
+        audioSource.connect(audioAnalyzer);
+        //make sure audio still plays for user
+        audioSource.connect(audioContext.destination);
+
+        audioDataArray = new Uint8Array(audioAnalyzer.frequencyBinCount);
+
+        viewing = true;
+
+    }
+
+}
+
+
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.target == 'offscreen') {
         if (message.action == 'capture-screenshot') {
@@ -74,6 +107,18 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 sendResponse({ pixelColor: pixelColor });
 
             }
+
+        } else if (message.action == 'capture-audio-level') {
+
+            audioAnalyzer.getByteFrequencyData(audioDataArray);
+            let volumeSum = 0;
+            for (const volume of audioDataArray) {
+                volumeSum += volume;
+            }
+            let averageVolume = volumeSum / audioDataArray.length;
+            let audioLevel = Math.round(averageVolume * 100 / 127);
+
+            sendResponse({ audioLevel: audioLevel });
 
         }
     }

@@ -32,7 +32,7 @@ chrome.storage.sync.get([
     'shouldClickNextOnPlaySpotify',
     'isOverlayVideoZoomMode',
     'isOtherSiteTroubleshootMode',
-    'isOppositePixelDetectionMode'
+    'audioLevelThreshold'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -50,7 +50,12 @@ chrome.storage.sync.get([
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
-    optionsForm.commercialDetectionMode.value = result.commercialDetectionMode ?? 'auto';
+    let commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+    //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings)
+    if (commercialDetectionMode === 'auto') {
+        commercialDetectionMode = 'auto-pixel-normal';
+    }
+    optionsForm.commercialDetectionMode.value = commercialDetectionMode;
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
@@ -64,7 +69,7 @@ chrome.storage.sync.get([
     optionsForm.shouldClickNextOnPlaySpotify.checked = result.shouldClickNextOnPlaySpotify ?? true;
     optionsForm.isOverlayVideoZoomMode.checked = result.isOverlayVideoZoomMode ?? false;
     optionsForm.isOtherSiteTroubleshootMode.checked = result.isOtherSiteTroubleshootMode ?? false;
-    optionsForm.isOppositePixelDetectionMode.checked = result.isOppositePixelDetectionMode ?? false;
+    optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -78,6 +83,7 @@ chrome.storage.sync.get([
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
     }
 
+    setTextFieldsToSelectAll();
     setKeyboardShortcutText();
     togglePiPFieldsVisability();
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
@@ -155,7 +161,7 @@ document.getElementById("save-button").onclick = function () {
             shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked,
             isOverlayVideoZoomMode: optionsForm.isOverlayVideoZoomMode.checked,
             isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
-            isOppositePixelDetectionMode: optionsForm.isOppositePixelDetectionMode.checked
+            audioLevelThreshold: optionsForm.audioLevelThreshold.value
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
@@ -191,6 +197,15 @@ document.getElementById("expand-button").onclick = function () {
 //close chrome extension window if they click to close
 document.getElementById("close-button").onclick = function () {
     window.close();
+}
+
+
+function setTextFieldsToSelectAll() {
+    document.querySelectorAll("input[type='text']").forEach(function (input) {
+        input.addEventListener("focus", function () {
+            this.select();
+        });
+    });
 }
 
 
