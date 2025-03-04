@@ -61,6 +61,7 @@ var audioLevelThreshold;
 var audioLevelIndicatorContainer;
 var audioLevelBar;
 var audioLevelThresholdLine;
+var shouldOverlayVideoSizeAndLocationAutoSet;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -95,7 +96,11 @@ function setOverlayVideo() {
             url = url.concat(ytLiveID);
         }
     } else if (overlayVideoType == 'other-video') {
-        url = otherVideoURL;
+        if (overlayHostName === chrome.runtime.id) {
+            url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
+        } else {
+            url = otherVideoURL;
+        }
     } else if (overlayVideoType == 'other-live') {
         url = otherLiveURL;
     }
@@ -398,7 +403,7 @@ chrome.runtime.onMessage.addListener(function (message) {
     if (message.action === "execute_manual_switch_function") {
 
         //special actions for the very first time this is initiated on a page
-        if (isFirstRun) {
+        if (isFirstRun && !isAutoModeInitiated) {
 
             //get overlayHostName
             //note: getting all other user set values later
@@ -438,7 +443,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pipLocationVertical',
                             'pipHeight',
                             'pipWidth',
-                            'audioLevelThreshold'
+                            'audioLevelThreshold',
+                            'shouldOverlayVideoSizeAndLocationAutoSet'
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -472,16 +478,22 @@ chrome.runtime.onMessage.addListener(function (message) {
                             if (commercialDetectionMode === 'auto') {
                                 commercialDetectionMode = 'auto-pixel-normal';
                             }
-                            if (!isAudioOnlyOverlay || commercialDetectionMode === 'auto-audio') {
-                                overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
-                                overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
-                                videoOverlayWidth = result.videoOverlayWidth ?? 75;
-                                videoOverlayHeight = result.videoOverlayHeight ?? 75;
-                            } else {
+                            shouldOverlayVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
+                            if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                                shouldOverlayVideoSizeAndLocationAutoSet = false;
+                            }
+                            //explaination for below: sometimes the instructions don't need to take up the whole page because there is no video overlay or the video overlay is auto set
+                            //note: no instructions and overlay video are needed for auto-audio mode with isAudioOnlyOverlay, but we don't want to replace the user set settings since we indirectly read them to place the audio indicator
+                            if ((isAudioOnlyOverlay && commercialDetectionMode !== 'auto-audio') || shouldOverlayVideoSizeAndLocationAutoSet) {
                                 overlayVideoLocationHorizontal = 'middle';
                                 overlayVideoLocationVertical = 'middle';
                                 videoOverlayWidth = 50;
                                 videoOverlayHeight = 50;
+                            } else {
+                                overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                                overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                                videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                                videoOverlayHeight = result.videoOverlayHeight ?? 75;
                             }
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
@@ -497,6 +509,10 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
+
+                            if (overlayVideoLocationVertical == 'bottom' || shouldOverlayVideoSizeAndLocationAutoSet) {
+                                hideVerticleScrollbar();
+                            }
 
                             //setting up for pixel selection for auto mode or continuing run for manual
                             if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
@@ -516,14 +532,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                                         document.addEventListener('click', pixelSelection);
                                     }, 500);
 
-                                } else if (!selectedPixel) {
-                                    abortPixelSelection();
-                                } else {
-                                    //TODO: Have this option to manual trigger before auto triggering has a chance occur higher up as it doesn't make sense to grab user prefs and do various checks again
-                                    startCommercialMode();
-                                    cooldownCountRemaining = manualOverrideCooldown >= 8 ? manualOverrideCooldown : 8; //need to at least give a chance for video to load
                                 }
-                                
+
                             } else if (commercialDetectionMode == 'auto-audio') {
 
                                 if (!isAutoModeInitiated) {
@@ -537,10 +547,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                                         prepForAudioMonitor();
                                     }, 500);
 
-                                } else {
-                                    //TODO: Have this option to manual trigger before auto triggering has a chance occur higher up as it doesn't make sense to grab user prefs and do various checks again
-                                    startCommercialMode();
-                                    cooldownCountRemaining = manualOverrideCooldown >= 8 ? manualOverrideCooldown : 8; //need to at least give a chance for video to load
                                 }
 
                             } else {
@@ -562,9 +568,10 @@ chrome.runtime.onMessage.addListener(function (message) {
 
             });
 
+        } else if (commercialDetectionMode.indexOf('auto-pixel') >= 0 && !selectedPixel) {
+            abortPixelSelection();
         } else {
 
-            //TODO: set the mismatch and match counts to some negative number in here
             if (isCommercialState) {
 
                 endCommercialMode();
@@ -693,30 +700,10 @@ function setBlockersAndPixelSelectionInstructions() {
     //overlayInstructions.style.setProperty("border", "3px red solid", "important");
     setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
-    //hide verticle scrollbar if video placed on bottom
-    if (overlayVideoLocationVertical == 'bottom') {
-        let hideScollStyle = document.createElement("style");
-        hideScollStyle.textContent = `
-            ::-webkit-scrollbar {
-                display: none;
-            }
-        `;
-        insertLocation.appendChild(hideScollStyle);
-        if (isFirefox) {
-            if (document.getElementsByTagName('html')[0]) {
-                //TODO: I believe scrollbar-width is experimental and not supported with all firefox versions, I should try to find something else
-                document.getElementsByTagName('html')[0].style.scrollbarWidth = "none";
-            }
-            if (document.getElementsByTagName('body')[0]) {
-                document.getElementsByTagName('body')[0].style.scrollbarWidth = "none";
-            }
-        }
-    }
-
     let iFrame = document.createElement('iframe');
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
     if (commercialDetectionMode === 'auto-pixel-opposite') {
-        iFrameSource = iFrameSource + '?opposite_mode=true';
+        iFrameSource = iFrameSource + '?purpose=opposite-mode-instructions';
     }
     iFrame.src = iFrameSource;
     iFrame.width = "100%";
@@ -726,6 +713,32 @@ function setBlockersAndPixelSelectionInstructions() {
     //iFrame.style.setProperty("border", "3px red solid", "important");
 
     overlayInstructions.appendChild(iFrame);
+
+}
+
+
+//hides verticle scrollbar because on some websites if the overlay video is placed on the bottom, it adds a scrollbar
+function hideVerticleScrollbar() {
+
+    let body = document.getElementsByTagName('body')[0];
+
+    let hideScollStyle = document.createElement("style");
+    hideScollStyle.textContent = `
+        ::-webkit-scrollbar {
+            display: none;
+        }
+    `;
+    body.appendChild(hideScollStyle);
+
+    if (isFirefox) {
+        if (document.getElementsByTagName('html')[0]) {
+            //TODO: I believe scrollbar-width is experimental and not supported with all firefox versions, I should try to find something else
+            document.getElementsByTagName('html')[0].style.scrollbarWidth = "none";
+        }
+        if (document.getElementsByTagName('body')[0]) {
+            document.getElementsByTagName('body')[0].style.scrollbarWidth = "none";
+        }
+    }
 
 }
 
@@ -796,6 +809,10 @@ function captureOriginalPixelColor(selectedPixel) {
             logoBox.style.color = "rgba(0, 0, 0, 1)";
         } else {
             logoBox.style.color = "rgba(255, 255, 255, 1)";
+        }
+
+        if (shouldOverlayVideoSizeAndLocationAutoSet) {
+            autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel);
         }
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
@@ -1224,7 +1241,6 @@ function audioThresholdMonitor() {
 //gets current audio level of tab from offscreen
 function getAudioLevel() {
 
-    //console.log('getAudioLevel()');
     return new Promise(function (resolve, reject) {
 
         if (isFirefox) {
@@ -1238,7 +1254,6 @@ function getAudioLevel() {
                 action: "capture-audio-level"
             }, function (response) {
                 resolve(response.audioLevel);
-                //console.log(response.audioLevel);
             });
 
         }
@@ -1508,7 +1523,7 @@ function abortPixelSelection() {
 
     setTimeout(() => {
         removeElementsByClass('ytoc-main-video-message-alert');
-    }, 8000);
+    }, 7000);
 
 }
 
@@ -1678,5 +1693,23 @@ function exitPiPMode() {
     overlayVideo.style.removeProperty("top");
 
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+
+}
+
+
+function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel) {
+
+    videoOverlayWidth = 100;
+    overlayVideoLocationHorizontal = 'middle';
+
+    let windowHeight = window.innerHeight;
+
+    if (selectedPixel.y < windowHeight / 2) {
+        overlayVideoLocationVertical = 'bottom';
+        videoOverlayHeight = 100 - (((selectedPixel.y + 8) / windowHeight) * 100).toFixed(3); //keeping 8px of room to view pixel and don't want to go below 0 in case user selected from very top //TODO: set differently for firefox?
+    } else {
+        overlayVideoLocationVertical = 'top';
+        videoOverlayHeight = (((selectedPixel.y - 4) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
+    }
 
 }

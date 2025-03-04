@@ -32,7 +32,8 @@ chrome.storage.sync.get([
     'shouldClickNextOnPlaySpotify',
     'isOverlayVideoZoomMode',
     'isOtherSiteTroubleshootMode',
-    'audioLevelThreshold'
+    'audioLevelThreshold',
+    'shouldOverlayVideoSizeAndLocationAutoSet'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -70,11 +71,14 @@ chrome.storage.sync.get([
     optionsForm.isOverlayVideoZoomMode.checked = result.isOverlayVideoZoomMode ?? false;
     optionsForm.isOtherSiteTroubleshootMode.checked = result.isOtherSiteTroubleshootMode ?? false;
     optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
+    optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
     for (let i = 0, max = modeRadios.length; i < max; i++) {
         modeRadios[i].addEventListener('change', toggleModeInstructionsVisability);
+        modeRadios[i].addEventListener('change', toggleAutoDimensionsFieldVisability);
+        modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
     }
 
     document.getElementById(optionsForm.overlayVideoType.value).style.display = 'block';
@@ -83,8 +87,12 @@ chrome.storage.sync.get([
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
     }
 
+    //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
     setTextFieldsToSelectAll();
     setKeyboardShortcutText();
+    toggleAutoDimensionsFieldVisability();
+    toggleDimensionsFieldsVisability();
+    document.getElementById('shouldOverlayVideoSizeAndLocationAutoSet').addEventListener('change', toggleDimensionsFieldsVisability);
     togglePiPFieldsVisability();
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
 
@@ -123,7 +131,13 @@ document.getElementById("save-button").onclick = function () {
 
         let overlayHostName;
         if (optionsForm.overlayVideoType.value === "other-video") {
-            overlayHostName = new URL(optionsForm.otherVideoURL.value).hostname;
+            let otherVideoURLObj = new URL(optionsForm.otherVideoURL.value);
+            if (otherVideoURLObj.pathname.toLowerCase().endsWith('.mp4')) {
+                //set the overlayHostName to the extension id because if the url is an mp4, it will be inserted onto an extension page
+                overlayHostName = window.location.host; //getting extension id from the extension popup
+            } else {
+                overlayHostName = otherVideoURLObj.hostname;
+            }
         } else if (optionsForm.overlayVideoType.value === "other-live") {
             overlayHostName = new URL(optionsForm.otherLiveURL.value).hostname;
         } else {
@@ -161,7 +175,8 @@ document.getElementById("save-button").onclick = function () {
             shouldClickNextOnPlaySpotify: optionsForm.shouldClickNextOnPlaySpotify.checked,
             isOverlayVideoZoomMode: optionsForm.isOverlayVideoZoomMode.checked,
             isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
-            audioLevelThreshold: optionsForm.audioLevelThreshold.value
+            audioLevelThreshold: optionsForm.audioLevelThreshold.value,
+            shouldOverlayVideoSizeAndLocationAutoSet: optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
@@ -226,6 +241,26 @@ function toggleModeInstructionsVisability() {
         modeInstructions[i].style.display = 'none';
     }
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
+}
+
+
+//show/hide auto overlay video dimension checkbox field when pixel modes are selected
+function toggleAutoDimensionsFieldVisability() {
+    if (optionsForm.commercialDetectionMode.value.indexOf('auto-pixel') < 0) {
+        document.getElementsByClassName('auto-dimensions-field-wrapper')[0].style.display = 'none';
+    } else {
+        document.getElementsByClassName('auto-dimensions-field-wrapper')[0].style.display = 'block';
+    }
+}
+
+
+//show/hide overlay video dimension fields when auto-set checkbox is checked/unchecked
+function toggleDimensionsFieldsVisability() {
+    if (optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked && optionsForm.commercialDetectionMode.value.indexOf('auto-pixel') >= 0) {
+        document.getElementsByClassName('dimensions-fields-wrapper')[0].style.display = 'none';
+    } else {
+        document.getElementsByClassName('dimensions-fields-wrapper')[0].style.display = 'block';
+    }
 }
 
 

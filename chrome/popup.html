@@ -137,43 +137,64 @@
             <span style="text-decoration: underline;"><b>Advanced Settings</b></span><br>
             <br>
 
-            <b>Overlay Video Width (%):</b>
-            <input type="number" name="videoOverlayWidth" id="videoOverlayWidth" min="1" max="100"><br>
-            <br>
+            <b>Overlay Video Dimensions:</b>
+            <br />
+            <br />
+
+            <div class="auto-dimensions-field-wrapper">
+
+                <input type="checkbox" name="shouldOverlayVideoSizeAndLocationAutoSet" id="shouldOverlayVideoSizeAndLocationAutoSet">
+                <label class="checkbox-label" for="shouldOverlayVideoSizeAndLocationAutoSet">Auto-Set Overlay Video Size and Location</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Pixel Color commercial detection modes only. Automatically sets the overlay video to max width and height without covering selected pixel.</span></span><br>
+                <br>
+
+            </div>
+
+            <div class="dimensions-fields-wrapper">
+
+                <b>Overlay Video Width (%):</b>
+                <input type="number" name="videoOverlayWidth" id="videoOverlayWidth" min="1" max="100"><br>
+                <br>
 
 
-            <b>Overlay Video Height (%):</b>
-            <input type="number" name="videoOverlayHeight" id="videoOverlayHeight" min="1" max="100"><br>
-            <br>
+                <b>Overlay Video Height (%):</b>
+                <input type="number" name="videoOverlayHeight" id="videoOverlayHeight" min="1" max="100"><br>
+                <br>
+
+
+                <b>X Display:</b>
+                <label class="display-location" for="overlayVideoLocationHorizontal-right">Right</label>
+                <input class="display-location" type="radio" id="overlayVideoLocationHorizontal-right" name="overlayVideoLocationHorizontal" value="right">
+
+                <label class="display-location" for="overlayVideoLocationHorizontal-middle">Middle</label>
+                <input class="display-location" type="radio" id="overlayVideoLocationHorizontal-middle" name="overlayVideoLocationHorizontal" value="middle">
+
+                <label class="display-location" for="overlayVideoLocationHorizontal-left">Left</label>
+                <input class="display-location" type="radio" id="overlayVideoLocationHorizontal-left" name="overlayVideoLocationHorizontal" value="left">
+                <br>
+                <br>
+
+
+                <b>Y Display:</b>
+                <label class="display-location" for="overlayVideoLocationVertical-top">Top</label>
+                <input class="display-location" type="radio" id="overlayVideoLocationVertical-top" name="overlayVideoLocationVertical" value="top"><br>
+
+                <label class="display-location" for="overlayVideoLocationVertical-middle">Middle</label>
+                <input class="display-location" type="radio" id="overlayVideoLocationVertical-middle" name="overlayVideoLocationVertical" value="middle"><br>
+
+                <label class="display-location" for="overlayVideoLocationVertical-bottom">Bottom</label>
+                <input class="display-location" type="radio" id="overlayVideoLocationVertical-bottom" name="overlayVideoLocationVertical" value="bottom"><br>
+                <br>
+
+            </div>
+
+
+            <b>Additional Settings:</b>
+            <br />
+            <br />
 
 
             <b>Fade Main/Background Video During Commercials (%):</b>
             <input type="number" name="mainVideoFade" id="mainVideoFade" min="0" max="99"><br>
-            <br>
-
-
-            <b>X Display:</b>
-            <label class="display-location" for="overlayVideoLocationHorizontal-right">Right</label>
-            <input class="display-location" type="radio" id="overlayVideoLocationHorizontal-right" name="overlayVideoLocationHorizontal" value="right">
-
-            <label class="display-location" for="overlayVideoLocationHorizontal-middle">Middle</label>
-            <input class="display-location" type="radio" id="overlayVideoLocationHorizontal-middle" name="overlayVideoLocationHorizontal" value="middle">
-
-            <label class="display-location" for="overlayVideoLocationHorizontal-left">Left</label>
-            <input class="display-location" type="radio" id="overlayVideoLocationHorizontal-left" name="overlayVideoLocationHorizontal" value="left">
-            <br>
-            <br>
-
-
-            <b>Y Display:</b>
-            <label class="display-location" for="overlayVideoLocationVertical-top">Top</label>
-            <input class="display-location" type="radio" id="overlayVideoLocationVertical-top" name="overlayVideoLocationVertical" value="top"><br>
-
-            <label class="display-location" for="overlayVideoLocationVertical-middle">Middle</label>
-            <input class="display-location" type="radio" id="overlayVideoLocationVertical-middle" name="overlayVideoLocationVertical" value="middle"><br>
-
-            <label class="display-location" for="overlayVideoLocationVertical-bottom">Bottom</label>
-            <input class="display-location" type="radio" id="overlayVideoLocationVertical-bottom" name="overlayVideoLocationVertical" value="bottom"><br>
             <br>
 
 

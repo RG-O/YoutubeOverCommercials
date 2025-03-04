@@ -87,6 +87,14 @@ button {
         display: block;
     }
 
+.auto-dimensions-field-wrapper {
+    display: block;
+}
+
+.dimensions-fields-wrapper {
+    display: block;
+}
+
 .pip-fields-wrapper {
     display: none;
 }
@@ -125,4 +133,12 @@ button {
 
 .keyboard-shortcut {
     color: red;
+}
+
+.overlay-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }
