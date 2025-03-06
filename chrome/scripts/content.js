@@ -62,6 +62,7 @@ var audioLevelIndicatorContainer;
 var audioLevelBar;
 var audioLevelThresholdLine;
 var shouldOverlayVideoSizeAndLocationAutoSet;
+var shouldShuffleYTPlaylist;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -88,6 +89,10 @@ function setOverlayVideo() {
     if (overlayVideoType == 'yt-playlist') {
         url = "https://www.youtube.com/embed/?listType=playlist&amp;list=";
         url = url.concat(ytPlaylistID);
+        if (shouldShuffleYTPlaylist) {
+            let randomStart = Math.floor(Math.random() * 10) + 1;
+            url += '&index=' + randomStart;
+        }
     } else if (overlayVideoType == 'yt-video' || overlayVideoType == 'yt-live') {
         url = "https://www.youtube.com/embed/";
         if (overlayVideoType == 'yt-video') {
@@ -444,7 +449,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pipHeight',
                             'pipWidth',
                             'audioLevelThreshold',
-                            'shouldOverlayVideoSizeAndLocationAutoSet'
+                            'shouldOverlayVideoSizeAndLocationAutoSet',
+                            'shouldShuffleYTPlaylist'
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -506,6 +512,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             pipHeight = result.pipHeight ?? 20;
                             pipWidth = result.pipWidth ?? 20;
                             audioLevelThreshold = result.audioLevelThreshold ?? 5;
+                            shouldShuffleYTPlaylist = result.shouldShuffleYTPlaylist ?? false;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');

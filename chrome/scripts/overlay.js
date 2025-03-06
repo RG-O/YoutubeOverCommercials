@@ -6,10 +6,21 @@ var isOtherSiteTroubleshootMode;
 var isOverlayVideoZoomMode;
 var commercialDetectionMode;
 var isCorrectOverlayFrame = true;
+var shouldShuffleYTPlaylist;
+var maxPlaylistVideoNumber;
+var playlistVideosPlayedArray = [];
 
 
 //grab user set values and then run initialCommercialState() right when script is injected (assuming script is injected after frame had some time to load)
-chrome.storage.sync.get(['overlayVideoType', 'shouldHideYTBackground', 'overlayHostName', 'isOtherSiteTroubleshootMode', 'isOverlayVideoZoomMode', 'commercialDetectionMode'], (result) => {
+chrome.storage.sync.get([
+    'overlayVideoType',
+    'shouldHideYTBackground',
+    'overlayHostName',
+    'isOtherSiteTroubleshootMode',
+    'isOverlayVideoZoomMode',
+    'commercialDetectionMode',
+    'shouldShuffleYTPlaylist'
+], (result) => {
 
     overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
     shouldHideYTBackground = result.shouldHideYTBackground ?? true;
@@ -21,6 +32,7 @@ chrome.storage.sync.get(['overlayVideoType', 'shouldHideYTBackground', 'overlayH
     if (commercialDetectionMode === 'auto') {
         commercialDetectionMode = 'auto-pixel-normal';
     }
+    shouldShuffleYTPlaylist = result.shouldShuffleYTPlaylist ?? false;
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -146,6 +158,21 @@ function initialCommercialState() {
             if (document.getElementsByClassName('ytp-pause-overlay-container')[0]) {
                 document.getElementsByClassName('ytp-pause-overlay-container')[0].remove();
             }
+
+            if (shouldShuffleYTPlaylist) {
+                if (document.getElementsByClassName('ytp-playlist-menu-button-text')[0]) {
+                    let playlistCount = document.getElementsByClassName('ytp-playlist-menu-button-text')[0].textContent;
+                    let firstVideo = [playlistCount.split('/')[0]];
+                    maxPlaylistVideoNumber = playlistCount.split('/')[1];
+                    playlistVideosPlayedArray = Array.from({ length: maxPlaylistVideoNumber }, (_, i) => i + 1);
+                    playlistVideosPlayedArray.splice(firstVideo - 1, 1);
+                    document.getElementsByClassName('ytp-playlist-menu-button')[0].click();
+                    setTimeout(() => {
+                        document.getElementsByClassName('ytp-playlist-menu-button')[0].click();
+                    }, 500);
+                }
+            }
+            
 
         }
 
@@ -304,7 +331,12 @@ function startCommercialState() {
 
         } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
 
-            document.getElementsByTagName('video')[0].play();
+            if (shouldShuffleYTPlaylist && document.getElementsByClassName('ytp-video-menu-item-index')[0]) {
+                document.getElementsByClassName('ytp-video-menu-item-index')[getRandomVideoNumber() - 1].click();
+            } else {
+                document.getElementsByTagName('video')[0].play();
+            }
+            
 
         }
 
@@ -400,4 +432,19 @@ function zoomInOnIFrame() {
 
     }
 
+}
+
+
+function resetPlaylistVideosPlayedArray() {
+    playlistVideosPlayedArray = Array.from({ length: maxPlaylistVideoNumber }, (_, i) => i + 1);
+}
+
+
+function getRandomVideoNumber() {
+    if (playlistVideosPlayedArray.length === 0) {
+        resetPlaylistVideosPlayedArray();
+    }
+    const index = Math.floor(Math.random() * playlistVideosPlayedArray.length);
+    //removes the video number from array when it returns it
+    return playlistVideosPlayedArray.splice(index, 1)[0];
 }

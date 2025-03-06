@@ -33,7 +33,8 @@ chrome.storage.sync.get([
     'isOverlayVideoZoomMode',
     'isOtherSiteTroubleshootMode',
     'audioLevelThreshold',
-    'shouldOverlayVideoSizeAndLocationAutoSet'
+    'shouldOverlayVideoSizeAndLocationAutoSet',
+    'shouldShuffleYTPlaylist'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -72,6 +73,7 @@ chrome.storage.sync.get([
     optionsForm.isOtherSiteTroubleshootMode.checked = result.isOtherSiteTroubleshootMode ?? false;
     optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
+    optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -176,7 +178,8 @@ document.getElementById("save-button").onclick = function () {
             isOverlayVideoZoomMode: optionsForm.isOverlayVideoZoomMode.checked,
             isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
             audioLevelThreshold: optionsForm.audioLevelThreshold.value,
-            shouldOverlayVideoSizeAndLocationAutoSet: optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked
+            shouldOverlayVideoSizeAndLocationAutoSet: optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked,
+            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
