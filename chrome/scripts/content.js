@@ -583,9 +583,25 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                 endCommercialMode();
 
+                if (!isDebugMode) {
+                    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+                        logoBox.style.display = 'none';
+                    } else if (commercialDetectionMode === 'auto-audio') {
+                        audioLevelIndicatorContainer.style.display = 'none';
+                    } //else don't need to hide for auto mode
+                }
+
             } else {
 
                 startCommercialMode();
+
+                if (isAudioOnlyOverlay) {
+                    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+                        logoBox.style.display = 'block';
+                    } else if (commercialDetectionMode === 'auto-audio') {
+                        audioLevelIndicatorContainer.style.display = 'flex';
+                    } //else don't show for auto mode
+                }
 
             }
 
