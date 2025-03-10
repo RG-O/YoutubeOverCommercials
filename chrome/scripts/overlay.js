@@ -311,7 +311,7 @@ function initialCommercialState() {
                 const dest = audioCtx.createMediaStreamDestination();
                 source.connect(dest);
 
-            }, 1000);
+            }, 250);
 
         }
 

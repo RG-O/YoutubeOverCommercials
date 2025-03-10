@@ -228,9 +228,7 @@ function initialRun() {
 
     }
 
-    if (commercialDetectionMode !== 'auto-audio') {
-        muteMainVideo();
-    }
+    muteMainVideo();
 
     if (isAudioOnlyOverlay) {
 
@@ -262,9 +260,16 @@ function muteMainVideo() {
     //muting main/background video
     if (mainVideoVolumeDuringCommercials == 0) {
 
-        //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
-        if (window.location.hostname == 'tv.youtube.com') {
+        if (commercialDetectionMode === 'auto-audio') {
 
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "disconnect-tab-audio"
+            });
+
+        } else if (window.location.hostname == 'tv.youtube.com') {
+
+            //using the actual controls to mute YTTV because for whatever reason, it will unmute itself
             if (document.querySelector('[aria-label="Mute (m)"]')) {
 
                 document.querySelector('[aria-label="Mute (m)"]').click();
@@ -279,7 +284,7 @@ function muteMainVideo() {
 
         }
 
-    } else if (mainVideoVolumeDuringCommercials < 1) {
+    } else if (mainVideoVolumeDuringCommercials < 1 && commercialDetectionMode !== 'auto-audio') { //note: mainVideoVolumeDuringCommercials is a percentage and can't adjust exact main video audio level in auto-audio mode as the levels are being read
 
         for (let i = 0; i < mainVideoCollection.length; i++) {
             mainVideoCollection[i].volume = mainVideoVolumeDuringCommercials;
@@ -294,7 +299,14 @@ function unmuteMainVideo() {
 
     if (mainVideoVolumeDuringCommercials == 0) {
 
-        if (window.location.hostname == 'tv.youtube.com') {
+        if (commercialDetectionMode === 'auto-audio') {
+
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "connect-tab-audio"
+            });
+
+        } else if (window.location.hostname == 'tv.youtube.com') {
 
             if (document.querySelector('[aria-label="Unmute (m)"]')) {
 
@@ -310,7 +322,7 @@ function unmuteMainVideo() {
 
         }
 
-    } else if (mainVideoVolumeDuringCommercials < 1) {
+    } else if (mainVideoVolumeDuringCommercials < 1 && commercialDetectionMode !== 'auto-audio') { //note: mainVideoVolumeDuringCommercials is a percentage and can't adjust exact main video audio level in auto-audio mode as the levels are being read
 
         for (let i = 0; i < mainVideoCollection.length; i++) {
             mainVideoCollection[i].volume = mainVideoVolumeDuringNonCommercials;
@@ -344,9 +356,7 @@ function endCommercialMode() {
 
     }
 
-    if (commercialDetectionMode !== 'auto-audio') {
-        unmuteMainVideo();
-    }
+    unmuteMainVideo();
 
 }
 
@@ -392,9 +402,7 @@ function startCommercialMode() {
 
         }
 
-        if (commercialDetectionMode !== 'auto-audio') {
-            muteMainVideo();
-        }
+        muteMainVideo();
 
     }
 
@@ -1140,7 +1148,6 @@ function setAudioLevelIndicator() {
         audioLevelIndicatorContainer.appendChild(logoBox);
     }
 
-    insertLocation = insertLocation.parentNode;
     insertLocation.insertBefore(audioLevelIndicatorContainer, null);
 
 }

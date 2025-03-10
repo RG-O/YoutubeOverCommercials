@@ -9,6 +9,7 @@ var audioContext;
 var audioSource;
 var audioAnalyzer;
 var audioDataArray;
+var isAudioConnected = false;
 
 
 chrome.runtime.onMessage.addListener(function (message) {
@@ -24,6 +25,16 @@ chrome.runtime.onMessage.addListener(function (message) {
         } else if (message.action == 'resume-viewing') {
             //does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
             startViewing(constraints);
+        } else if (message.action == 'disconnect-tab-audio') {
+            if (isAudioConnected) {
+                audioSource.disconnect(audioContext.destination);
+                isAudioConnected = false;
+            }
+        } else if (message.action == 'connect-tab-audio') {
+            if (!isAudioConnected) {
+                audioSource.connect(audioContext.destination);
+                isAudioConnected = true;
+            }
         } else if (message.action == 'close') {
             window.close();
         }
@@ -72,6 +83,7 @@ async function startListening(constraints) {
         audioSource.connect(audioAnalyzer);
         //make sure audio still plays for user
         audioSource.connect(audioContext.destination);
+        isAudioConnected = true;
 
         audioDataArray = new Uint8Array(audioAnalyzer.frequencyBinCount);
 
