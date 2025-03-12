@@ -269,7 +269,7 @@
             <br>
 
 
-            <span style="text-decoration: underline;"><b>Automatic Mode Settings</b></span>
+            <b style="text-decoration: underline;">Automatic Mode Settings</b>
             <br />
             <br />
 
@@ -296,15 +296,49 @@
             <input type="checkbox" name="isDebugMode" id="isDebugMode">
             <label class="checkbox-label" for="isDebugMode">Set Debug Mode?</label><br>
             <br>
+
+            <b style="text-decoration: underline;">Setting Profiles</b>
+            <br />
+            <br />
+
+            <select id="profileSelect">
+                <option value="">-- Load Profile --</option>
+            </select>
             <br>
+            <br>
+            <button id="newProfile">Create New Profile</button>
+            <div class="profile-settings-wrapper">
+                <input type="text" id="profileName" placeholder="Profile Name">
+                <br>
+                <br>
+                <button id="saveProfile">Save Profile (Exclude ID/URL)</button>
+                <br>
+                <br>
+                <div class="save-profile-with-id-wrapper">
+                    <button id="saveProfileWithID">Save Profile (Include ID/URL)</button>
+                    <br>
+                    <br>
+                </div>
+                <button id="deleteProfile">Delete Profile</button>
+                <div class="confirm-delete-profile-wrapper">
+                    <p class="confirm-delete-profile-message">Are you sure you would like to delete profile?</p>
+                    <button id="confirmDeleteProfile">Delete</button>
+                    <button id="cancelDeleteProfile">Cancel</button>
+                    <br>
+                    <br>
+                </div>
+                <br>
+                <br>
+            </div>
+            <p style="font-weight: bold;">----------------------------------------------------</p>
 
         </div>
     </form>
     <br>
 
     <div>
-        <button id="save-button">Save</button>
-        <button id="close-button">Close</button>
+        <button id="save-button">Save & Apply Settings</button>
+        <button id="close-button">Close Without Saving</button>
     </div>
 
     <script src="scripts/popup.js"></script>
