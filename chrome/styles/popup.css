@@ -99,6 +99,10 @@ button {
     display: none;
 }
 
+.firefox-experimental {
+    display: none;
+}
+
 .commercial-detection-mode-instructions-wrapper {
     display: none;
     margin-left: 22px;

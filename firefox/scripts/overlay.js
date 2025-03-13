@@ -1,5 +1,5 @@
 
-var isFirefox = false; //********************
+var isFirefox = true; //********************
 
 var overlayVideoType;
 var shouldHideYTBackground;

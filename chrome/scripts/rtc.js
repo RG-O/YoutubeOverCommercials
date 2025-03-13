@@ -7,7 +7,6 @@ var isInitialDifferenceSet = false;
 var initialDifference;
 
 
-
 clearPage();
 addBannerMessage('Tab opened by YTOC extension to funnel overlay video audio through. Do not close until you are done using YTOC extension.');
 
@@ -35,6 +34,8 @@ function requestNewStreamIfOutOfSync(timestamp) {
 
 
 peer.ontrack = event => {
+
+    console.log('peer.ontrack event');
 
     if (!receivedVideo) {
         //TODO: Only receive and play audio instead of the full video

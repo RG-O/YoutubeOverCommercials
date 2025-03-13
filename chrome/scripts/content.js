@@ -1,5 +1,5 @@
 
-var isFirefox = false; //********************
+var isFirefox = false; //******************** remember to also update in background.js and overlay.js
 
 var isCommercialState = false;
 var firstClick = true;
@@ -65,6 +65,14 @@ var shouldOverlayVideoSizeAndLocationAutoSet;
 var shouldShuffleYTPlaylist;
 //TODO: Add user preference for spotify to have audio come in gradually
 
+//variables for Firefox auto audio commercial detection mode:
+var stream;
+var audioContext;
+var audioSource;
+var audioAnalyzer;
+var audioDataArray;
+var isAudioConnected = false;
+
 
 //function that is responsible for loading the video iframe over top of the main/background video
 function setOverlayVideo() {
@@ -101,10 +109,19 @@ function setOverlayVideo() {
             url = url.concat(ytLiveID);
         }
     } else if (overlayVideoType == 'other-video') {
-        if (overlayHostName === chrome.runtime.id) {
-            url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
+        //using chrome.i18n.getMessage("@@extension_id")
+        if (isFirefox) {
+            if (overlayHostName === chrome.i18n.getMessage("@@extension_id")) {
+                url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
+            } else {
+                url = otherVideoURL;
+            }
         } else {
-            url = otherVideoURL;
+            if (overlayHostName === chrome.runtime.id || overlayHostName) {
+                url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
+            } else {
+                url = otherVideoURL;
+            }
         }
     } else if (overlayVideoType == 'other-live') {
         url = otherLiveURL;
@@ -240,8 +257,8 @@ function initialRun() {
 
     } else {
 
-        if (commercialDetectionMode === 'auto-audio') {
-            chrome.runtime.sendMessage({ action: "open_overlay_video_audio_tab" });
+        if (commercialDetectionMode === 'auto-audio' && !isFirefox) {
+            chrome.runtime.sendMessage({ action: "chrome_open_overlay_video_audio_tab" });
             window.addEventListener('beforeunload', closeOverlayVideoAudioTab);
         }
 
@@ -262,10 +279,22 @@ function muteMainVideo() {
 
         if (commercialDetectionMode === 'auto-audio') {
 
-            chrome.runtime.sendMessage({
-                target: "offscreen",
-                action: "disconnect-tab-audio"
-            });
+            if (isFirefox) {
+
+                if (isAudioConnected) {
+                    audioSource.disconnect(audioContext.destination);
+                    isAudioConnected = false;
+                }
+
+            } else {
+
+                chrome.runtime.sendMessage({
+                    target: "offscreen",
+                    action: "disconnect-tab-audio"
+                });
+
+            }
+            
 
         } else if (window.location.hostname == 'tv.youtube.com') {
 
@@ -301,10 +330,21 @@ function unmuteMainVideo() {
 
         if (commercialDetectionMode === 'auto-audio') {
 
-            chrome.runtime.sendMessage({
-                target: "offscreen",
-                action: "connect-tab-audio"
-            });
+            if (isFirefox) {
+
+                if (!isAudioConnected) {
+                    audioSource.connect(audioContext.destination);
+                    isAudioConnected = true;
+                }
+
+            } else {
+
+                chrome.runtime.sendMessage({
+                    target: "offscreen",
+                    action: "connect-tab-audio"
+                });
+
+            }
 
         } else if (window.location.hostname == 'tv.youtube.com') {
 
@@ -1275,7 +1315,15 @@ function getAudioLevel() {
 
         if (isFirefox) {
 
-            // do something
+            audioAnalyzer.getByteFrequencyData(audioDataArray);
+            let volumeSum = 0;
+            for (const volume of audioDataArray) {
+                volumeSum += volume;
+            }
+            let averageVolume = volumeSum / audioDataArray.length;
+            let audioLevel = Math.round(averageVolume * 100 / 127);
+
+            resolve(audioLevel);
 
         } else {
 
@@ -1406,6 +1454,47 @@ function startListeningToTab() {
 
         chrome.runtime.sendMessage({ action: "chrome-view-tab-audio" });
         window.addEventListener('beforeunload', stopViewingTab);
+
+    } else {
+
+        try {
+
+            //grab first video with an audio track
+            for (const video of mainVideoCollection) {
+                const audioTracks = video.srcObject?.getAudioTracks() || [];
+                if (audioTracks.length === 0) {
+
+                    try {
+                        stream = video.mozCaptureStream();
+                    } catch (e) {
+                        stream = video.captureStream();
+                    }
+
+                    audioContext = new AudioContext();
+                    audioSource = audioContext.createMediaStreamSource(stream);
+                    audioAnalyzer = audioContext.createAnalyser();
+                    audioAnalyzer.fftSize = 512;
+                    audioAnalyzer.minDecibels = -127;
+                    audioAnalyzer.maxDecibels = 0;
+                    audioAnalyzer.smoothingTimeConstant = 0;
+                    audioSource.connect(audioAnalyzer);
+                    //make sure audio still plays for user
+                    audioSource.connect(audioContext.destination);
+                    isAudioConnected = true;
+
+                    audioDataArray = new Uint8Array(audioAnalyzer.frequencyBinCount);
+
+                    return;
+                    
+                }
+            }
+
+        } catch (error) {
+            console.error("YTOC: An error occurred while trying to captureStream:", error.message);
+            clearInterval(monitorIntervalID);
+            alert(`Message from YTOC Extension: Videos from ${window.location.hostname} not compatible with Audio Detection mode on Firefox. Please try a different Mode of Detection.`);
+            return;
+        }
 
     }
 
@@ -1734,12 +1823,18 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel) {
 
     let windowHeight = window.innerHeight;
 
+    let belowSelectedPixelBuffer = 8;
+    let aboveSelectedPixelBuffer = 4;
+    if (isFirefox) {
+        belowSelectedPixelBuffer = 4;
+    }
+
     if (selectedPixel.y < windowHeight / 2) {
         overlayVideoLocationVertical = 'bottom';
-        videoOverlayHeight = 100 - (((selectedPixel.y + 8) / windowHeight) * 100).toFixed(3); //keeping 8px of room to view pixel and don't want to go below 0 in case user selected from very top //TODO: set differently for firefox?
+        videoOverlayHeight = 100 - (((selectedPixel.y + belowSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 8px of room to view pixel and don't want to go below 0 in case user selected from very top //TODO: set differently for firefox?
     } else {
         overlayVideoLocationVertical = 'top';
-        videoOverlayHeight = (((selectedPixel.y - 4) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
+        videoOverlayHeight = (((selectedPixel.y - aboveSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
     }
 
 }

@@ -132,6 +132,11 @@ chrome.storage.sync.get([
         updateSaveProfileButtonsText();
     });
 
+    //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
+    if (isFirefox) {
+        document.getElementsByClassName('firefox-experimental')[0].style.display = 'inline';
+    }
+
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
     runAllToggles();
 
@@ -479,7 +484,7 @@ function saveProfile(shouldSaveWithID) {
         chrome.storage.sync.set({ profiles }, () => {
             reloadProfileNames(profileName);
             updateSaveProfileButtonsText();
-            addValidationMessage(optionsForm.profileName, 'success', 'Profile saved. Click apply button at bottom when ready.');
+            addValidationMessage(optionsForm.profileName, 'success', 'Profile saved. Click apply settings when ready.');
         });
 
     }
@@ -529,7 +534,7 @@ function applyProfile() {
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();
-            addValidationMessage(optionsForm.profileName, 'success', 'Profile loaded. Click apply button at bottom when ready.');
+            addValidationMessage(optionsForm.profileName, 'success', 'Profile loaded. Click apply settings when ready.');
 
         }
     }

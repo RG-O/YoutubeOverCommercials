@@ -164,7 +164,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
-    } else if (message.action === "open_overlay_video_audio_tab") {
+    } else if (message.action === "chrome_open_overlay_video_audio_tab") {
 
         //grab user set values
         chrome.storage.sync.get(['overlayHostName'], (result) => {
@@ -176,7 +176,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             } else {
                 url = 'https://' + overlayHostName;
             }
-            
 
             //since in auto-audio detection mode, open tab using the same domain as the overlay video so I can funnel audio from the overlay video through this tab as to not trigger audio detection
             //TODO: can I iframe this in offscreen.html instead? As an additional tab would not be needed and audio playing in offscreen doesn't seem to count towards the tab audio
@@ -189,19 +188,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                     chrome.storage.sync.set({ overlayVideoAudioTabID: tab.id });
 
-                    setTimeout(() => {
+                    //note: if new tab is pixel-select-instructions.html, the rtc.js gets injected differently
+                    if (overlayHostName !== chrome.runtime.id) {
 
-                        //chrome.scripting.executeScript({
-                        //    target: { tabId: tab.id, allFrames: false },
-                        //    func: rtcPlayAudio
-                        //});
+                        setTimeout(() => {
 
-                        chrome.scripting.executeScript({
-                            target: { tabId: tab.id, allFrames: false },
-                            files: ["scripts/rtc.js"]
-                        });
+                            chrome.scripting.executeScript({
+                                target: { tabId: tab.id, allFrames: false },
+                                files: ["scripts/rtc.js"]
+                            });
 
-                    }, 500);
+                        }, 500);
+
+                    }
 
                 }
             );
