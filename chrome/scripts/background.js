@@ -15,59 +15,18 @@ chrome.commands.onCommand.addListener(function (command) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "initial_execute_overlay_video_interaction") {
 
-        //grab user set values
-        chrome.storage.sync.get(['shouldHideYTBackground', 'overlayHostName', 'isOtherSiteTroubleshootMode', 'isOverlayVideoZoomMode'], (result) => {
-
-            let shouldHideYTBackground = result.shouldHideYTBackground ?? true;
-            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
-            let isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
-            let isOverlayVideoZoomMode = result.isOverlayVideoZoomMode ?? false;
-
-            //TODO: inject an entire js file into the overlay video and then message functions in it, would that be better?
-            //injecting initialCommercialState() into all frames on the active tab
-            chrome.scripting.executeScript({
-                target: { tabId: sender.tab.id, allFrames: true },
-                func: initialCommercialState,
-                args: [shouldHideYTBackground, overlayHostName, isOtherSiteTroubleshootMode, isOverlayVideoZoomMode]
-            });
-
+        chrome.scripting.executeScript({
+            target: { tabId: sender.tab.id, allFrames: true },
+            files: ["scripts/overlay.js"]
         });
 
     } else if (message.action === "execute_overlay_video_non_commercial_state") {
 
-        //grab user set values
-        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName', 'isOtherSiteTroubleshootMode'], (result) => {
-
-            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
-            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
-            let isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
-
-            //injecting stopCommercialState() into all frames on the active tab
-            chrome.scripting.executeScript({
-                target: { tabId: sender.tab.id, allFrames: true },
-                func: stopCommercialState,
-                args: [overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode]
-            });
-
-        });
+        chrome.tabs.sendMessage(sender.tab.id, { action: "overlay_non_commercial_state" });
 
     } else if (message.action === "execute_overlay_video_commercial_state") {
 
-        //grab user set values
-        chrome.storage.sync.get(['overlayVideoType', 'overlayHostName', 'isOtherSiteTroubleshootMode'], (result) => {
-
-            let overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
-            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
-            let isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
-
-            //injecting startCommercialState() into all frames on the active tab
-            chrome.scripting.executeScript({
-                target: { tabId: sender.tab.id, allFrames: true },
-                func: startCommercialState,
-                args: [overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode]
-            });
-
-        });
+        chrome.tabs.sendMessage(sender.tab.id, { action: "overlay_commercial_state" });
 
     } else if (message.action === "open_spotify") {
 
@@ -205,304 +164,80 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
+    } else if (message.action === "chrome_open_overlay_video_audio_tab") {
+
+        //grab user set values
+        chrome.storage.sync.get(['overlayHostName'], (result) => {
+
+            let overlayHostName = result.overlayHostName ?? 'www.youtube.com';
+            let url;
+            if (overlayHostName === chrome.runtime.id) {
+                url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=rtc';
+            } else {
+                url = 'https://' + overlayHostName;
+            }
+
+            //since in auto-audio detection mode, open tab using the same domain as the overlay video so I can funnel audio from the overlay video through this tab as to not trigger audio detection
+            //TODO: can I iframe this in offscreen.html instead? As an additional tab would not be needed and audio playing in offscreen doesn't seem to count towards the tab audio
+            chrome.tabs.create({
+                pinned: true,
+                active: false,
+                url: url,
+            },
+                (tab) => {
+
+                    chrome.storage.sync.set({ overlayVideoAudioTabID: tab.id });
+
+                    //note: if new tab is pixel-select-instructions.html, the rtc.js gets injected differently
+                    if (overlayHostName !== chrome.runtime.id) {
+
+                        setTimeout(() => {
+
+                            chrome.scripting.executeScript({
+                                target: { tabId: tab.id, allFrames: false },
+                                files: ["scripts/rtc.js"]
+                            });
+
+                        }, 500);
+
+                    }
+
+                }
+            );
+
+        });
+
+    } else if (message.action === "close_overlay_video_audio_tab") {
+
+        chrome.storage.sync.get(['overlayVideoAudioTabID'], (result) => {
+
+            if (result.overlayVideoAudioTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.overlayVideoAudioTabID);
+                    if (exists) {
+                        chrome.tabs.remove(result.overlayVideoAudioTabID);
+                    }
+
+                });
+
+            }
+
+        });
+
     }
 });
 
 
-function initialCommercialState(shouldHideYTBackground, overlayHostName, isOtherSiteTroubleshootMode, isOverlayVideoZoomMode) {
-
-    //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
-    if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideoCollection !== 'undefined') {
-            //TODO: is this second check necessary if we already know mainVideoCollection is defined? would the frames share this variable?
-            if (mainVideoCollection == document.getElementsByTagName('video')) {
-                return;
-            }
-        }
-    }
-
-    //TODO: add second (maybe call it B) isOverlayVideoZoomMode that can zoom the video tag (user could use both)
-    if (isOverlayVideoZoomMode && window.location.hostname == overlayHostName && overlayHostName != 'www.youtube.com') {
-
-        setTimeout(() => {
-
-            if (document.getElementsByTagName('iframe')[0]) {
-
-                //making the assumed iframe with the video fit the full page
-                let videoIFrame = document.getElementsByTagName('iframe')[0];
-                videoIFrame.style.setProperty("visibility", "visible", "important");
-                videoIFrame.style.setProperty("position", "fixed", "important");
-                videoIFrame.style.setProperty("top", "0", "important");
-                videoIFrame.style.setProperty("left", "0", "important");
-                videoIFrame.style.setProperty("min-width", "0", "important");
-                videoIFrame.style.setProperty("min-height", "0", "important");
-                videoIFrame.style.setProperty("width", "100%", "important");
-                videoIFrame.style.setProperty("height", "100%", "important");
-                videoIFrame.style.setProperty("padding", "0", "important");
-                videoIFrame.style.setProperty("border-width", "0", "important");
-                videoIFrame.style.setProperty("z-index", "2147483647", "important");
-
-            }
-
-        }, 1000);
-
-    }
-
-    //making sure frame has the requested hostname of the overlay video so this doesn't accidentaly impact the main/background video
-    if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
-
-        //initial click or play on the overlay video
-        if (overlayHostName == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
-            document.getElementsByClassName('video-stream html5-main-video')[0].click();
-        } else if (overlayHostName != 'tv.youtube.com') {
-            document.getElementsByTagName('video')[0].play();
-        } //else do nothing because yttv plays automatically
-
-        //set marker on overlay video so the Live Thread Ticker browser extension knows not to apply
-        if (document.getElementsByTagName('body')[0]) {
-            let lttBlocker = document.createElement("span");
-            lttBlocker.id = 'YTOC-LTT-Blocker';
-            document.getElementsByTagName('body')[0].appendChild(lttBlocker);
-        }
-
-        if (shouldHideYTBackground) {
-
-            setTimeout(() => {
-
-                if (document.getElementsByTagName('html')[0]) {
-                    document.getElementsByTagName('html')[0].style.backgroundColor = "transparent";
-                }
-                if (document.getElementsByTagName('body')[0]) {
-                    document.getElementsByTagName('body')[0].style.backgroundColor = "transparent";
-                }
-                //special for yt
-                if (document.getElementsByClassName('html5-video-player')[0]) {
-                    document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
-                }
-                //special for yttv
-                if (overlayHostName == 'tv.youtube.com') {
-                    if (document.getElementsByTagName('ytu-player-controller')[0]) {
-                        document.getElementsByTagName('ytu-player-controller')[0].style.backgroundColor = "transparent";
-                    }
-                    let hideYTTVBlackBackgroundStyle = document.createElement("style");
-                    hideYTTVBlackBackgroundStyle.textContent = `
-                        ytu-player-layout.ytu-player-controller {
-                            --ypl-player-video-backdrop-color: transparent !important;
-                        }
-                    `;
-                    let insertLocation = document.getElementsByTagName('body')[0];
-                    insertLocation.appendChild(hideYTTVBlackBackgroundStyle);
-                }
-
-            }, 1000); //wait a little because when a video plays initially it disapears for a sec and it looks janky for it to look like it flickers
-
-        }
-
-        //hide scrollbar in case it shows for some non YT site because it might if the iframe is too small
-        if (overlayHostName != 'www.youtube.com') {
-
-            let hideScollStyle = document.createElement("style");
-            hideScollStyle.textContent = `
-                ::-webkit-scrollbar {
-                    display: none;
-                }
-            `;
-            let insertLocation = document.getElementsByTagName('body')[0];
-            insertLocation.appendChild(hideScollStyle);
-            //TODO: do special scrollbar hiding for firefox?
-
-        }
-
-        //waiting a second for video to load to run some checks and stuff
-        setTimeout(() => {
-
-            let myYTOCVideo;
-            if (overlayHostName == 'tv.youtube.com') {
-                myYTOCVideo = document.getElementsByClassName('video-stream html5-main-video')[0];
-            } else {
-                myYTOCVideo = document.getElementsByTagName('video')[0];
-            }
-
-            //unmute if started out muted for yt
-            if (overlayHostName == 'www.youtube.com') {
-
-                if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
-                    document.getElementsByClassName('ytp-mute-button')[0].click();
-                }
-
-                if (document.getElementsByClassName('ytp-pause-overlay-container')[0]) {
-                    document.getElementsByClassName('ytp-pause-overlay-container')[0].remove();
-                }
-
-            }
-
-            //TODO: add button on top of overlay video  if in live mode that asks if user would like video to play PiP while main video is not commercial, disapear if not clicked after x time
-
-            //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
-            if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
-
-                let elm = document.createElement("div");
-                elm.textContent = "Detected that video cannot auto start due to reasons. Please manually play video, pause video, and then play video again. Doing so will allow the extension to work properly from here on out. Sorry for the inconvenience! This message will soon disapear.";
-                elm.style.setProperty("color", "red", "important");
-                elm.style.setProperty("background-color", "white", "important");
-                elm.style.setProperty("z-index", "2147483647", "important");
-                elm.style.setProperty("position", "absolute", "important");
-
-                //TODO: set at very top level insead of video level
-                let insertLocation = myYTOCVideo.parentNode;
-                insertLocation = insertLocation.parentNode;
-                let firstChild = insertLocation.firstChild;
-                insertLocation.insertBefore(elm, firstChild);
-
-                //slowly removing message
-                setTimeout(() => {
-
-                    elm.style.setProperty("animation", "fadeOut ease 15s");
-                    elm.style.setProperty("animation-fill-mode", "forwards");
-                    let fadeStyle = document.createElement("style");
-                    fadeStyle.textContent = `
-                        @keyframes fadeOut {
-                          0% {
-                            opacity: 1;
-                          }
-                          100% {
-                            opacity: 0;
-                          }
-                        }
-                    `;
-                    elm.appendChild(fadeStyle);
-
-                    setTimeout(() => {
-                        elm.remove();
-                    }, 15000);
-
-                }, 15000);
-
-            }
-
-        }, 2500);
-
-    } //else do nothing, most likely script was injected into wrong frame
-
-}
-
-//plays or unmutes overlay video
-function startCommercialState(overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode) {
-
-    //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
-    if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideoCollection !== 'undefined') {
-            if (mainVideoCollection == document.getElementsByTagName('video')) {
-                return;
-            }
-        }
-    }
-
-    if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
-
-        if (overlayHostName == 'www.youtube.com') {
-
-            if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
-
-                document.getElementsByClassName('ytp-mute-button')[0].click();
-
-            } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
-
-                document.getElementsByTagName('video')[0].play();
-
-            }
-
-        } else {
-
-            if (overlayVideoType == 'other-live') {
-
-                if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
-
-                    document.querySelector('[aria-label="Unmute (m)"]').click();
-
-                } else if (overlayHostName != 'tv.youtube.com') {
-
-                    document.getElementsByTagName('video')[0].muted = false;
-
-                }
-
-            } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Play (k)"]')) {
-
-                document.querySelector('[aria-label="Play (k)"]').click();
-
-            } else if (document.getElementsByTagName('video')[0].paused) {
-
-                document.getElementsByTagName('video')[0].play();
-
-            }
-
-        }
-
-    } //else do nothing
-
-}
-
-//pauses or mutes overlay video
-function stopCommercialState(overlayVideoType, overlayHostName, isOtherSiteTroubleshootMode) {
-
-    //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
-    if (overlayHostName != 'www.youtube.com') {
-        if (typeof mainVideoCollection !== 'undefined') {
-            if (mainVideoCollection == document.getElementsByTagName('video')) {
-                return;
-            }
-        }
-    }
-
-    if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
-
-        if (overlayHostName == 'www.youtube.com') {
-
-            if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Mute (m)"]')) {
-
-                document.getElementsByClassName('ytp-mute-button')[0].click();
-
-            } else if (overlayVideoType != 'yt-live' && !document.getElementsByTagName('video')[0].paused) {
-
-                document.getElementsByTagName('video')[0].pause();
-
-            } //else do nothing
-
-        } else {
-
-            if (overlayVideoType == 'other-live') {
-
-                if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
-
-                    document.querySelector('[aria-label="Mute (m)"]').click();
-
-                } else if (overlayHostName != 'tv.youtube.com') {
-
-                    document.getElementsByTagName('video')[0].muted = true;
-
-                }
-
-            } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Pause (k)"]')) {
-
-                document.querySelector('[aria-label="Pause (k)"]').click();
-                
-            } else if (!document.getElementsByTagName('video')[0].paused) {
-
-                document.getElementsByTagName('video')[0].pause();
-
-            }
-
-        }
-
-    } //else do nothing
-
-}
-
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.action === "chrome-view-tab") {
+    if (message.action === "chrome-view-tab-video") {
 
         chromeViewTab(message, sender);
+
+    } else if (message.action === "chrome-view-tab-audio") {
+
+        chromeListenToTab(message, sender);
 
     }
 });
@@ -538,6 +273,37 @@ async function chromeViewTab(message, sender) {
     chrome.runtime.sendMessage({
         target: 'offscreen',
         action: 'start-viewing',
+        constraints: constraints
+    });
+
+}
+
+
+async function chromeListenToTab(message, sender) {
+
+    await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: ['USER_MEDIA', 'AUDIO_PLAYBACK'],
+        justification: 'Recording tab in order to extract audio'
+    });
+
+    const streamId = await chrome.tabCapture.getMediaStreamId({
+        targetTabId: sender.tab.id
+    });
+
+    const constraints = {
+        audio: {
+            mandatory: {
+                chromeMediaSource: 'tab',
+                chromeMediaSourceId: streamId
+            }
+        },
+        video: false
+    }
+
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'start-listening',
         constraints: constraints
     });
 
@@ -637,7 +403,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
         chrome.tabs.captureVisibleTab(
 
-            sender.tab.windowId, //debug - replace with just null if this doesn't work
+            sender.tab.windowId,
             {
                 format: 'png'
                 , rect: request.rect

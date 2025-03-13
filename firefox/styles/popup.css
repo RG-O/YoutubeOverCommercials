@@ -67,12 +67,12 @@ button {
 
 .id-field-wrapper {
     display: none;
+    margin-left: 22px;
 }
 
     .id-field-wrapper label {
         float: left;
         margin-right: 5px;
-        margin-left: 22px;
     }
 
     .id-field-wrapper div {
@@ -87,7 +87,19 @@ button {
         display: block;
     }
 
+.auto-dimensions-field-wrapper {
+    display: block;
+}
+
+.dimensions-fields-wrapper {
+    display: block;
+}
+
 .pip-fields-wrapper {
+    display: none;
+}
+
+.firefox-experimental {
     display: none;
 }
 
@@ -125,4 +137,42 @@ button {
 
 .keyboard-shortcut {
     color: red;
+}
+
+.profile-settings-wrapper {
+    display: none;
+}
+
+.save-profile-with-id-wrapper {
+    display: none;
+}
+
+.confirm-delete-profile-wrapper {
+    display: none;
+}
+
+.confirm-delete-profile-message {
+    color: red;
+}
+
+.error-message {
+    font-size: 12px;
+    color: red;
+    position: absolute;
+}
+
+.success-message {
+    font-size: 12px;
+    color: green;
+    position: absolute;
+}
+
+/*----- pixel-select-instructions.html specific styling below -----*/
+
+.overlay-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }
