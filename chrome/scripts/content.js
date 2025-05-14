@@ -117,7 +117,7 @@ function setOverlayVideo() {
                 url = otherVideoURL;
             }
         } else {
-            if (overlayHostName === chrome.runtime.id || overlayHostName) {
+            if (overlayHostName === chrome.runtime.id) {
                 url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
             } else {
                 url = otherVideoURL;
