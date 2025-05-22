@@ -109,7 +109,6 @@ function setOverlayVideo() {
             url = url.concat(ytLiveID);
         }
     } else if (overlayVideoType == 'other-video') {
-        //using chrome.i18n.getMessage("@@extension_id")
         if (isFirefox) {
             if (overlayHostName === chrome.i18n.getMessage("@@extension_id")) {
                 url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
