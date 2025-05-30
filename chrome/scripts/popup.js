@@ -2,6 +2,7 @@
 var isFirefox = false; //********************
 var profiles = {};
 var gridCells;
+var pipGridCells;
 
 //grab all user set values
 chrome.storage.sync.get([
@@ -145,12 +146,25 @@ chrome.storage.sync.get([
             const x = cell.getAttribute('data-x');
             const y = cell.getAttribute('data-y');
 
-            // Set radio buttons
-            document.getElementById(`x-${x}`).checked = true;
-            document.getElementById(`y-${y}`).checked = true;
+            optionsForm.overlayVideoLocationHorizontal.checked = true;
+            optionsForm.overlayVideoLocationVertical.checked = true;
 
-            // Visual feedback
             clearOverlayDisplayPositionGrid();
+            cell.classList.add('selected');
+        });
+    });
+
+    pipGridCells = document.querySelectorAll('.pip-grid-cell');
+
+    pipGridCells.forEach(cell => {
+        cell.addEventListener('click', () => {
+            const x = cell.getAttribute('data-pip-x');
+            const y = cell.getAttribute('data-pip-y');
+
+            optionsForm.pipLocationHorizontal.checked = true;
+            optionsForm.pipLocationVertical.checked = true;
+
+            clearPiPDisplayPositionGrid();
             cell.classList.add('selected');
         });
     });
@@ -310,6 +324,22 @@ function clearOverlayDisplayPositionGrid() {
 }
 
 
+function setPiPDisplayPositionGrid() {
+    const x = optionsForm.pipLocationHorizontal.value;
+    const y = optionsForm.pipLocationVertical.value;
+    clearPiPDisplayPositionGrid();
+    pipGridCells.forEach(cell => {
+        if (cell.getAttribute('data-pip-x') === x && cell.getAttribute('data-pip-y') === y) {
+            cell.classList.add('selected');
+        }
+    });
+}
+
+function clearPiPDisplayPositionGrid() {
+    pipGridCells.forEach(cell => cell.classList.remove('selected'));
+}
+
+
 //show/hide ID and URL fields when their corresponding radio button is checked/unchecked
 function toggleIDFieldVisability() {
     let idFields = document.getElementsByClassName('id-field-wrapper');
@@ -427,6 +457,7 @@ function runAllToggles() {
     updateSaveProfileButtonsText();
     hideConfirmDeleteProfilePrompt();
     setOverlayDisplayPositionGrid();
+    setPiPDisplayPositionGrid();
 }
 
 

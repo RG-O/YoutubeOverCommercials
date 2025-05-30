@@ -93,6 +93,11 @@ button {
 
 .pip-fields-wrapper {
     display: none;
+    margin: 5px;
+    background: rgb(18, 56, 77, 0.1);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 5px;
 }
 
 .firefox-experimental {
@@ -241,6 +246,37 @@ button {
     }
 
     .grid-cell:hover {
+        /*background-color: #ccc;*/
+        border-color: #12384d;
+    }
+
+.pip-grid {
+    float: right;
+    display: grid;
+    border: 1px solid #ccc;
+    grid-template-columns: repeat(2, 30px);
+    grid-template-rows: repeat(2, 20px);
+    /*gap: 5px;*/
+    width: fit-content;
+}
+
+.pip-grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
+}
+
+    .pip-grid-cell.selected {
+        background-color: #12384d;
+        color: white;
+        border-color: #12384d;
+    }
+
+    .pip-grid-cell:hover {
         /*background-color: #ccc;*/
         border-color: #12384d;
     }

@@ -134,7 +134,7 @@
         <div class="advanced">
             <h2 style="text-decoration: underline;">Advanced Settings</h2>
 
-            <h3>Overlay Video Dimensions:</h3>
+            <h3>Overlay Video/Audio Settings:</h3>
 
             <div class="auto-dimensions-field-wrapper">
 
@@ -156,7 +156,7 @@
                 </div>
 
                 <div class="general-field">
-                    Display Position:
+                    Overlay Video Display Position:
                     <div class="display-grid">
                         <div class="grid-cell" data-x="left" data-y="top"></div>
                         <div class="grid-cell" data-x="middle" data-y="top"></div>
@@ -185,13 +185,11 @@
 
             </div>
 
-            <h3>Various Settings:</h3>
-
             <input type="checkbox" name="shouldHideYTBackground" id="shouldHideYTBackground">
             <label class="checkbox-label" for="shouldHideYTBackground">Hide Black Background</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Hides the black background that shows behind youtube videos that sometimes peaks out the sides of the video depending on the aspect ratio. This also attempts to do hide the black background for non youtube videos.</span></span><br>
 
             <input type="checkbox" name="shouldClickNextOnPlaySpotify" id="shouldClickNextOnPlaySpotify">
-            <label class="checkbox-label" for="shouldClickNextOnPlaySpotify">Auto Next Song</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For Spotify mode only. Automatically plays the next song when a commercial is detected. Uncheck this if you would like it to resume where a song left off when the last commercial ended.</span></span><br>
+            <label class="checkbox-label" for="shouldClickNextOnPlaySpotify">Auto Next Song for Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For Spotify mode only. Automatically plays the next song when a commercial is detected. Uncheck this if you would like it to resume where a song left off when the last commercial ended.</span></span><br>
 
             <input type="checkbox" name="shouldShuffleYTPlaylist" id="shouldShuffleYTPlaylist">
             <label class="checkbox-label" for="shouldShuffleYTPlaylist">Auto Shuffle Next YT Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For YouTube Playlist mode only. Automatically plays random next video when a commercial is detected. Uncheck this if you would like it to resume where a video in the playlist left off when the last commercial ended and not shuffle.</span></span><br>
@@ -202,8 +200,43 @@
             <input type="checkbox" name="isOtherSiteTroubleshootMode" id="isOtherSiteTroubleshootMode">
             <label class="checkbox-label" for="isOtherSiteTroubleshootMode">Non-YT Video Troubleshoot</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trying to play a non YouTube video over commercials and the video will not mute/unmute or play/pause when it is supposed to? Try enabling this setting to fix it!</span></span><br>
 
+            <input type="checkbox" name="isPiPMode" id="isPiPMode">
+            <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
 
-            <h3>Primary Stream Settings:</h3>
+            <div class="pip-fields-wrapper">
+
+                <div class="general-field">
+                    PiP Width (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the width of the screen the overlay video takes up while in PiP mode.</span></span>
+                    <input type="number" name="pipWidth" id="pipWidth" min="1" max="50">
+                </div>
+
+                <div class="general-field">
+                    PiP Height (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the height of the screen the overlay video takes up while in PiP mode.</span></span>
+                    <input type="number" name="pipHeight" id="pipHeight" min="1" max="50">
+                </div>
+
+                <div class="general-field">
+                    PiP Display Location:
+                    <div class="pip-grid">
+                        <div class="pip-grid-cell" data-pip-x="left" data-pip-y="top"></div>
+                        <div class="pip-grid-cell" data-pip-x="right" data-pip-y="top"></div>
+                        <div class="pip-grid-cell" data-pip-x="left" data-pip-y="bottom"></div>
+                        <div class="pip-grid-cell" data-pip-x="right" data-pip-y="bottom"></div>
+                    </div>
+                    <div style="clear: both;"></div>
+
+                    <div style="display: none;">
+                        <input type="radio" id="pipLocationHorizontal-left" name="pipLocationHorizontal" value="left">
+                        <input type="radio" id="pipLocationHorizontal-right" name="pipLocationHorizontal" value="right">
+                        <input type="radio" id="pipLocationVertical-top" name="pipLocationVertical" value="top">
+                        <input type="radio" id="pipLocationVertical-bottom" name="pipLocationVertical" value="bottom">
+                    </div>
+                </div>
+
+            </div>
+
+
+            <h3>Primary Video/Audio Settings:</h3>
 
             <div class="general-field">
                 Fade During Commercials (%):
@@ -227,71 +260,37 @@
 
             <h3>Automatic Commercial Detection Settings</h3>
 
-            <b>Color Mismatch Count Threshold:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
-            <input type="number" name="mismatchCountThreshold" id="mismatchCountThreshold" min="1"><br>
-            <br>
-
-            <b>Color Match Count Threshold:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to match its original color at time of selection before declaring the program as resumed and hiding the overlaid video. NOTE: While in Reverse Pixel Detection Mode, this value is used count mismatches before declaring being out of commercial break.</span></span>
-            <input type="number" name="matchCountThreshold" id="matchCountThreshold" min="1"><br>
-            <br>
-
-            <b>Color Difference Threshold:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">How different from the original pixel color does the current pixel color need to be before deciding it isn't a matching color. This isn't really a percentage, but more so a made up measurement where around 8-12 is usually the sweet spot. Set higher if you absolutely have to pick a pixel inside a semi-transparent logo/graphic.</span></span>
-            <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="3" max="88"><br>
-            <br>
-
-            <b>Override Cooldown Time (sec):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
-            <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1"><br>
-            <br>
-
-            <b>Audio Level Threshold (%):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Audio Commercial Detection Mode Only. Level that audio needs to be under before declaring a commercial break.</span></span>
-            <input type="number" name="audioLevelThreshold" id="audioLevelThreshold" min="1" max="100"><br>
-            <br>
-
-            <h3>Picture in Picture (PiP) Settings</h3>
-
-            <input type="checkbox" name="isPiPMode" id="isPiPMode">
-            <label class="checkbox-label" for="isPiPMode">PiP Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span><br>
-            <br>
-
-
-            <div class="pip-fields-wrapper">
-
-                <b>PiP Width (%):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the width of the screen the overlay video takes up while in PiP mode.</span></span>
-                <input type="number" name="pipWidth" id="pipWidth" min="1" max="50"><br>
-                <br>
-
-                <b>PiP Height (%):</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the height of the screen the overlay video takes up while in PiP mode.</span></span>
-                <input type="number" name="pipHeight" id="pipHeight" min="1" max="50"><br>
-                <br>
-
-
-                <b>PiP X Display:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Option to display the PiP video in the right or left corner.</span></span>
-                <label class="display-location" for="pipLocationHorizontal-right">Right</label>
-                <input class="display-location" type="radio" id="pipLocationHorizontal-right" name="pipLocationHorizontal" value="right">
-
-                <label class="display-location" for="pipLocationHorizontal-left">Left</label>
-                <input class="display-location" type="radio" id="pipLocationHorizontal-left" name="pipLocationHorizontal" value="left">
-                <br>
-                <br>
-
-
-                <b>PiP Y Display:</b><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Option to display the PiP video in the top or bottom corner.</span></span>
-                <label class="display-location" for="pipLocationVertical-top">Top</label>
-                <input class="display-location" type="radio" id="pipLocationVertical-top" name="pipLocationVertical" value="top"><br>
-
-                <label class="display-location" for="pipLocationVertical-bottom">Bottom</label>
-                <input class="display-location" type="radio" id="pipLocationVertical-bottom" name="pipLocationVertical" value="bottom"><br>
-                <br>
-
+            <div class="general-field">
+                Color Mismatch Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
+                <input type="number" name="mismatchCountThreshold" id="mismatchCountThreshold" min="1">
             </div>
 
-            <input type="checkbox" name="isDebugMode" id="isDebugMode">
-            <label class="checkbox-label" for="isDebugMode">Set Debug Mode?</label><br>
-            <br>
+            <div class="general-field">
+                Color Match Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to match its original color at time of selection before declaring the program as resumed and hiding the overlaid video. NOTE: While in Reverse Pixel Detection Mode, this value is used count mismatches before declaring being out of commercial break.</span></span>
+                <input type="number" name="matchCountThreshold" id="matchCountThreshold" min="1">
+            </div>
 
-            <b style="text-decoration: underline;">Setting Profiles</b>
-            <br />
-            <br />
+            <div class="general-field">
+                Color Difference Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">How different from the original pixel color does the current pixel color need to be before deciding it isn't a matching color. This isn't really a percentage, but more so a made up measurement where around 8-12 is usually the sweet spot. Set higher if you absolutely have to pick a pixel inside a semi-transparent logo/graphic.</span></span>
+                <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="3" max="88">
+            </div>
+
+            <div class="general-field">
+                Override Cooldown Time (sec):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
+                <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1">
+            </div>
+
+            <div class="general-field">
+                Audio Level Threshold (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Audio Commercial Detection Mode Only. Level that audio needs to be under before declaring a commercial break.</span></span>
+                <input type="number" name="audioLevelThreshold" id="audioLevelThreshold" min="1" max="100">
+            </div>
+
+            <div class="general-field">
+                <input type="checkbox" name="isDebugMode" id="isDebugMode">
+                <label class="checkbox-label" for="isDebugMode">Set Debug Mode?</label>
+            </div>
+
+            <h3>Setting Profiles</h3>
 
             <select id="profileSelect">
                 <option value="">-- Load Profile --</option>
@@ -322,7 +321,6 @@
                 <br>
                 <br>
             </div>
-            <p style="font-weight: bold;">----------------------------------------------------</p>
 
         </div>
     </form>
