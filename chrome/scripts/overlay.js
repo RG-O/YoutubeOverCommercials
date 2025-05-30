@@ -55,7 +55,14 @@ chrome.storage.sync.get([
     }
 
     if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
-        initialCommercialState();
+        if (overlayHostName == 'web.stremio.com') {
+            //delay initial setup if web stremio as it takes longer for video to appear on page
+            setTimeout(() => {
+                initialCommercialState();
+            }, 8000); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
+        } else {
+            initialCommercialState();
+        }
     } else {
         isCorrectOverlayFrame = false;
     }
@@ -92,39 +99,6 @@ function initialCommercialState() {
         document.getElementsByTagName('body')[0].appendChild(lttBlocker);
     }
 
-    if (shouldHideYTBackground) {
-
-        setTimeout(() => {
-
-            if (document.getElementsByTagName('html')[0]) {
-                document.getElementsByTagName('html')[0].style.backgroundColor = "transparent";
-            }
-            if (document.getElementsByTagName('body')[0]) {
-                document.getElementsByTagName('body')[0].style.backgroundColor = "transparent";
-            }
-            //special for yt
-            if (document.getElementsByClassName('html5-video-player')[0]) {
-                document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
-            }
-            //special for yttv
-            if (overlayHostName == 'tv.youtube.com') {
-                if (document.getElementsByTagName('ytu-player-controller')[0]) {
-                    document.getElementsByTagName('ytu-player-controller')[0].style.backgroundColor = "transparent";
-                }
-                let hideYTTVBlackBackgroundStyle = document.createElement("style");
-                hideYTTVBlackBackgroundStyle.textContent = `
-                    ytu-player-layout.ytu-player-controller {
-                        --ypl-player-video-backdrop-color: transparent !important;
-                    }
-                `;
-                let insertLocation = document.getElementsByTagName('body')[0];
-                insertLocation.appendChild(hideYTTVBlackBackgroundStyle);
-            }
-
-        }, 1000); //wait a little because when a video plays initially it disapears for a sec and it looks janky for it to look like it flickers
-
-    }
-
     //hide scrollbar in case it shows for some non YT site because it might if the iframe is too small
     if (overlayHostName != 'www.youtube.com') {
 
@@ -148,6 +122,16 @@ function initialCommercialState() {
             myYTOCVideo = document.getElementsByClassName('video-stream html5-main-video')[0];
         } else {
             myYTOCVideo = document.getElementsByTagName('video')[0];
+        }
+
+        if (shouldHideYTBackground) {
+            myYTOCVideo.style.background = 'transparent';
+
+            let parent = myYTOCVideo.parentElement;
+            while (parent) {
+                parent.style.background = 'transparent';
+                parent = parent.parentElement;
+            }
         }
 
         //unmute if started out muted for yt
