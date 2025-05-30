@@ -1,6 +1,7 @@
 
 var isFirefox = false; //********************
 var profiles = {};
+var gridCells;
 
 //grab all user set values
 chrome.storage.sync.get([
@@ -136,6 +137,23 @@ chrome.storage.sync.get([
     if (isFirefox) {
         document.getElementsByClassName('firefox-experimental')[0].style.display = 'inline';
     }
+
+    gridCells = document.querySelectorAll('.grid-cell');
+
+    gridCells.forEach(cell => {
+        cell.addEventListener('click', () => {
+            const x = cell.getAttribute('data-x');
+            const y = cell.getAttribute('data-y');
+
+            // Set radio buttons
+            document.getElementById(`x-${x}`).checked = true;
+            document.getElementById(`y-${y}`).checked = true;
+
+            // Visual feedback
+            clearOverlayDisplayPositionGrid();
+            cell.classList.add('selected');
+        });
+    });
 
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
     runAllToggles();
@@ -276,6 +294,22 @@ function setTextFieldsToSelectAll() {
 }
 
 
+function setOverlayDisplayPositionGrid() {
+    const x = optionsForm.overlayVideoLocationHorizontal.value;
+    const y = optionsForm.overlayVideoLocationVertical.value;
+    clearOverlayDisplayPositionGrid();
+    gridCells.forEach(cell => {
+        if (cell.getAttribute('data-x') === x && cell.getAttribute('data-y') === y) {
+            cell.classList.add('selected');
+        }
+    });
+}
+
+function clearOverlayDisplayPositionGrid() {
+    gridCells.forEach(cell => cell.classList.remove('selected'));
+}
+
+
 //show/hide ID and URL fields when their corresponding radio button is checked/unchecked
 function toggleIDFieldVisability() {
     let idFields = document.getElementsByClassName('id-field-wrapper');
@@ -382,7 +416,7 @@ function showConfirmDeleteProfilePrompt() {
 }
 
 
-//run all toggles to make sure all information/fields hide/show based on values in the fields
+//run all toggles to make sure all information/fields hide/show/set based on values in the fields
 function runAllToggles() {
     toggleModeInstructionsVisability();
     toggleIDFieldVisability();
@@ -392,6 +426,7 @@ function runAllToggles() {
     toggleWithIDProfileSaveButtonVisability();
     updateSaveProfileButtonsText();
     hideConfirmDeleteProfilePrompt();
+    setOverlayDisplayPositionGrid();
 }
 
 

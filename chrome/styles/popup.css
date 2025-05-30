@@ -4,38 +4,22 @@ body {
     /*font-family: 'Roboto', sans-serif;*/
     overflow-x: hidden;
     margin-top: 0;
-}
-
-/*h1 {
-    font-size: 40px;
-    text-align: center;*/
-    /*font-family: 'Roboto Condensed', sans-serif;*/
-    /*color: black;
-    margin-top: 15px;
-    margin-bottom: 15px;
-    margin-block: 0px;
-    line-height: 20px;
-}
-
-h2 {
-    font-size: 22px;
-    margin-block-start: 0px;
-    margin-block-end: 0px;
-}*/
-
-p {
-    color: black;
+    margin: 0;
 }
 
 form {
     color: black;
     font-size: 16px;
+    margin: 8px;
 }
 
-/*input[type=radio] {
-    float: left;
-    margin-top: 9px;
-}*/
+input[type=radio] {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    top: 3px;
+    width: 18px;
+    height: 18px;
+}
 
 input[type=number] {
     width: 40px;
@@ -46,7 +30,11 @@ input[type=number] {
     float: right;
 }
 
-.checkbox-label, .note, .tooltiptext {
+.general-field {
+    margin-bottom: 7px;
+}
+
+.note, .tooltiptext {
     font-size: 12px;
 }
 
@@ -68,25 +56,27 @@ button {
 
 .id-field-wrapper {
     display: none;
-    margin-left: 26px;
+    margin-top: 5px;
+    margin-right: 5px;
+    margin-bottom: 5px;
+    margin-left: 36px;
+    background: rgb(18, 56, 77, 0.1);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 5px;
 }
 
-    .id-field-wrapper label {
-        float: left;
-        margin-right: 5px;
-    }
+.id-field-label {
+    margin-bottom: 5px;
+}
 
-    .id-field-wrapper div {
-        overflow: hidden;
-    }
-
-    .id-field-wrapper input {
-        width: 100%;
-        -moz-box-sizing: border-box;
-        -webkit-box-sizing: border-box;
-        box-sizing: border-box;
-        display: block;
-    }
+.id-field-wrapper input {
+    width: 100%;
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+    display: block;
+}
 
 .auto-dimensions-field-wrapper {
     display: block;
@@ -94,6 +84,11 @@ button {
 
 .dimensions-fields-wrapper {
     display: block;
+    margin: 5px;
+    background: rgb(18, 56, 77, 0.1);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 5px;
 }
 
 .pip-fields-wrapper {
@@ -106,13 +101,14 @@ button {
 
 .commercial-detection-mode-instructions-wrapper {
     display: none;
-    margin-left: 26px;
+    margin-left: 31px;
 }
 
 .tooltip {
     position: relative;
     display: inline-block;
-    color: rgb(140, 179, 210, .9);
+    color: #12384d;
+    cursor: default;
 }
 
     .tooltip .tooltiptext {
@@ -168,7 +164,7 @@ button {
     position: absolute;
 }
 
-img {
+.logo-image {
     display: block;
     margin: auto;
     /*width: 50%;*/
@@ -183,10 +179,71 @@ img {
     position: sticky;
     bottom: 0;
     background: rgb(240, 238, 236);
-    /*background: white;*/
-    /*padding: 10px;*/
-    /*border-top: 1px solid #ccc;*/
+    border-top: 1px solid #ccc;
+    padding: 8px;
 }
+
+.badge {
+    font-size: 12px;
+    margin-left: 4px;
+    padding-left: 4px;
+    padding-right: 4px;
+    text-align: center;
+    border-radius: 5px;
+}
+
+.badge-recommended {
+    background-color: #12384d;
+    color: white;
+}
+
+.badge-experimental {
+    background-color: darkorange;
+    color: white;
+}
+
+.mode-how-to {
+    background: rgb(255, 255, 0, 0.1);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin: 5px;
+    padding: 5px;
+}
+
+button {
+    height: 40px;
+}
+
+.display-grid {
+    float: right;
+    display: grid;
+    border: 1px solid #ccc;
+    grid-template-columns: repeat(3, 30px);
+    grid-template-rows: repeat(3, 20px);
+    /*gap: 5px;*/
+    width: fit-content;
+}
+
+.grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ccc;
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
+}
+
+    .grid-cell.selected {
+        background-color: #12384d;
+        color: white;
+        border-color: #12384d;
+    }
+
+    .grid-cell:hover {
+        /*background-color: #ccc;*/
+        border-color: #12384d;
+    }
 
 /*----- pixel-select-instructions.html specific styling below -----*/
 
