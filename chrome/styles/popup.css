@@ -13,6 +13,16 @@ form {
     margin: 8px;
 }
 
+kbd {
+    display: inline-block;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 0.1em 0.5em;
+    margin: 0 0.2em;
+    box-shadow: 0 1px 0px rgba(0, 0, 0, 0.2), 0 0 0 2px #fff inset;
+    background-color: #f7f7f7;
+}
+
 input[type=radio] {
     margin-top: 5px;
     margin-bottom: 5px;
@@ -26,9 +36,19 @@ input[type=number] {
     float: right;
 }
 
+input[type=checkbox] {
+    width: 18px;
+    height: 18px;
+    float: right;
+}
+
 .display-location, .display-location[type=radio] {
     float: right;
 }
+
+/*.checkbox-label {
+    margin-left: 20px;
+}*/
 
 .general-field {
     margin-bottom: 7px;
@@ -57,9 +77,9 @@ button {
 .id-field-wrapper {
     display: none;
     margin-top: 5px;
-    margin-right: 5px;
+    /*margin-right: 5px;*/
     margin-bottom: 5px;
-    margin-left: 36px;
+    /*margin-left: 36px;*/
     background: rgb(18, 56, 77, 0.1);
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -78,13 +98,19 @@ button {
     display: block;
 }
 
+.id-input-row {
+    display: flex;
+    gap: 5px;
+}
+
 .auto-dimensions-field-wrapper {
     display: block;
 }
 
 .dimensions-fields-wrapper {
     display: block;
-    margin: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     background: rgb(18, 56, 77, 0.1);
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -93,7 +119,8 @@ button {
 
 .pip-fields-wrapper {
     display: none;
-    margin: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     background: rgb(18, 56, 77, 0.1);
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -106,7 +133,7 @@ button {
 
 .commercial-detection-mode-instructions-wrapper {
     display: none;
-    margin-left: 31px;
+    /*margin-left: 31px;*/
 }
 
 .tooltip {
@@ -138,7 +165,7 @@ button {
     }
 
 .keyboard-shortcut {
-    color: red;
+    text-wrap: nowrap;
 }
 
 .profile-settings-wrapper {
@@ -211,11 +238,12 @@ button {
     background: rgb(255, 255, 0, 0.1);
     border: 1px solid #ccc;
     border-radius: 5px;
-    margin: 5px;
+    margin-top: 5px;
+    margin-bottom: 5px;
     padding: 5px;
 }
 
-button {
+.button {
     height: 40px;
 }
 

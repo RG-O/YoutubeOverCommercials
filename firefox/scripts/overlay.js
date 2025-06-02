@@ -59,7 +59,7 @@ chrome.storage.sync.get([
             //delay initial setup if web stremio as it takes longer for video to appear on page
             setTimeout(() => {
                 initialCommercialState();
-            }, 8000); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
+            }, 7000); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
         } else {
             initialCommercialState();
         }

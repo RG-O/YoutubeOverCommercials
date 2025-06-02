@@ -146,8 +146,8 @@ chrome.storage.sync.get([
             const x = cell.getAttribute('data-x');
             const y = cell.getAttribute('data-y');
 
-            optionsForm.overlayVideoLocationHorizontal.checked = true;
-            optionsForm.overlayVideoLocationVertical.checked = true;
+            optionsForm.overlayVideoLocationHorizontal.value = x;
+            optionsForm.overlayVideoLocationVertical.value = y;
 
             clearOverlayDisplayPositionGrid();
             cell.classList.add('selected');
@@ -161,12 +161,37 @@ chrome.storage.sync.get([
             const x = cell.getAttribute('data-pip-x');
             const y = cell.getAttribute('data-pip-y');
 
-            optionsForm.pipLocationHorizontal.checked = true;
-            optionsForm.pipLocationVertical.checked = true;
+            optionsForm.pipLocationHorizontal.value = x;
+            optionsForm.pipLocationVertical.value = y;
 
             clearPiPDisplayPositionGrid();
             cell.classList.add('selected');
         });
+    });
+    
+    document.getElementById('pull-button-ytPlaylistID').addEventListener('click', async (event) => {
+        event.preventDefault();
+        optionsForm.ytPlaylistID.value = await getIDFromCurrentTab('list');
+    });
+
+    document.getElementById('pull-button-ytVideoID').addEventListener('click', async (event) => {
+        event.preventDefault();
+        optionsForm.ytVideoID.value = await getIDFromCurrentTab('v');
+    });
+
+    document.getElementById('pull-button-ytLiveID').addEventListener('click', async (event) => {
+        event.preventDefault();
+        optionsForm.ytLiveID.value = await getIDFromCurrentTab('v');
+    });
+
+    document.getElementById('pull-button-otherVideoURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        optionsForm.otherVideoURL.value = await getIDFromCurrentTab(false);
+    });
+
+    document.getElementById('pull-button-otherLiveURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        optionsForm.otherLiveURL.value = await getIDFromCurrentTab(false);
     });
 
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
@@ -305,6 +330,24 @@ function setTextFieldsToSelectAll() {
             this.select();
         });
     });
+}
+
+
+async function getIDFromCurrentTab(param) {
+    let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (param) {
+        const url = new URL(tab.url);
+
+        if (url.hostname === 'www.youtube.com') {
+            return url.searchParams.get(param) || 'ID not found';
+        } else {
+            //TODO: Do something special for firefox here
+            alert('Must currently be on www.youtube.com in order to pull ID.');
+        }
+    } else {
+        return tab.url;
+    }
 }
 
 
@@ -465,7 +508,7 @@ function setKeyboardShortcutText() {
     if (isFirefox) {
         let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
         for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
-            keyboardShortcuts[i].innerText = "Ctrl + Alt + C";
+            keyboardShortcuts[i].innerHTML = `<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>`;
         }
     }
 }

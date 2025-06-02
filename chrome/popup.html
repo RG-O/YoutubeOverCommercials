@@ -18,7 +18,8 @@
         <br>
         <div id="auto-pixel-normal" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
-                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span> when there are no commercials on screen, and then follow the on-screen instructions presented.
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
             </div>
         </div>
 
@@ -27,7 +28,8 @@
         <br>
         <div id="auto-pixel-opposite" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
-                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span> when there is a commercial break on screen, and then follow the on-screen instructions presented.
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when there is a commercial break on screen, and then follow the on-screen instructions presented.
             </div>
         </div>
 
@@ -36,22 +38,24 @@
         <br>
         <div id="auto-audio" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
-                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span>
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span>
             </div>
         </div>
 
         <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials.</span></span>
+        <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
         <br>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
-                <b>HOW TO USE</b>: Go to stream that has commercials, make full screen, hit <span class="keyboard-shortcut">Ctrl + Shift + F</span> when commercials begin and <span class="keyboard-shortcut">Ctrl + Shift + F</span> when commercials end.
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when commercials begin and again when commercials end.
                 <a href="/instructions.html" target="_blank">Full manual instructions.</a>
             </div>
         </div>
 
 
-        <h3>Overlay Type:</h3>
+        <h3>Overlay Type and Source:</h3>
 
         <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
         <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
@@ -60,8 +64,9 @@
             <div class="id-field-label">
                 <label>Playlist ID:</label>
             </div>
-            <div>
+            <div class="id-input-row">
                 <input type="text" name="ytPlaylistID" id="ytPlaylistID">
+                <button id="pull-button-ytPlaylistID">&#x2B07;&#xFE0F;</button>
             </div>
         </div>
 
@@ -72,8 +77,9 @@
             <div class="id-field-label">
                 <label>Video ID:</label>
             </div>
-            <div>
+            <div class="id-input-row">
                 <input type="text" name="ytVideoID" id="ytVideoID">
+                <button id="pull-button-ytVideoID">&#x2B07;&#xFE0F;</button>
             </div>
         </div>
 
@@ -84,8 +90,9 @@
             <div class="id-field-label">
                 <label>Live Video ID:</label>
             </div>
-            <div>
+            <div class="id-input-row">
                 <input type="text" name="ytLiveID" id="ytLiveID">
+                <button id="pull-button-ytLiveID">&#x2B07;&#xFE0F;</button>
             </div>
         </div>
 
@@ -111,8 +118,9 @@
             <div class="id-field-label">
                 <label>Page with Video or MP4 File URL:</label>
             </div>
-            <div>
+            <div class="id-input-row">
                 <input type="text" name="otherVideoURL" id="otherVideoURL">
+                <button id="pull-button-otherVideoURL">&#x2B07;&#xFE0F;</button>
             </div>
         </div>
 
@@ -123,40 +131,39 @@
             <div class="id-field-label">
                 <label>Page with Stream URL:</label>
             </div>
-            <div>
+            <div class="id-input-row">
                 <input type="text" name="otherLiveURL" id="otherLiveURL">
+                <button id="pull-button-otherLiveURL">&#x2B07;&#xFE0F;</button>
             </div>
         </div>
         <br>
 
 
-        <button id="expand-button" type="button" class="collapsible">Show Advanced Settings...</button>
+        <button id="expand-button" type="button" class="collapsible">Show Advanced Settings</button>
         <div class="advanced">
-            <h2 style="text-decoration: underline;">Advanced Settings</h2>
+            <h2>Advanced Settings</h2>
 
             <h3>Overlay Video/Audio Settings:</h3>
 
-            <div class="auto-dimensions-field-wrapper">
-
-                <input type="checkbox" name="shouldOverlayVideoSizeAndLocationAutoSet" id="shouldOverlayVideoSizeAndLocationAutoSet">
+            <div class="general-field auto-dimensions-field-wrapper">
                 <label class="checkbox-label" for="shouldOverlayVideoSizeAndLocationAutoSet">Auto-Set Overlay Video Size and Location</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Pixel Color commercial detection modes only. Automatically sets the overlay video to max width and height without covering selected pixel.</span></span>
-
+                <input type="checkbox" name="shouldOverlayVideoSizeAndLocationAutoSet" id="shouldOverlayVideoSizeAndLocationAutoSet">
             </div>
 
             <div class="dimensions-fields-wrapper">
 
                 <div class="general-field">
-                    Overlay Video Width (%):
+                    Overlay Video Width (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Percentatage of the width of the screen the overlay video takes up.</span></span>
                     <input type="number" name="videoOverlayWidth" id="videoOverlayWidth" min="1" max="100">
                 </div>
 
                 <div class="general-field">
-                    Overlay Video Height (%):
+                    Overlay Video Height (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Percentatage of the height of the screen the overlay video takes up.</span></span>
                     <input type="number" name="videoOverlayHeight" id="videoOverlayHeight" min="1" max="100">
                 </div>
 
                 <div class="general-field">
-                    Overlay Video Display Position:
+                    Overlay Video Display Position:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Location the overlay video displays on the screen. Can be helpful for when certain sports do a side by side during commercials to set overlay video to the side.</span></span>
                     <div class="display-grid">
                         <div class="grid-cell" data-x="left" data-y="top"></div>
                         <div class="grid-cell" data-x="middle" data-y="top"></div>
@@ -182,26 +189,37 @@
                         <input type="radio" name="overlayVideoLocationVertical" id="y-bottom" value="bottom">
                     </div>
                 </div>
-
             </div>
 
-            <input type="checkbox" name="shouldHideYTBackground" id="shouldHideYTBackground">
-            <label class="checkbox-label" for="shouldHideYTBackground">Hide Black Background</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Hides the black background that shows behind youtube videos that sometimes peaks out the sides of the video depending on the aspect ratio. This also attempts to do hide the black background for non youtube videos.</span></span><br>
+            <div class="general-field">
+                <label class="checkbox-label" for="shouldHideYTBackground">Hide Black Background</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Hides the black background that shows behind youtube videos that sometimes peaks out the sides of the video depending on the aspect ratio. This also attempts to do hide the black background for non youtube videos.</span></span>
+                <input type="checkbox" name="shouldHideYTBackground" id="shouldHideYTBackground">
+            </div>
 
-            <input type="checkbox" name="shouldClickNextOnPlaySpotify" id="shouldClickNextOnPlaySpotify">
-            <label class="checkbox-label" for="shouldClickNextOnPlaySpotify">Auto Next Song for Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For Spotify mode only. Automatically plays the next song when a commercial is detected. Uncheck this if you would like it to resume where a song left off when the last commercial ended.</span></span><br>
+            <div class="general-field">
+                <label class="checkbox-label" for="shouldClickNextOnPlaySpotify">Auto Next Song for Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For Spotify mode only. Automatically plays the next song when a commercial is detected. Uncheck this if you would like it to resume where a song left off when the last commercial ended.</span></span>
+                <input type="checkbox" name="shouldClickNextOnPlaySpotify" id="shouldClickNextOnPlaySpotify">
+            </div>
 
-            <input type="checkbox" name="shouldShuffleYTPlaylist" id="shouldShuffleYTPlaylist">
-            <label class="checkbox-label" for="shouldShuffleYTPlaylist">Auto Shuffle Next YT Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For YouTube Playlist mode only. Automatically plays random next video when a commercial is detected. Uncheck this if you would like it to resume where a video in the playlist left off when the last commercial ended and not shuffle.</span></span><br>
+            <div class="general-field">
+                <label class="checkbox-label" for="shouldShuffleYTPlaylist">Auto Shuffle Next YT Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For YouTube Playlist mode only. Automatically plays random next video when a commercial is detected. Uncheck this if you would like it to resume where a video in the playlist left off when the last commercial ended and not shuffle.</span></span>
+                <input type="checkbox" name="shouldShuffleYTPlaylist" id="shouldShuffleYTPlaylist">
+            </div>
 
-            <input type="checkbox" name="isOverlayVideoZoomMode" id="isOverlayVideoZoomMode">
-            <label class="checkbox-label" for="isOverlayVideoZoomMode">Non-YT Video Zoom</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Trying to play a non YouTube video over commercials and the overlay shows other info on the site besides just the video or some of the video is cut off? Try enabling this setting to fix it!</span></span><br>
+            <div class="general-field">
+                <label class="checkbox-label" for="isOverlayVideoZoomMode">Non-YT Video Zoom</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Trying to play a non YouTube video over commercials and the overlay shows other info on the site besides just the video or some of the video is cut off? Try enabling this setting to fix it!</span></span>
+                <input type="checkbox" name="isOverlayVideoZoomMode" id="isOverlayVideoZoomMode">
+            </div>
 
-            <input type="checkbox" name="isOtherSiteTroubleshootMode" id="isOtherSiteTroubleshootMode">
-            <label class="checkbox-label" for="isOtherSiteTroubleshootMode">Non-YT Video Troubleshoot</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trying to play a non YouTube video over commercials and the video will not mute/unmute or play/pause when it is supposed to? Try enabling this setting to fix it!</span></span><br>
+            <div class="general-field">
+                <label class="checkbox-label" for="isOtherSiteTroubleshootMode">Non-YT Video Troubleshoot</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trying to play a non YouTube video over commercials and the video will not mute/unmute or play/pause when it is supposed to? Try enabling this setting to fix it!</span></span>
+                <input type="checkbox" name="isOtherSiteTroubleshootMode" id="isOtherSiteTroubleshootMode">
+            </div>
 
-            <input type="checkbox" name="isPiPMode" id="isPiPMode">
-            <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
+            <div class="general-field">
+                <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
+                <input type="checkbox" name="isPiPMode" id="isPiPMode">
+            </div>
 
             <div class="pip-fields-wrapper">
 
@@ -216,7 +234,7 @@
                 </div>
 
                 <div class="general-field">
-                    PiP Display Location:
+                    PiP Display Position:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Which corner the overlay video displays while in PiP mode.</span></span>
                     <div class="pip-grid">
                         <div class="pip-grid-cell" data-pip-x="left" data-pip-y="top"></div>
                         <div class="pip-grid-cell" data-pip-x="right" data-pip-y="top"></div>
@@ -239,22 +257,18 @@
             <h3>Primary Video/Audio Settings:</h3>
 
             <div class="general-field">
-                Fade During Commercials (%):
+                Dimming During Commercials (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">How much percentage to dim primary/background video while overlay video is on top.</span></span>
                 <input type="number" name="mainVideoFade" id="mainVideoFade" min="0" max="99">
             </div>
 
             <div class="general-field">
-                Volume Outside of Commercials (%):
+                Volume Outside of Commercials (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Best to leave this value at 100 most of the time. Leaving this at 100 and the value at 0 below, the extension will simply mute/unmute the primary/background video without adjusting specific volume settings. Note: Adjusting this value from 100 will break the extension for YouTubeTV.</span></span>
                 <input type="number" name="mainVideoVolumeDuringNonCommercials" id="mainVideoVolumeDuringNonCommercials" min="0" max="100">
             </div>
 
             <div class="general-field">
-                Volume During Commercials (%):
+                Volume During Commercials (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Best to leave this value at 0 most of the time. Leaving this at 0 and the value at 100 above, the extension will simply mute/unmute the primary/background video without adjusting specific volume settings. Note: Adjusting this value from 100 will break the extension for YouTubeTV.</span></span>
                 <input type="number" name="mainVideoVolumeDuringCommercials" id="mainVideoVolumeDuringCommercials" min="0" max="100">
-            </div>
-
-            <div class="note">
-                Note: Best to keep these values 100 and 0 most of the time, but especially while using over top of YouTubeTV.
             </div>
 
 
@@ -286,8 +300,8 @@
             </div>
 
             <div class="general-field">
+                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays pixel indicator on screen all the time and adds additional logging to the background.</span></span>
                 <input type="checkbox" name="isDebugMode" id="isDebugMode">
-                <label class="checkbox-label" for="isDebugMode">Set Debug Mode?</label>
             </div>
 
             <h3>Setting Profiles</h3>
