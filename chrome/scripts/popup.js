@@ -171,27 +171,42 @@ chrome.storage.sync.get([
     
     document.getElementById('pull-button-ytPlaylistID').addEventListener('click', async (event) => {
         event.preventDefault();
-        optionsForm.ytPlaylistID.value = await getIDFromCurrentTab('list');
+        let id = await getIDFromCurrentTab('list');
+        if (id) {
+            optionsForm.ytPlaylistID.value = id;
+        }
     });
 
     document.getElementById('pull-button-ytVideoID').addEventListener('click', async (event) => {
         event.preventDefault();
-        optionsForm.ytVideoID.value = await getIDFromCurrentTab('v');
+        let id = await getIDFromCurrentTab('v');
+        if (id) {
+            optionsForm.ytVideoID.value = id;
+        }
     });
 
     document.getElementById('pull-button-ytLiveID').addEventListener('click', async (event) => {
         event.preventDefault();
-        optionsForm.ytLiveID.value = await getIDFromCurrentTab('v');
+        let id = await getIDFromCurrentTab('v');
+        if (id) {
+            optionsForm.ytLiveID.value = id;
+        }
     });
 
     document.getElementById('pull-button-otherVideoURL').addEventListener('click', async (event) => {
         event.preventDefault();
-        optionsForm.otherVideoURL.value = await getIDFromCurrentTab(false);
+        let id = await getIDFromCurrentTab(false);
+        if (id) {
+            optionsForm.otherVideoURL.value = id;
+        }
     });
 
     document.getElementById('pull-button-otherLiveURL').addEventListener('click', async (event) => {
         event.preventDefault();
-        optionsForm.otherLiveURL.value = await getIDFromCurrentTab(false);
+        let id = await getIDFromCurrentTab(false);
+        if (id) {
+            optionsForm.otherLiveURL.value = id;
+        }
     });
 
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
@@ -340,10 +355,26 @@ async function getIDFromCurrentTab(param) {
         const url = new URL(tab.url);
 
         if (url.hostname === 'www.youtube.com') {
+            let id = url.searchParams.get(param);
+
+            if (id) {
+                return id;
+            } else {
+                if (param === 'v') {
+                    //TODO: Do something special for firefox here
+                    alert('Sorry, YouTube video ID not found. Please navigate to the video you would like to use and try again. Or copy and paste the video ID into the field.');
+                    return false;
+                } else {
+                    //TODO: Do something special for firefox here
+                    alert('Sorry, YouTube playlist ID not found. Please navigate to the playlist you would like to use and try again. Or copy and paste the playlist ID into the field.');
+                    return false;
+                }
+            }
             return url.searchParams.get(param) || 'ID not found';
         } else {
             //TODO: Do something special for firefox here
             alert('Must currently be on www.youtube.com in order to pull ID.');
+            return false;
         }
     } else {
         return tab.url;
@@ -591,9 +622,14 @@ function saveProfile(shouldSaveWithID) {
         };
 
         chrome.storage.sync.set({ profiles }, () => {
+            if (chrome.runtime.lastError) {
+                addValidationMessage(optionsForm.profileName, 'error', 'Sorry, profile not saved. Out of space. Please delete some profiles and try again.');
+                return;
+            }
+
             reloadProfileNames(profileName);
             updateSaveProfileButtonsText();
-            addValidationMessage(optionsForm.profileName, 'success', 'Profile saved. Click apply settings when ready.');
+            addValidationMessage(optionsForm.profileName, 'success', 'Profile saved. Click "Save & Apply" button when ready.');
         });
 
     }
@@ -643,7 +679,7 @@ function applyProfile() {
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();
-            addValidationMessage(optionsForm.profileName, 'success', 'Profile loaded. Click apply settings when ready.');
+            addValidationMessage(optionsForm.profileName, 'success', 'Profile loaded. Click "Save & Apply" button when ready.');
 
         }
     }

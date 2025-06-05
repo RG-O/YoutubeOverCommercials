@@ -21,6 +21,7 @@ var logoBoxText;
 var countdownOngoing = false;
 var pipBlocker;
 var pipBlockerText;
+var hasFontBeenInjected = false;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -457,6 +458,10 @@ chrome.runtime.onMessage.addListener(function (message) {
         //special actions for the very first time this is initiated on a page
         if (isFirstRun && !isAutoModeInitiated) {
 
+            if (!hasFontBeenInjected) {
+                injectFontOntoPage();
+            }
+
             //get overlayHostName
             //note: getting all other user set values later
             chrome.storage.sync.get(['overlayHostName'], (result) => {
@@ -613,7 +618,8 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                     } //else do nothing for when nodeName is IFRAME
 
-                } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
+                } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point. 
+                    //TODO: Also displays some sort of alert / warning when user tries to use over top of actual www.youtube.com
                     //since user was not in full screen, instruct them that they need to be
 
                     setNotFullscreenAlerts();
@@ -668,7 +674,7 @@ function setNotFullscreenAlerts() {
 
     if (!fullScreenAlertSet) {
 
-        addMessageAlertToMainVideo('Video must be full screen for YTOC extension to work.');
+        addMessageAlertToMainVideo('Video must be full screen for Live Commercial Blocker extension to work.');
         fullScreenAlertSet = true;
 
     }
@@ -1018,7 +1024,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isAudioOnlyOverlay) {
                             if (isDebugMode) {
-                                logoBoxText = 'YTOC';
+                                logoBoxText = 'LIVE COMMERCIAL BLOCKER';
                                 logoBox.textContent = logoBoxText;
                             } else {
                                 logoBox.style.display = 'none';
@@ -1179,7 +1185,7 @@ function setAudioLevelIndicator() {
 
     logoBox = document.createElement('div');
     logoBox.className = "ytoc-audio-level-indicator-countdown";
-    logoBoxText = 'YTOC Initiated';
+    logoBoxText = 'Live Commercial Blocker Initiated';
     logoBox.textContent = logoBoxText;
     if (audioLevelIndicatorContainerLocationHorizontal === 'right') {
         audioLevelIndicatorContainer.insertBefore(logoBox, audioLevelIndicator);
@@ -1278,7 +1284,7 @@ function audioThresholdMonitor() {
 
                         if (isAudioOnlyOverlay) {
                             if (isDebugMode) {
-                                logoBoxText = 'YTOC';
+                                logoBoxText = 'LIVE COMMERCIAL BLOCKER';
                                 logoBox.textContent = logoBoxText;
                             } else {
                                 audioLevelIndicatorContainer.style.display = 'none';
@@ -1382,9 +1388,9 @@ function setCommercialDetectedIndicator(selectedPixel) {
 function initialLogoBoxTextUpdate() {
 
     if (!isAudioOnlyOverlay || isDebugMode) {
-        logoBoxText = 'YTOC';
+        logoBoxText = 'LIVE COMMERCIAL BLOCKER';
     } else if (overlayVideoType == 'spotify') {
-        logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
+        logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to Live Commercial Blocker
     } else if (overlayVideoType == 'other-tabs') {
         logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
     }
@@ -1410,7 +1416,8 @@ function spotifyLogoBoxUpdate(text) {
         } else {
             audioLevelIndicatorContainer.style.display = 'flex';
         }
-        
+
+        //TODO: either add user preference to always show song title during commercial even when not in debug mode or just do it and have this timeout set logo to black or white
         if (!isDebugMode && commercialDetectionMode !== 'auto-audio') {
             setTimeout(() => {
                 logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
@@ -1489,9 +1496,9 @@ function startListeningToTab() {
             }
 
         } catch (error) {
-            console.error("YTOC: An error occurred while trying to captureStream:", error.message);
+            console.error("Live Commercial Blocker: An error occurred while trying to captureStream:", error.message);
             clearInterval(monitorIntervalID);
-            alert(`Message from YTOC Extension: Videos from ${window.location.hostname} not compatible with Audio Detection mode on Firefox. Please try a different Mode of Detection.`);
+            alert(`Message from Live Commercial Blocker Extension: Videos from ${window.location.hostname} not compatible with Audio Detection mode on Firefox. Please try a different Mode of Detection.`);
             return;
         }
 
@@ -1594,11 +1601,24 @@ function fullscreenChanged() {
 
 
 function pauseAutoMode() {
-
     clearInterval(monitorIntervalID);
     stopViewingTab();
-    addMessageAlertToMainVideo('YTOC extension paused until back to fullscreen. Set video to fullscreen or refresh tab to remove message.');
 
+    let pauseMessage = 'Live Commercial Blocker extension paused. Set video back to fullscreen to resume.';
+    if (overlayVideoType === 'spotify') {
+        pauseMessage += ' Or refresh page to exit extension and remove message.';
+    } else {
+        pauseMessage += ' This message will disappear shortly.';
+    }
+    addMessageAlertToMainVideo(pauseMessage);
+
+    //TODO: add removal timeout directly to addMessageAlertToMainVideo to make all messages disappear?
+    //TODO: get this working for the spotify mode without accidentally removing the success message after user chooses spotify playlist
+    if (overlayVideoType !== 'spotify') {
+        setTimeout(() => {
+            removeElementsByClass('ytoc-main-video-message-alert');
+        }, 9000);
+    }
 }
 
 
@@ -1836,4 +1856,14 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel) {
         videoOverlayHeight = (((selectedPixel.y - aboveSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
     }
 
+}
+
+
+function injectFontOntoPage() {
+    let fontInjectionStyle = document.createElement("style");
+    fontInjectionStyle.textContent = `@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,700;1,700&display=swap');`;
+    let insertLocation = document.getElementsByTagName('body')[0];
+    insertLocation.appendChild(fontInjectionStyle);
+
+    hasFontBeenInjected = true;
 }

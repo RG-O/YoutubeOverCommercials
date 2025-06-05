@@ -150,7 +150,7 @@ function initialSetup() {
     setTimeout(() => {
 
         var link = document.createElement('link');
-        link.href = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap';
+        link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,700;1,700&display=swap';
         link.rel = 'stylesheet';
         document.head.appendChild(link);
 
@@ -169,7 +169,7 @@ function initialSetup() {
         banner.style.padding = '5px';
         banner.style.zIndex = '1000';
         banner.style.fontSize = '20px';
-        banner.style.fontFamily = 'Roboto, Arial, sans-serif';
+        banner.style.fontFamily = '"Montserrat", sans-serif';
         banner.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
 
         document.body.style.marginTop = '35px';

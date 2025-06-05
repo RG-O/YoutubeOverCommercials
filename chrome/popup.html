@@ -2,20 +2,16 @@
 <html>
 <head>
     <link rel="stylesheet" href="styles/popup.css">
-    <!--<style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto&family=Roboto+Condensed:wght@300&display=swap');
-    </style>-->
 </head>
 <body>
-    <!--<img style="height: 250px;" src="LiveCommercialBlockerLogoLarge.png" />-->
     <img class="logo-image" style="width: 380px;" src="LiveCommercialBlockerLogoLargeLandscape.png" />
     <form id="optionsForm">
-        <!--<h1>Settings</h1>-->
         <h3>Mode of Commercial Detection:</h3>
 
-        <input type="radio" id="commercialDetectionMode-auto-pixel-normal" name="commercialDetectionMode" value="auto-pixel-normal">
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-recommended">Recommended</span>
-        <br>
+        <div>
+            <input type="radio" id="commercialDetectionMode-auto-pixel-normal" name="commercialDetectionMode" value="auto-pixel-normal">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-recommended">Recommended</span>
+        </div>
         <div id="auto-pixel-normal" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
                 <b>HOW TO USE:</b><br />
@@ -23,9 +19,10 @@
             </div>
         </div>
 
-        <input type="radio" id="commercialDetectionMode-auto-pixel-opposite" name="commercialDetectionMode" value="auto-pixel-opposite">
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-opposite">Pixel Color Match</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for the presence of a selected screen graphic that only shows during commercial breaks on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
-        <br>
+        <div>
+            <input type="radio" id="commercialDetectionMode-auto-pixel-opposite" name="commercialDetectionMode" value="auto-pixel-opposite">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-opposite">Pixel Color Match</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for the presence of a selected screen graphic that only shows during commercial breaks on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
+        </div>
         <div id="auto-pixel-opposite" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
                 <b>HOW TO USE:</b><br />
@@ -33,9 +30,10 @@
             </div>
         </div>
 
-        <input type="radio" id="commercialDetectionMode-auto-audio" name="commercialDetectionMode" value="auto-audio">
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-audio">Audio Level Low</label><span class="note firefox-experimental"> (experimental)</span><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Detects when commercial breaks occur by detecting a set duration of volume lower than a set threshold on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
-        <br>
+        <div>
+            <input type="radio" id="commercialDetectionMode-auto-audio" name="commercialDetectionMode" value="auto-audio">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-audio">Audio Level Low</label><span class="note firefox-experimental"> (experimental)</span><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercial breaks occur by detecting a set duration of volume lower than a set threshold on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
+        </div>
         <div id="auto-audio" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
                 <b>HOW TO USE:</b><br />
@@ -43,9 +41,10 @@
             </div>
         </div>
 
-        <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
-        <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
-        <br>
+        <div>
+            <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
+        </div>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
                 <b>HOW TO USE:</b><br />
@@ -57,89 +56,110 @@
 
         <h3>Overlay Type and Source:</h3>
 
-        <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
-        <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
+            <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
+        </div>
         <div id="yt-playlist" class="id-field-wrapper">
             <div class="id-field-label">
                 <label>Playlist ID:</label>
             </div>
             <div class="id-input-row">
                 <input type="text" name="ytPlaylistID" id="ytPlaylistID">
-                <button id="pull-button-ytPlaylistID">&#x2B07;&#xFE0F;</button>
+                <button id="pull-button-ytPlaylistID" class="pull-id-button">
+                    &#x2B07;&#xFE0F;
+                    <span class="pull-id-tooltip">Pull ID from current tab.</span>
+                </button>
             </div>
         </div>
 
-        <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
-        <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
+            <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
+        </div>
         <div id="yt-video" class="id-field-wrapper">
             <div class="id-field-label">
                 <label>Video ID:</label>
             </div>
             <div class="id-input-row">
                 <input type="text" name="ytVideoID" id="ytVideoID">
-                <button id="pull-button-ytVideoID">&#x2B07;&#xFE0F;</button>
+                <button id="pull-button-ytVideoID" class="pull-id-button">
+                    &#x2B07;&#xFE0F;
+                    <span class="pull-id-tooltip">Pull ID from current tab.</span>
+                </button>
             </div>
         </div>
 
-        <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
-        <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
+            <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
+        </div>
         <div id="yt-live" class="id-field-wrapper">
             <div class="id-field-label">
                 <label>Live Video ID:</label>
             </div>
             <div class="id-input-row">
                 <input type="text" name="ytLiveID" id="ytLiveID">
-                <button id="pull-button-ytLiveID">&#x2B07;&#xFE0F;</button>
+                <button id="pull-button-ytLiveID" class="pull-id-button">
+                    &#x2B07;&#xFE0F;
+                    <span class="pull-id-tooltip">Pull ID from current tab.</span>
+                </button>
             </div>
         </div>
 
-        <input type="radio" id="overlayVideoType-spotify" name="overlayVideoType" value="spotify">
-        <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-spotify" name="overlayVideoType" value="spotify">
+            <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
+        </div>
         <div id="spotify" class="id-field-wrapper">
             Will prompt you to select playlist from Spotify.<br />
             <span style="color: red;">Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.</span>
         </div>
 
-        <input type="radio" id="overlayVideoType-other-tabs" name="overlayVideoType" value="other-tabs">
-        <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 250px; top: -185px; left: -120px;">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-other-tabs" name="overlayVideoType" value="other-tabs">
+            <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 250px; top: -205px; left: -120px;">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
+        </div>
         <div id="other-tabs" class="id-field-wrapper">
             Will mute/unmute audio playing from other tabs.
         </div>
 
-        <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
-        <label class="video-type-label" for="overlayVideoType-other-video">Non-YT Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 240px; top: -115px; left: -160px;">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
+            <label class="video-type-label" for="overlayVideoType-other-video">Non-YT Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 240px; top: -160px; left: -110px;">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
+        </div>
         <div id="other-video" class="id-field-wrapper">
             <div class="id-field-label">
                 <label>Page with Video or MP4 File URL:</label>
             </div>
             <div class="id-input-row">
                 <input type="text" name="otherVideoURL" id="otherVideoURL">
-                <button id="pull-button-otherVideoURL">&#x2B07;&#xFE0F;</button>
+                <button id="pull-button-otherVideoURL" class="pull-id-button">
+                    &#x2B07;&#xFE0F;
+                    <span class="pull-id-tooltip">Pull URL from current tab.</span>
+                </button>
             </div>
         </div>
 
-        <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
-        <label class="video-type-label" for="overlayVideoType-other-live">Non-YT Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; top: -85px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below!</span></span><span class="badge badge-experimental">Experimental</span>
-        <br>
+        <div>
+            <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
+            <label class="video-type-label" for="overlayVideoType-other-live">Non-YT Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; top: -110px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below!</span></span><span class="badge badge-experimental">Experimental</span>
+        </div>
         <div id="other-live" class="id-field-wrapper">
             <div class="id-field-label">
                 <label>Page with Stream URL:</label>
             </div>
             <div class="id-input-row">
                 <input type="text" name="otherLiveURL" id="otherLiveURL">
-                <button id="pull-button-otherLiveURL">&#x2B07;&#xFE0F;</button>
+                <button id="pull-button-otherLiveURL" class="pull-id-button">
+                    &#x2B07;&#xFE0F;
+                    <span class="pull-id-tooltip">Pull URL from current tab.</span>
+                </button>
             </div>
         </div>
-        <br>
 
 
-        <button id="expand-button" type="button" class="collapsible">Show Advanced Settings</button>
+        <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Advanced Settings</button>
         <div class="advanced">
             <h2>Advanced Settings</h2>
 
@@ -306,39 +326,40 @@
 
             <h3>Setting Profiles</h3>
 
-            <select id="profileSelect">
-                <option value="">-- Load Profile --</option>
-            </select>
-            <br>
-            <br>
+            <div class="general-field">
+                <select id="profileSelect" style="width: 100%;">
+                    <option value="">-- Load Profile --</option>
+                </select>
+            </div>
+
             <button id="newProfile">Create New Profile</button>
             <div class="profile-settings-wrapper">
-                <input type="text" id="profileName" placeholder="Profile Name">
-                <br>
-                <br>
-                <button id="saveProfile">Save Profile (Exclude ID/URL)</button>
-                <br>
-                <br>
-                <div class="save-profile-with-id-wrapper">
-                    <button id="saveProfileWithID">Save Profile (Include ID/URL)</button>
-                    <br>
-                    <br>
+                <div class="general-field">
+                    <input type="text" id="profileName" placeholder="Profile Name" style="width: 100%; box-sizing: border-box;">
                 </div>
-                <button id="deleteProfile">Delete Profile</button>
+
+                <div class="general-field">
+                    <button id="saveProfile">Save Profile (Exclude ID/URL)</button>
+                </div>
+
+                <div class="save-profile-with-id-wrapper">
+                    <div class="general-field">
+                        <button id="saveProfileWithID">Save Profile (Include ID/URL)</button>
+                    </div>
+                </div>
+
+                <button id="deleteProfile" style="margin-top: 22px;">Delete Profile</button>
                 <div class="confirm-delete-profile-wrapper">
                     <p class="confirm-delete-profile-message">Are you sure you would like to delete profile?</p>
                     <button id="confirmDeleteProfile">Delete</button>
                     <button id="cancelDeleteProfile">Cancel</button>
-                    <br>
-                    <br>
+
                 </div>
-                <br>
-                <br>
+
             </div>
 
         </div>
     </form>
-    <br>
 
     <div class="sticky-buttons">
         <button class="button" id="save-button">Save & Apply</button>
