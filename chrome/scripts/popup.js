@@ -137,6 +137,8 @@ chrome.storage.sync.get([
     //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
     if (isFirefox) {
         document.getElementsByClassName('firefox-experimental')[0].style.display = 'inline';
+        //document.getElementsByTagName('body')[0].style.width = '400px';
+        document.getElementsByTagName('body')[0].style.paddingRight = '18px';
     }
 
     gridCells = document.querySelectorAll('.grid-cell');

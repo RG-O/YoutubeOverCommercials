@@ -2,11 +2,18 @@
 <html>
 <head>
     <link rel="stylesheet" href="styles/popup.css">
+
+    <style>
+        h1, h2 {
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     <img class="logo-image" style="width: 380px;" src="LiveCommercialBlockerLogoLargeLandscape.png" />
     <form id="optionsForm">
-        <h3>Mode of Commercial Detection:</h3>
+        <h2>SETTINGS</h2>
+        <h3>MODE OF COMMERCIAL DETECTION</h3>
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-normal" name="commercialDetectionMode" value="auto-pixel-normal">
@@ -54,7 +61,7 @@
         </div>
 
 
-        <h3>Overlay Type and Source:</h3>
+        <h3>OVERLAY TYPE AND SOURCE</h3>
 
         <div>
             <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
@@ -158,12 +165,14 @@
             </div>
         </div>
 
+        <div style="padding-bottom: 15px"></div>
+
 
         <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Advanced Settings</button>
         <div class="advanced">
-            <h2>Advanced Settings</h2>
+            <h2>ADVANCED SETTINGS</h2>
 
-            <h3>Overlay Video/Audio Settings:</h3>
+            <h3>OVERLAY VIDEO/AUDIO SETTINGS</h3>
 
             <div class="general-field auto-dimensions-field-wrapper">
                 <label class="checkbox-label" for="shouldOverlayVideoSizeAndLocationAutoSet">Auto-Set Overlay Video Size and Location</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Pixel Color commercial detection modes only. Automatically sets the overlay video to max width and height without covering selected pixel.</span></span>
@@ -274,7 +283,7 @@
             </div>
 
 
-            <h3>Primary Video/Audio Settings:</h3>
+            <h3>PRIMARY VIDEO/AUDIO SETTINGS</h3>
 
             <div class="general-field">
                 Dimming During Commercials (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">How much percentage to dim primary/background video while overlay video is on top.</span></span>
@@ -292,7 +301,7 @@
             </div>
 
 
-            <h3>Automatic Commercial Detection Settings</h3>
+            <h3>AUTOMATIC COMMERCIAL DETECTION SETTINGS</h3>
 
             <div class="general-field">
                 Color Mismatch Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
@@ -324,7 +333,7 @@
                 <input type="checkbox" name="isDebugMode" id="isDebugMode">
             </div>
 
-            <h3>Setting Profiles</h3>
+            <h3>SETTING PROFILES</h3>
 
             <div class="general-field">
                 <select id="profileSelect" style="width: 100%;">
@@ -364,7 +373,9 @@
     <div class="sticky-buttons">
         <button class="button" id="save-button">Save & Apply</button>
         <button class="button" id="close-button">Cancel</button>
-        <a href="https://www.buymeacoffee.com/ryango"><img style="height: 40px; float: right;" src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
+        <a href="https://www.buymeacoffee.com/ryango" target="_blank">
+            <img style="height: 40px; float: right;" src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" />
+        </a>
     </div>
 
     <script src="scripts/popup.js"></script>
