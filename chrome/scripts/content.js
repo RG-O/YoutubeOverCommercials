@@ -753,12 +753,15 @@ function setBlockersAndPixelSelectionInstructions() {
 
         pipBlocker = document.createElement('div');
         pipBlocker.className = "ytoc-overlay-instructions";
-        pipBlocker.style.backgroundColor = "black";
+        pipBlocker.style.backgroundColor = "rgb(240, 238, 236)";
         
         insertLocationFullscreenElm.insertBefore(pipBlocker, null);
         pipBlockerText = document.createElement('div');
-        pipBlockerText.style.color = "white";
+        pipBlockerText.style.color = "black";
         pipBlockerText.style.fontSize = "16px";
+        pipBlockerText.style.fontFamily = '"Montserrat", sans-serif';
+        pipBlockerText.style.textShadow = "none";
+        pipBlockerText.style.padding = "5px";
         if (pipLocationVertical == 'bottom') {
             pipBlockerText.style.position = "absolute";
             pipBlockerText.style.bottom = "0";
