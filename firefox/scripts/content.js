@@ -555,8 +555,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                             }
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
-                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
-                            manualOverrideCooldown = result.manualOverrideCooldown ?? 55;
+                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 14;
+                            manualOverrideCooldown = result.manualOverrideCooldown ?? 120;
                             isDebugMode = result.isDebugMode ?? false;
                             isPiPMode = result.isPiPMode ?? true;
                             pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
