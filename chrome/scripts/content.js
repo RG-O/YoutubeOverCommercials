@@ -30,6 +30,7 @@ var ytLiveID;
 var otherVideoURL;
 var otherLiveURL;
 var overlayHostName;
+var isOtherSiteTroubleshootMode;
 var mainVideoFade;
 var videoOverlayWidth;
 var videoOverlayHeight;
@@ -262,10 +263,17 @@ function initialRun() {
             window.addEventListener('beforeunload', closeOverlayVideoAudioTab);
         }
 
+        let overlayInjectionTimeout;
+        if (isOtherSiteTroubleshootMode) {
+            //wait longer to inject overlay.js for potentially iframes loading inside iframes
+            overlayInjectionTimeout = 5000;
+        } else {
+            overlayInjectionTimeout = 1000;
+        }
         //wait a little bit for the video to load //TODO: get indicator of when completely loaded
         setTimeout(() => {
             chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
-        }, 2000);
+        }, overlayInjectionTimeout);
 
     }
 
@@ -482,6 +490,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'ytLiveID',
                             'otherVideoURL',
                             'otherLiveURL',
+                            'isOtherSiteTroubleshootMode',
                             'mainVideoFade',
                             'videoOverlayWidth',
                             'videoOverlayHeight',
@@ -522,6 +531,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
+                            isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
                             mainVideoFade = result.mainVideoFade ?? 65;
                             mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
                             mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv

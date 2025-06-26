@@ -47,33 +47,50 @@ chrome.storage.sync.get([
         }
     }
 
-    if (!isCorrectOverlayFrame) {
-        console.log('found mainVideoCollection');
+    //set marker on potential overlays so the Live Thread Ticker browser extension knows not to apply
+    if (document.getElementsByTagName('body')[0]) {
+        let lttBlocker = document.createElement("span");
+        lttBlocker.id = 'YTOC-LTT-Blocker';
+        document.getElementsByTagName('body')[0].appendChild(lttBlocker);
     }
 
-    //TODO: add second (maybe call it B) isOverlayVideoZoomMode that can zoom the video tag (user could use both)
+    //TODO: separate isOverlayVideoZoomMode into two settings, one that can zoom the video tag and the other that zooms on iframe (user could use both)
     if (isOverlayVideoZoomMode && window.location.hostname == overlayHostName && overlayHostName != 'www.youtube.com') {
         //make sure we are in iframe to make sure we don't zoom in on primary video if that is also in an iframe
         if (inIFrame()) {
             setTimeout(() => {
-                if (document.getElementsByTagName('iframe')[0]) {
-                    console.log('zooming in on iframe');
-                    zoomInOnElement(document.getElementsByTagName('iframe')[0]);
-                    console.log(document.getElementsByTagName('iframe')[0]);
+                let iFrame = document.getElementsByTagName('iframe')[0];
+
+                if (iFrame) {
+                    zoomInOnElement(iFrame);
+
+                    if (shouldHideYTBackground) {
+                        iFrame.style.background = 'transparent';
+
+                        let parent = iFrame.parentElement;
+                        while (parent) {
+                            parent.style.background = 'transparent';
+                            parent = parent.parentElement;
+                        }
+                    }
                 }
             }, 1000);
         }
     }
 
     if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
+        let initialCommercialStateTimeout;
         if (overlayHostName == 'web.stremio.com') {
-            //delay initial setup if web stremio as it takes longer for video to appear on page
-            setTimeout(() => {
-                initialCommercialState();
-            }, 7000); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
+            //delay initial setup longer if web stremio as it takes longer for video to appear on page
+            initialCommercialStateTimeout = 7000;
         } else {
-            initialCommercialState();
+            //typical delay waiting for things to load, etc.
+            initialCommercialStateTimeout = 1000;
         }
+
+        setTimeout(() => {
+            initialCommercialState();
+        }, initialCommercialStateTimeout); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
     } else {
         isCorrectOverlayFrame = false;
     }
@@ -116,13 +133,6 @@ function initialCommercialState() {
 
     } //else do nothing because yttv plays automatically
 
-    //set marker on overlay video so the Live Thread Ticker browser extension knows not to apply
-    if (document.getElementsByTagName('body')[0]) {
-        let lttBlocker = document.createElement("span");
-        lttBlocker.id = 'YTOC-LTT-Blocker';
-        document.getElementsByTagName('body')[0].appendChild(lttBlocker);
-    }
-
     //hide scrollbar in case it shows for some non YT site because it might if the iframe is too small
     if (overlayHostName != 'www.youtube.com') {
 
@@ -159,14 +169,15 @@ function initialCommercialState() {
         }
 
         if (isOverlayVideoZoomMode) {
-            //make sure we are in iframe to make sure we don't zoom in on primary video
+            //make sure we are in iframe to make sure we don't zoom in on primary video //TODO: may not actually be needed here because we already confirmed this is not where the primary video is
             if (inIFrame()) {
                 let overlayVideoCollection = document.getElementsByTagName('video');
                 for (let i = 0; i < overlayVideoCollection.length; i++) {
-                    console.log('zooming in on video');
                     zoomInOnElement(overlayVideoCollection[i]);
-                    console.log(overlayVideoCollection[i]);
                     //make sure user can still controll video while zoomed in
+                    //clear controls first
+                    overlayVideoCollection[i].removeAttribute('controls');
+                    //then set controls viewable on hover
                     overlayVideoCollection[i].addEventListener('mouseenter', function () {
                         toggleVideoControls(this);
                     });
@@ -207,7 +218,7 @@ function initialCommercialState() {
         //TODO: add button on top of overlay video  if in live mode that asks if user would like video to play PiP while main video is not commercial, disapear if not clicked after x time
 
         //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
-        if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
+        if (myYTOCVideo && myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
 
             let elm = document.createElement("div");
             elm.textContent = "Detected that video cannot auto start due to reasons. Please manually play video, pause video, and then play video again. Doing so will allow the extension to work properly from here on out. Sorry for the inconvenience! This message will soon disapear.";
