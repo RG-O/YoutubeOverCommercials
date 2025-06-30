@@ -47,15 +47,50 @@ chrome.storage.sync.get([
         }
     }
 
-    //TODO: add second (maybe call it B) isOverlayVideoZoomMode that can zoom the video tag (user could use both)
+    //set marker on potential overlays so the Live Thread Ticker browser extension knows not to apply
+    if (document.getElementsByTagName('body')[0]) {
+        let lttBlocker = document.createElement("span");
+        lttBlocker.id = 'YTOC-LTT-Blocker';
+        document.getElementsByTagName('body')[0].appendChild(lttBlocker);
+    }
+
+    //TODO: separate isOverlayVideoZoomMode into two settings, one that can zoom the video tag and the other that zooms on iframe (user could use both)
     if (isOverlayVideoZoomMode && window.location.hostname == overlayHostName && overlayHostName != 'www.youtube.com') {
-        setTimeout(() => {
-            zoomInOnIFrame();
-        }, 1000);
+        //make sure we are in iframe to make sure we don't zoom in on primary video if that is also in an iframe
+        if (inIFrame()) {
+            setTimeout(() => {
+                let iFrame = document.getElementsByTagName('iframe')[0];
+
+                if (iFrame) {
+                    zoomInOnElement(iFrame);
+
+                    if (shouldHideYTBackground) {
+                        iFrame.style.background = 'transparent';
+
+                        let parent = iFrame.parentElement;
+                        while (parent) {
+                            parent.style.background = 'transparent';
+                            parent = parent.parentElement;
+                        }
+                    }
+                }
+            }, 1000);
+        }
     }
 
     if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
-        initialCommercialState();
+        let initialCommercialStateTimeout;
+        if (overlayHostName == 'web.stremio.com') {
+            //delay initial setup longer if web stremio as it takes longer for video to appear on page
+            initialCommercialStateTimeout = 7000;
+        } else {
+            //typical delay waiting for things to load, etc.
+            initialCommercialStateTimeout = 1000;
+        }
+
+        setTimeout(() => {
+            initialCommercialState();
+        }, initialCommercialStateTimeout); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
     } else {
         isCorrectOverlayFrame = false;
     }
@@ -82,48 +117,21 @@ function initialCommercialState() {
     if (overlayHostName == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
         document.getElementsByClassName('video-stream html5-main-video')[0].click();
     } else if (overlayHostName != 'tv.youtube.com') {
-        document.getElementsByTagName('video')[0].play();
+
+        if (isOtherSiteTroubleshootMode) {
+
+            let overlayVideoCollection = document.getElementsByTagName('video');
+            for (let i = 0; i < overlayVideoCollection.length; i++) {
+                overlayVideoCollection[i].play();
+            }
+
+        } else if (document.getElementsByTagName('video')[0]) {
+
+            document.getElementsByTagName('video')[0].play();
+
+        }
+
     } //else do nothing because yttv plays automatically
-
-    //set marker on overlay video so the Live Thread Ticker browser extension knows not to apply
-    if (document.getElementsByTagName('body')[0]) {
-        let lttBlocker = document.createElement("span");
-        lttBlocker.id = 'YTOC-LTT-Blocker';
-        document.getElementsByTagName('body')[0].appendChild(lttBlocker);
-    }
-
-    if (shouldHideYTBackground) {
-
-        setTimeout(() => {
-
-            if (document.getElementsByTagName('html')[0]) {
-                document.getElementsByTagName('html')[0].style.backgroundColor = "transparent";
-            }
-            if (document.getElementsByTagName('body')[0]) {
-                document.getElementsByTagName('body')[0].style.backgroundColor = "transparent";
-            }
-            //special for yt
-            if (document.getElementsByClassName('html5-video-player')[0]) {
-                document.getElementsByClassName('html5-video-player')[0].style.backgroundColor = "transparent";
-            }
-            //special for yttv
-            if (overlayHostName == 'tv.youtube.com') {
-                if (document.getElementsByTagName('ytu-player-controller')[0]) {
-                    document.getElementsByTagName('ytu-player-controller')[0].style.backgroundColor = "transparent";
-                }
-                let hideYTTVBlackBackgroundStyle = document.createElement("style");
-                hideYTTVBlackBackgroundStyle.textContent = `
-                    ytu-player-layout.ytu-player-controller {
-                        --ypl-player-video-backdrop-color: transparent !important;
-                    }
-                `;
-                let insertLocation = document.getElementsByTagName('body')[0];
-                insertLocation.appendChild(hideYTTVBlackBackgroundStyle);
-            }
-
-        }, 1000); //wait a little because when a video plays initially it disapears for a sec and it looks janky for it to look like it flickers
-
-    }
 
     //hide scrollbar in case it shows for some non YT site because it might if the iframe is too small
     if (overlayHostName != 'www.youtube.com') {
@@ -148,6 +156,36 @@ function initialCommercialState() {
             myYTOCVideo = document.getElementsByClassName('video-stream html5-main-video')[0];
         } else {
             myYTOCVideo = document.getElementsByTagName('video')[0];
+        }
+
+        if (myYTOCVideo && shouldHideYTBackground) {
+            myYTOCVideo.style.background = 'transparent';
+
+            let parent = myYTOCVideo.parentElement;
+            while (parent) {
+                parent.style.background = 'transparent';
+                parent = parent.parentElement;
+            }
+        }
+
+        if (isOverlayVideoZoomMode) {
+            //make sure we are in iframe to make sure we don't zoom in on primary video //TODO: may not actually be needed here because we already confirmed this is not where the primary video is
+            if (inIFrame()) {
+                let overlayVideoCollection = document.getElementsByTagName('video');
+                for (let i = 0; i < overlayVideoCollection.length; i++) {
+                    zoomInOnElement(overlayVideoCollection[i]);
+                    //make sure user can still controll video while zoomed in
+                    //clear controls first
+                    overlayVideoCollection[i].removeAttribute('controls');
+                    //then set controls viewable on hover
+                    overlayVideoCollection[i].addEventListener('mouseenter', function () {
+                        toggleVideoControls(this);
+                    });
+                    overlayVideoCollection[i].addEventListener('mouseleave', function () {
+                        toggleVideoControls(this);
+                    });
+                }
+            }
         }
 
         //unmute if started out muted for yt
@@ -175,13 +213,12 @@ function initialCommercialState() {
                 }
             }
             
-
         }
 
         //TODO: add button on top of overlay video  if in live mode that asks if user would like video to play PiP while main video is not commercial, disapear if not clicked after x time
 
         //checking if video is paused even though it is just about about ready to play, indicating something is preventing it from doing so
-        if (myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
+        if (myYTOCVideo && myYTOCVideo.paused && myYTOCVideo.readyState > 2) {
 
             let elm = document.createElement("div");
             elm.textContent = "Detected that video cannot auto start due to reasons. Please manually play video, pause video, and then play video again. Doing so will allow the extension to work properly from here on out. Sorry for the inconvenience! This message will soon disapear.";
@@ -237,12 +274,12 @@ function initialCommercialState() {
                     } else if (myYTOCVideo.mozCaptureStream) {
                         stream = myYTOCVideo.mozCaptureStream();
                     } else {
-                        alert(`Message from YTOC Extension: Videos from ${overlayHostName} not eligible for overlay while in Audio Detection mode. Please try to use a different video source, a different Overlay Type, or a different Mode of Detection.`);
+                        alert(`Message from Live Commercial Blocker Extension: Videos from ${overlayHostName} not eligible for overlay while in Audio Detection mode. Please try to use a different video source, a different Overlay Type, or a different Mode of Detection.`);
                         return;
                     }
                 } catch (error) {
-                    console.error("YTOC: An error occurred while trying to captureStream:", error.message);
-                    alert(`Message from YTOC Extension: Videos from ${overlayHostName} not eligible for overlay while in Audio Detection mode. Please try to use a different video source, a different Overlay Type, or a different Mode of Detection.`);
+                    console.error("Live Commercial Blocker: An error occurred while trying to captureStream:", error.message);
+                    alert(`Message from Live Commercial Blocker Extension: Videos from ${overlayHostName} not eligible for overlay while in Audio Detection mode. Please try to use a different video source, a different Overlay Type, or a different Mode of Detection.`);
                     return;
                 }
 
@@ -253,7 +290,7 @@ function initialCommercialState() {
                 //displaying message to user if there is an issue funnelling audio to other tab.
                 function startConnectionTimeout() {
                     connectionTimeout = setTimeout(() => {
-                        alert(`Message from YTOC Extension: Due to technical limitations, audio from overlay ${overlayHostName} videos cannot be played over this website while in Audio Level Low Commercial Detection Mode. Please try a different Overlay Type or Commercial Detection Mode.`);
+                        alert(`Message from Live Commercial Blocker Extension: Due to technical limitations, audio from overlay ${overlayHostName} videos cannot be played over this website while in Audio Level Low Commercial Detection Mode. Please try a different Overlay Type or Commercial Detection Mode.`);
                     }, 4000);
                 }
 
@@ -367,13 +404,32 @@ function startCommercialState() {
 
             } else if (overlayHostName != 'tv.youtube.com') {
 
-                document.getElementsByTagName('video')[0].muted = false;
+                if (isOtherSiteTroubleshootMode) {
 
+                    let overlayVideoCollection = document.getElementsByTagName('video');
+                    for (let i = 0; i < overlayVideoCollection.length; i++) {
+                        overlayVideoCollection[i].muted = false;
+                    }
+
+                } else if (document.getElementsByTagName('video')[0]) {
+
+                    document.getElementsByTagName('video')[0].muted = false;
+
+                }
             }
 
         } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Play (k)"]')) {
 
             document.querySelector('[aria-label="Play (k)"]').click();
+
+        } else if (isOtherSiteTroubleshootMode) {
+
+            let overlayVideoCollection = document.getElementsByTagName('video');
+            for (let i = 0; i < overlayVideoCollection.length; i++) {
+                if (overlayVideoCollection[i].paused) {
+                    overlayVideoCollection[i].play();
+                }
+            }
 
         } else if (document.getElementsByTagName('video')[0].paused) {
 
@@ -410,13 +466,33 @@ function stopCommercialState() {
 
             } else if (overlayHostName != 'tv.youtube.com') {
 
-                document.getElementsByTagName('video')[0].muted = true;
+                if (isOtherSiteTroubleshootMode) {
+
+                    let overlayVideoCollection = document.getElementsByTagName('video');
+                    for (let i = 0; i < overlayVideoCollection.length; i++) {
+                        overlayVideoCollection[i].muted = true;
+                    }
+
+                } else if (document.getElementsByTagName('video')[0]) {
+
+                    document.getElementsByTagName('video')[0].muted = true;
+
+                }
 
             }
 
         } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Pause (k)"]')) {
 
             document.querySelector('[aria-label="Pause (k)"]').click();
+
+        } else if (isOtherSiteTroubleshootMode) {
+
+            let overlayVideoCollection = document.getElementsByTagName('video');
+            for (let i = 0; i < overlayVideoCollection.length; i++) {
+                if (!overlayVideoCollection[i].paused) {
+                    overlayVideoCollection[i].pause();
+                }
+            }
 
         } else if (!document.getElementsByTagName('video')[0].paused) {
 
@@ -430,25 +506,18 @@ function stopCommercialState() {
 
 
 //sets iframe to take up the full frame
-function zoomInOnIFrame() {
-
-    if (document.getElementsByTagName('iframe')[0]) {
-
-        let videoIFrame = document.getElementsByTagName('iframe')[0];
-        videoIFrame.style.setProperty("visibility", "visible", "important");
-        videoIFrame.style.setProperty("position", "fixed", "important");
-        videoIFrame.style.setProperty("top", "0", "important");
-        videoIFrame.style.setProperty("left", "0", "important");
-        videoIFrame.style.setProperty("min-width", "0", "important");
-        videoIFrame.style.setProperty("min-height", "0", "important");
-        videoIFrame.style.setProperty("width", "100%", "important");
-        videoIFrame.style.setProperty("height", "100%", "important");
-        videoIFrame.style.setProperty("padding", "0", "important");
-        videoIFrame.style.setProperty("border-width", "0", "important");
-        videoIFrame.style.setProperty("z-index", "2147483647", "important");
-
-    }
-
+function zoomInOnElement(zoomElement) {
+    zoomElement.style.setProperty("visibility", "visible", "important");
+    zoomElement.style.setProperty("position", "fixed", "important");
+    zoomElement.style.setProperty("top", "0", "important");
+    zoomElement.style.setProperty("left", "0", "important");
+    zoomElement.style.setProperty("min-width", "0", "important");
+    zoomElement.style.setProperty("min-height", "0", "important");
+    zoomElement.style.setProperty("width", "100%", "important");
+    zoomElement.style.setProperty("height", "100%", "important");
+    zoomElement.style.setProperty("padding", "0", "important");
+    zoomElement.style.setProperty("border-width", "0", "important");
+    zoomElement.style.setProperty("z-index", "2147483647", "important");
 }
 
 
@@ -464,4 +533,22 @@ function getRandomVideoNumber() {
     const index = Math.floor(Math.random() * playlistVideosPlayedArray.length);
     //removes the video number from array when it returns it
     return playlistVideosPlayedArray.splice(index, 1)[0];
+}
+
+
+function inIFrame() {
+    try {
+        return window.self !== window.top;
+    } catch (e) {
+        return true;
+    }
+}
+
+
+function toggleVideoControls(video) {
+    if (video.hasAttribute('controls')) {
+        video.removeAttribute('controls');
+    } else {
+        video.setAttribute('controls', 'controls');
+    }
 }

@@ -1,6 +1,8 @@
 
 var isFirefox = true; //********************
 var profiles = {};
+var gridCells;
+var pipGridCells;
 
 //grab all user set values
 chrome.storage.sync.get([
@@ -61,8 +63,8 @@ chrome.storage.sync.get([
     optionsForm.commercialDetectionMode.value = commercialDetectionMode;
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 12;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 55;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 14;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 120;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
     optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
     optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
@@ -135,7 +137,79 @@ chrome.storage.sync.get([
     //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
     if (isFirefox) {
         document.getElementsByClassName('firefox-experimental')[0].style.display = 'inline';
+        //document.getElementsByTagName('body')[0].style.width = '400px';
+        document.getElementsByTagName('body')[0].style.paddingRight = '18px';
     }
+
+    gridCells = document.querySelectorAll('.grid-cell');
+
+    gridCells.forEach(cell => {
+        cell.addEventListener('click', () => {
+            const x = cell.getAttribute('data-x');
+            const y = cell.getAttribute('data-y');
+
+            optionsForm.overlayVideoLocationHorizontal.value = x;
+            optionsForm.overlayVideoLocationVertical.value = y;
+
+            clearOverlayDisplayPositionGrid();
+            cell.classList.add('selected');
+        });
+    });
+
+    pipGridCells = document.querySelectorAll('.pip-grid-cell');
+
+    pipGridCells.forEach(cell => {
+        cell.addEventListener('click', () => {
+            const x = cell.getAttribute('data-pip-x');
+            const y = cell.getAttribute('data-pip-y');
+
+            optionsForm.pipLocationHorizontal.value = x;
+            optionsForm.pipLocationVertical.value = y;
+
+            clearPiPDisplayPositionGrid();
+            cell.classList.add('selected');
+        });
+    });
+    
+    document.getElementById('pull-button-ytPlaylistID').addEventListener('click', async (event) => {
+        event.preventDefault();
+        let id = await getIDFromCurrentTab('list');
+        if (id) {
+            optionsForm.ytPlaylistID.value = id;
+        }
+    });
+
+    document.getElementById('pull-button-ytVideoID').addEventListener('click', async (event) => {
+        event.preventDefault();
+        let id = await getIDFromCurrentTab('v');
+        if (id) {
+            optionsForm.ytVideoID.value = id;
+        }
+    });
+
+    document.getElementById('pull-button-ytLiveID').addEventListener('click', async (event) => {
+        event.preventDefault();
+        let id = await getIDFromCurrentTab('v');
+        if (id) {
+            optionsForm.ytLiveID.value = id;
+        }
+    });
+
+    document.getElementById('pull-button-otherVideoURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        let id = await getIDFromCurrentTab(false);
+        if (id) {
+            optionsForm.otherVideoURL.value = id;
+        }
+    });
+
+    document.getElementById('pull-button-otherLiveURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        let id = await getIDFromCurrentTab(false);
+        if (id) {
+            optionsForm.otherLiveURL.value = id;
+        }
+    });
 
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
     runAllToggles();
@@ -249,9 +323,9 @@ document.getElementById("expand-button").onclick = function () {
     this.classList.toggle("button-hidden");
     var content = this.nextElementSibling;
     content.style.display = "block";
-    //reduce size of elements to account for firefox scroll bar showing over fields
-    document.getElementsByTagName('form')[0].style.width = '288px';
-    document.getElementsByTagName('h1')[0].style.fontSize = '35px';
+    ////reduce size of elements to account for firefox scroll bar showing over fields
+    //document.getElementsByTagName('form')[0].style.width = '288px';
+    //document.getElementsByTagName('h1')[0].style.fontSize = '35px';
 }
 
 
@@ -273,6 +347,72 @@ function setTextFieldsToSelectAll() {
             this.select();
         });
     });
+}
+
+
+async function getIDFromCurrentTab(param) {
+    let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    if (param) {
+        const url = new URL(tab.url);
+
+        if (url.hostname === 'www.youtube.com') {
+            let id = url.searchParams.get(param);
+
+            if (id) {
+                return id;
+            } else {
+                if (param === 'v') {
+                    //TODO: Do something special for firefox here
+                    alert('Sorry, YouTube video ID not found. Please navigate to the video you would like to use and try again. Or copy and paste the video ID into the field.');
+                    return false;
+                } else {
+                    //TODO: Do something special for firefox here
+                    alert('Sorry, YouTube playlist ID not found. Please navigate to the playlist you would like to use and try again. Or copy and paste the playlist ID into the field.');
+                    return false;
+                }
+            }
+            return url.searchParams.get(param) || 'ID not found';
+        } else {
+            //TODO: Do something special for firefox here
+            alert('Must currently be on www.youtube.com in order to pull ID.');
+            return false;
+        }
+    } else {
+        return tab.url;
+    }
+}
+
+
+function setOverlayDisplayPositionGrid() {
+    const x = optionsForm.overlayVideoLocationHorizontal.value;
+    const y = optionsForm.overlayVideoLocationVertical.value;
+    clearOverlayDisplayPositionGrid();
+    gridCells.forEach(cell => {
+        if (cell.getAttribute('data-x') === x && cell.getAttribute('data-y') === y) {
+            cell.classList.add('selected');
+        }
+    });
+}
+
+function clearOverlayDisplayPositionGrid() {
+    gridCells.forEach(cell => cell.classList.remove('selected'));
+}
+
+
+function setPiPDisplayPositionGrid() {
+    const x = optionsForm.pipLocationHorizontal.value;
+    const y = optionsForm.pipLocationVertical.value;
+    clearPiPDisplayPositionGrid();
+    pipGridCells.forEach(cell => {
+        if (cell.getAttribute('data-pip-x') === x && cell.getAttribute('data-pip-y') === y) {
+            cell.classList.add('selected');
+        }
+    });
+}
+
+function clearPiPDisplayPositionGrid() {
+    pipGridCells.forEach(cell => cell.classList.remove('selected'));
 }
 
 
@@ -382,7 +522,7 @@ function showConfirmDeleteProfilePrompt() {
 }
 
 
-//run all toggles to make sure all information/fields hide/show based on values in the fields
+//run all toggles to make sure all information/fields hide/show/set based on values in the fields
 function runAllToggles() {
     toggleModeInstructionsVisability();
     toggleIDFieldVisability();
@@ -392,6 +532,8 @@ function runAllToggles() {
     toggleWithIDProfileSaveButtonVisability();
     updateSaveProfileButtonsText();
     hideConfirmDeleteProfilePrompt();
+    setOverlayDisplayPositionGrid();
+    setPiPDisplayPositionGrid();
 }
 
 
@@ -399,7 +541,7 @@ function setKeyboardShortcutText() {
     if (isFirefox) {
         let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
         for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
-            keyboardShortcuts[i].innerText = "Ctrl + Alt + C";
+            keyboardShortcuts[i].innerHTML = `<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>`;
         }
     }
 }
@@ -482,9 +624,14 @@ function saveProfile(shouldSaveWithID) {
         };
 
         chrome.storage.sync.set({ profiles }, () => {
+            if (chrome.runtime.lastError) {
+                addValidationMessage(optionsForm.profileName, 'error', 'Sorry, profile not saved. Out of space. Please delete some profiles and try again.');
+                return;
+            }
+
             reloadProfileNames(profileName);
             updateSaveProfileButtonsText();
-            addValidationMessage(optionsForm.profileName, 'success', 'Profile saved. Click apply settings when ready.');
+            addValidationMessage(optionsForm.profileName, 'success', 'Profile saved. Click "Save & Apply" button when ready.');
         });
 
     }
@@ -499,42 +646,42 @@ function applyProfile() {
     if (selectedProfile) {
         if (profiles[selectedProfile]) {
 
-            if (profiles[selectedProfile].overlayVideoType) { optionsForm.overlayVideoType.value = profiles[selectedProfile].overlayVideoType; }
-            if (profiles[selectedProfile].ytPlaylistID) { optionsForm.ytPlaylistID.value = profiles[selectedProfile].ytPlaylistID; }
-            if (profiles[selectedProfile].ytVideoID) { optionsForm.ytVideoID.value = profiles[selectedProfile].ytVideoID; }
-            if (profiles[selectedProfile].ytLiveID) { optionsForm.ytLiveID.value = profiles[selectedProfile].ytLiveID; }
-            if (profiles[selectedProfile].otherVideoURL) { optionsForm.otherVideoURL.value = profiles[selectedProfile].otherVideoURL; }
-            if (profiles[selectedProfile].otherLiveURL) { optionsForm.otherLiveURL.value = profiles[selectedProfile].otherLiveURL; }
-            if (profiles[selectedProfile].overlayVideoLocationHorizontal) { optionsForm.overlayVideoLocationHorizontal.value = profiles[selectedProfile].overlayVideoLocationHorizontal; }
-            if (profiles[selectedProfile].overlayVideoLocationVertical) { optionsForm.overlayVideoLocationVertical.value = profiles[selectedProfile].overlayVideoLocationVertical; }
-            if (profiles[selectedProfile].mainVideoFade) { optionsForm.mainVideoFade.value = profiles[selectedProfile].mainVideoFade; }
-            if (profiles[selectedProfile].videoOverlayWidth) { optionsForm.videoOverlayWidth.value = profiles[selectedProfile].videoOverlayWidth; }
-            if (profiles[selectedProfile].videoOverlayHeight) { optionsForm.videoOverlayHeight.value = profiles[selectedProfile].videoOverlayHeight; }
-            if (profiles[selectedProfile].mainVideoVolumeDuringCommercials) { optionsForm.mainVideoVolumeDuringCommercials.value = profiles[selectedProfile].mainVideoVolumeDuringCommercials; }
-            if (profiles[selectedProfile].mainVideoVolumeDuringNonCommercials) { optionsForm.mainVideoVolumeDuringNonCommercials.value = profiles[selectedProfile].mainVideoVolumeDuringNonCommercials; }
-            if (profiles[selectedProfile].shouldHideYTBackground) { optionsForm.shouldHideYTBackground.checked = profiles[selectedProfile].shouldHideYTBackground; }
-            //note: don't need special commercialDetectionMode adjustment because nobody could have created a profile before the update
-            if (profiles[selectedProfile].commercialDetectionMode) { optionsForm.commercialDetectionMode.value = profiles[selectedProfile].commercialDetectionMode; }
-            if (profiles[selectedProfile].mismatchCountThreshold) { optionsForm.mismatchCountThreshold.value = profiles[selectedProfile].mismatchCountThreshold; }
-            if (profiles[selectedProfile].matchCountThreshold) { optionsForm.matchCountThreshold.value = profiles[selectedProfile].matchCountThreshold; }
-            if (profiles[selectedProfile].colorDifferenceMatchingThreshold) { optionsForm.colorDifferenceMatchingThreshold.value = profiles[selectedProfile].colorDifferenceMatchingThreshold; }
-            if (profiles[selectedProfile].manualOverrideCooldown) { optionsForm.manualOverrideCooldown.value = profiles[selectedProfile].manualOverrideCooldown; }
-            if (profiles[selectedProfile].isDebugMode) { optionsForm.isDebugMode.checked = profiles[selectedProfile].isDebugMode; }
-            if (profiles[selectedProfile].isPiPMode) { optionsForm.isPiPMode.checked = profiles[selectedProfile].isPiPMode; }
-            if (profiles[selectedProfile].pipLocationHorizontal) { optionsForm.pipLocationHorizontal.value = profiles[selectedProfile].pipLocationHorizontal; }
-            if (profiles[selectedProfile].pipLocationVertical) { optionsForm.pipLocationVertical.value = profiles[selectedProfile].pipLocationVertical; }
-            if (profiles[selectedProfile].pipHeight) { optionsForm.pipHeight.value = profiles[selectedProfile].pipHeight; }
-            if (profiles[selectedProfile].pipWidth) { optionsForm.pipWidth.value = profiles[selectedProfile].pipWidth; }
-            if (profiles[selectedProfile].shouldClickNextOnPlaySpotify) { optionsForm.shouldClickNextOnPlaySpotify.checked = profiles[selectedProfile].shouldClickNextOnPlaySpotify; }
-            if (profiles[selectedProfile].isOverlayVideoZoomMode) { optionsForm.isOverlayVideoZoomMode.checked = profiles[selectedProfile].isOverlayVideoZoomMode; }
-            if (profiles[selectedProfile].isOtherSiteTroubleshootMode) { optionsForm.isOtherSiteTroubleshootMode.checked = profiles[selectedProfile].isOtherSiteTroubleshootMode; }
-            if (profiles[selectedProfile].audioLevelThreshold) { optionsForm.audioLevelThreshold.value = profiles[selectedProfile].audioLevelThreshold; }
-            if (profiles[selectedProfile].shouldOverlayVideoSizeAndLocationAutoSet) { optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = profiles[selectedProfile].shouldOverlayVideoSizeAndLocationAutoSet; }
-            if (profiles[selectedProfile].shouldShuffleYTPlaylist) { optionsForm.shouldShuffleYTPlaylist.checked = profiles[selectedProfile].shouldShuffleYTPlaylist; }
+            if (typeof profiles[selectedProfile].overlayVideoType !== 'undefined') { optionsForm.overlayVideoType.value = profiles[selectedProfile].overlayVideoType; }
+            if (typeof profiles[selectedProfile].ytPlaylistID !== 'undefined') { optionsForm.ytPlaylistID.value = profiles[selectedProfile].ytPlaylistID; }
+            if (typeof profiles[selectedProfile].ytVideoID !== 'undefined') { optionsForm.ytVideoID.value = profiles[selectedProfile].ytVideoID; }
+            if (typeof profiles[selectedProfile].ytLiveID !== 'undefined') { optionsForm.ytLiveID.value = profiles[selectedProfile].ytLiveID; }
+            if (typeof profiles[selectedProfile].otherVideoURL !== 'undefined') { optionsForm.otherVideoURL.value = profiles[selectedProfile].otherVideoURL; }
+            if (typeof profiles[selectedProfile].otherLiveURL !== 'undefined') { optionsForm.otherLiveURL.value = profiles[selectedProfile].otherLiveURL; }
+            if (typeof profiles[selectedProfile].overlayVideoLocationHorizontal !== 'undefined') { optionsForm.overlayVideoLocationHorizontal.value = profiles[selectedProfile].overlayVideoLocationHorizontal; }
+            if (typeof profiles[selectedProfile].overlayVideoLocationVertical !== 'undefined') { optionsForm.overlayVideoLocationVertical.value = profiles[selectedProfile].overlayVideoLocationVertical; }
+            if (typeof profiles[selectedProfile].mainVideoFade !== 'undefined') { optionsForm.mainVideoFade.value = profiles[selectedProfile].mainVideoFade; }
+            if (typeof profiles[selectedProfile].videoOverlayWidth !== 'undefined') { optionsForm.videoOverlayWidth.value = profiles[selectedProfile].videoOverlayWidth; }
+            if (typeof profiles[selectedProfile].videoOverlayHeight !== 'undefined') { optionsForm.videoOverlayHeight.value = profiles[selectedProfile].videoOverlayHeight; }
+            if (typeof profiles[selectedProfile].mainVideoVolumeDuringCommercials !== 'undefined') { optionsForm.mainVideoVolumeDuringCommercials.value = profiles[selectedProfile].mainVideoVolumeDuringCommercials; }
+            if (typeof profiles[selectedProfile].mainVideoVolumeDuringNonCommercials !== 'undefined') { optionsForm.mainVideoVolumeDuringNonCommercials.value = profiles[selectedProfile].mainVideoVolumeDuringNonCommercials; }
+            if (typeof profiles[selectedProfile].shouldHideYTBackground !== 'undefined') { optionsForm.shouldHideYTBackground.checked = profiles[selectedProfile].shouldHideYTBackground; }
+            //note: don't need special commercialDetectionMode adjustment because nobody could have created a profile before the 2.0 update
+            if (typeof profiles[selectedProfile].commercialDetectionMode !== 'undefined') { optionsForm.commercialDetectionMode.value = profiles[selectedProfile].commercialDetectionMode; }
+            if (typeof profiles[selectedProfile].mismatchCountThreshold !== 'undefined') { optionsForm.mismatchCountThreshold.value = profiles[selectedProfile].mismatchCountThreshold; }
+            if (typeof profiles[selectedProfile].matchCountThreshold !== 'undefined') { optionsForm.matchCountThreshold.value = profiles[selectedProfile].matchCountThreshold; }
+            if (typeof profiles[selectedProfile].colorDifferenceMatchingThreshold !== 'undefined') { optionsForm.colorDifferenceMatchingThreshold.value = profiles[selectedProfile].colorDifferenceMatchingThreshold; }
+            if (typeof profiles[selectedProfile].manualOverrideCooldown !== 'undefined') { optionsForm.manualOverrideCooldown.value = profiles[selectedProfile].manualOverrideCooldown; }
+            if (typeof profiles[selectedProfile].isDebugMode !== 'undefined') { optionsForm.isDebugMode.checked = profiles[selectedProfile].isDebugMode; }
+            if (typeof profiles[selectedProfile].isPiPMode !== 'undefined') { optionsForm.isPiPMode.checked = profiles[selectedProfile].isPiPMode; }
+            if (typeof profiles[selectedProfile].pipLocationHorizontal !== 'undefined') { optionsForm.pipLocationHorizontal.value = profiles[selectedProfile].pipLocationHorizontal; }
+            if (typeof profiles[selectedProfile].pipLocationVertical !== 'undefined') { optionsForm.pipLocationVertical.value = profiles[selectedProfile].pipLocationVertical; }
+            if (typeof profiles[selectedProfile].pipHeight !== 'undefined') { optionsForm.pipHeight.value = profiles[selectedProfile].pipHeight; }
+            if (typeof profiles[selectedProfile].pipWidth !== 'undefined') { optionsForm.pipWidth.value = profiles[selectedProfile].pipWidth; }
+            if (typeof profiles[selectedProfile].shouldClickNextOnPlaySpotify !== 'undefined') { optionsForm.shouldClickNextOnPlaySpotify.checked = profiles[selectedProfile].shouldClickNextOnPlaySpotify; }
+            if (typeof profiles[selectedProfile].isOverlayVideoZoomMode !== 'undefined') { optionsForm.isOverlayVideoZoomMode.checked = profiles[selectedProfile].isOverlayVideoZoomMode; }
+            if (typeof profiles[selectedProfile].isOtherSiteTroubleshootMode !== 'undefined') { optionsForm.isOtherSiteTroubleshootMode.checked = profiles[selectedProfile].isOtherSiteTroubleshootMode; }
+            if (typeof profiles[selectedProfile].audioLevelThreshold !== 'undefined') { optionsForm.audioLevelThreshold.value = profiles[selectedProfile].audioLevelThreshold; }
+            if (typeof profiles[selectedProfile].shouldOverlayVideoSizeAndLocationAutoSet !== 'undefined') { optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = profiles[selectedProfile].shouldOverlayVideoSizeAndLocationAutoSet; }
+            if (typeof profiles[selectedProfile].shouldShuffleYTPlaylist !== 'undefined') { optionsForm.shouldShuffleYTPlaylist.checked = profiles[selectedProfile].shouldShuffleYTPlaylist; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();
-            addValidationMessage(optionsForm.profileName, 'success', 'Profile loaded. Click apply settings when ready.');
+            addValidationMessage(optionsForm.profileName, 'success', 'Profile loaded. Click "Save & Apply" button when ready.');
 
         }
     }

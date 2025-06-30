@@ -15,6 +15,7 @@ if (purpose === 'opposite-mode-instructions') {
 } else if (purpose === 'overlay-video-container') {
 
     document.getElementById('all-content').style.display = 'none';
+    document.getElementsByTagName('body')[0].style.backgroundColor = "black";
     document.getElementsByTagName('html')[0].style.cursor = 'default';
 
     video = document.createElement("video");

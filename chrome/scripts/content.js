@@ -21,6 +21,7 @@ var logoBoxText;
 var countdownOngoing = false;
 var pipBlocker;
 var pipBlockerText;
+var hasFontBeenInjected = false;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -29,6 +30,7 @@ var ytLiveID;
 var otherVideoURL;
 var otherLiveURL;
 var overlayHostName;
+var isOtherSiteTroubleshootMode;
 var mainVideoFade;
 var videoOverlayWidth;
 var videoOverlayHeight;
@@ -109,7 +111,6 @@ function setOverlayVideo() {
             url = url.concat(ytLiveID);
         }
     } else if (overlayVideoType == 'other-video') {
-        //using chrome.i18n.getMessage("@@extension_id")
         if (isFirefox) {
             if (overlayHostName === chrome.i18n.getMessage("@@extension_id")) {
                 url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
@@ -117,7 +118,7 @@ function setOverlayVideo() {
                 url = otherVideoURL;
             }
         } else {
-            if (overlayHostName === chrome.runtime.id || overlayHostName) {
+            if (overlayHostName === chrome.runtime.id) {
                 url = chrome.runtime.getURL('pixel-select-instructions.html') + '?purpose=overlay-video-container&video-url=' + otherVideoURL;
             } else {
                 url = otherVideoURL;
@@ -262,10 +263,17 @@ function initialRun() {
             window.addEventListener('beforeunload', closeOverlayVideoAudioTab);
         }
 
+        let overlayInjectionTimeout;
+        if (isOtherSiteTroubleshootMode) {
+            //wait longer to inject overlay.js for potentially iframes loading inside iframes
+            overlayInjectionTimeout = 5000;
+        } else {
+            overlayInjectionTimeout = 1000;
+        }
         //wait a little bit for the video to load //TODO: get indicator of when completely loaded
         setTimeout(() => {
             chrome.runtime.sendMessage({ action: "initial_execute_overlay_video_interaction" });
-        }, 2000);
+        }, overlayInjectionTimeout);
 
     }
 
@@ -458,6 +466,10 @@ chrome.runtime.onMessage.addListener(function (message) {
         //special actions for the very first time this is initiated on a page
         if (isFirstRun && !isAutoModeInitiated) {
 
+            if (!hasFontBeenInjected) {
+                injectFontOntoPage();
+            }
+
             //get overlayHostName
             //note: getting all other user set values later
             chrome.storage.sync.get(['overlayHostName'], (result) => {
@@ -478,6 +490,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'ytLiveID',
                             'otherVideoURL',
                             'otherLiveURL',
+                            'isOtherSiteTroubleshootMode',
                             'mainVideoFade',
                             'videoOverlayWidth',
                             'videoOverlayHeight',
@@ -518,6 +531,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             ytLiveID = result.ytLiveID ?? 'QhJcIlE0NAQ';
                             otherVideoURL = result.otherVideoURL ?? 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
                             otherLiveURL = result.otherLiveURL ?? 'https://tv.youtube.com/watch/_2ONrjDR7S8';
+                            isOtherSiteTroubleshootMode = result.isOtherSiteTroubleshootMode ?? false;
                             mainVideoFade = result.mainVideoFade ?? 65;
                             mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
                             mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
@@ -551,8 +565,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                             }
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
-                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
-                            manualOverrideCooldown = result.manualOverrideCooldown ?? 55;
+                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 14;
+                            manualOverrideCooldown = result.manualOverrideCooldown ?? 120;
                             isDebugMode = result.isDebugMode ?? false;
                             isPiPMode = result.isPiPMode ?? true;
                             pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
@@ -614,7 +628,8 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                     } //else do nothing for when nodeName is IFRAME
 
-                } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point
+                } else if (overlayHostName == 'www.youtube.com') { //TODO: find a better way to not show this warning on overlay video when using non-yt videos and maybe not even let it get to this point. 
+                    //TODO: Also displays some sort of alert / warning when user tries to use over top of actual www.youtube.com
                     //since user was not in full screen, instruct them that they need to be
 
                     setNotFullscreenAlerts();
@@ -669,7 +684,7 @@ function setNotFullscreenAlerts() {
 
     if (!fullScreenAlertSet) {
 
-        addMessageAlertToMainVideo('Video must be full screen for YTOC extension to work.');
+        addMessageAlertToMainVideo('Video must be full screen for Live Commercial Blocker extension to work.');
         fullScreenAlertSet = true;
 
     }
@@ -748,12 +763,15 @@ function setBlockersAndPixelSelectionInstructions() {
 
         pipBlocker = document.createElement('div');
         pipBlocker.className = "ytoc-overlay-instructions";
-        pipBlocker.style.backgroundColor = "black";
+        pipBlocker.style.backgroundColor = "rgb(240, 238, 236)";
         
         insertLocationFullscreenElm.insertBefore(pipBlocker, null);
         pipBlockerText = document.createElement('div');
-        pipBlockerText.style.color = "white";
+        pipBlockerText.style.color = "black";
         pipBlockerText.style.fontSize = "16px";
+        pipBlockerText.style.fontFamily = '"Montserrat", sans-serif';
+        pipBlockerText.style.textShadow = "none";
+        pipBlockerText.style.padding = "5px";
         if (pipLocationVertical == 'bottom') {
             pipBlockerText.style.position = "absolute";
             pipBlockerText.style.bottom = "0";
@@ -1019,7 +1037,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isAudioOnlyOverlay) {
                             if (isDebugMode) {
-                                logoBoxText = 'YTOC';
+                                logoBoxText = 'LIVE COMMERCIAL BLOCKER';
                                 logoBox.textContent = logoBoxText;
                             } else {
                                 logoBox.style.display = 'none';
@@ -1180,7 +1198,7 @@ function setAudioLevelIndicator() {
 
     logoBox = document.createElement('div');
     logoBox.className = "ytoc-audio-level-indicator-countdown";
-    logoBoxText = 'YTOC Initiated';
+    logoBoxText = 'Live Commercial Blocker Initiated';
     logoBox.textContent = logoBoxText;
     if (audioLevelIndicatorContainerLocationHorizontal === 'right') {
         audioLevelIndicatorContainer.insertBefore(logoBox, audioLevelIndicator);
@@ -1279,7 +1297,7 @@ function audioThresholdMonitor() {
 
                         if (isAudioOnlyOverlay) {
                             if (isDebugMode) {
-                                logoBoxText = 'YTOC';
+                                logoBoxText = 'LIVE COMMERCIAL BLOCKER';
                                 logoBox.textContent = logoBoxText;
                             } else {
                                 audioLevelIndicatorContainer.style.display = 'none';
@@ -1383,9 +1401,9 @@ function setCommercialDetectedIndicator(selectedPixel) {
 function initialLogoBoxTextUpdate() {
 
     if (!isAudioOnlyOverlay || isDebugMode) {
-        logoBoxText = 'YTOC';
+        logoBoxText = 'LIVE COMMERCIAL BLOCKER';
     } else if (overlayVideoType == 'spotify') {
-        logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to YTOC
+        logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to Live Commercial Blocker
     } else if (overlayVideoType == 'other-tabs') {
         logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
     }
@@ -1411,7 +1429,8 @@ function spotifyLogoBoxUpdate(text) {
         } else {
             audioLevelIndicatorContainer.style.display = 'flex';
         }
-        
+
+        //TODO: either add user preference to always show song title during commercial even when not in debug mode or just do it and have this timeout set logo to black or white
         if (!isDebugMode && commercialDetectionMode !== 'auto-audio') {
             setTimeout(() => {
                 logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
@@ -1490,9 +1509,9 @@ function startListeningToTab() {
             }
 
         } catch (error) {
-            console.error("YTOC: An error occurred while trying to captureStream:", error.message);
+            console.error("Live Commercial Blocker: An error occurred while trying to captureStream:", error.message);
             clearInterval(monitorIntervalID);
-            alert(`Message from YTOC Extension: Videos from ${window.location.hostname} not compatible with Audio Detection mode on Firefox. Please try a different Mode of Detection.`);
+            alert(`Message from Live Commercial Blocker Extension: Videos from ${window.location.hostname} not compatible with Audio Detection mode on Firefox. Please try a different Mode of Detection.`);
             return;
         }
 
@@ -1595,11 +1614,24 @@ function fullscreenChanged() {
 
 
 function pauseAutoMode() {
-
     clearInterval(monitorIntervalID);
     stopViewingTab();
-    addMessageAlertToMainVideo('YTOC extension paused until back to fullscreen. Set video to fullscreen or refresh tab to remove message.');
 
+    let pauseMessage = 'Live Commercial Blocker extension paused. Set video back to fullscreen to resume.';
+    if (overlayVideoType === 'spotify') {
+        pauseMessage += ' Or refresh page to exit extension and remove message.';
+    } else {
+        pauseMessage += ' This message will disappear shortly.';
+    }
+    addMessageAlertToMainVideo(pauseMessage);
+
+    //TODO: add removal timeout directly to addMessageAlertToMainVideo to make all messages disappear?
+    //TODO: get this working for the spotify mode without accidentally removing the success message after user chooses spotify playlist
+    if (overlayVideoType !== 'spotify') {
+        setTimeout(() => {
+            removeElementsByClass('ytoc-main-video-message-alert');
+        }, 9000);
+    }
 }
 
 
@@ -1837,4 +1869,14 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel) {
         videoOverlayHeight = (((selectedPixel.y - aboveSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
     }
 
+}
+
+
+function injectFontOntoPage() {
+    let fontInjectionStyle = document.createElement("style");
+    fontInjectionStyle.textContent = `@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,700;1,700&display=swap');`;
+    let insertLocation = document.getElementsByTagName('body')[0];
+    insertLocation.appendChild(fontInjectionStyle);
+
+    hasFontBeenInjected = true;
 }
