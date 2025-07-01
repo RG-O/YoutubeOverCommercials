@@ -65,11 +65,11 @@ chrome.storage.sync.get([
                     zoomInOnElement(iFrame);
 
                     if (shouldHideYTBackground) {
-                        iFrame.style.background = 'transparent';
+                        iFrame.style.setProperty("background", "transparent", "important");
 
                         let parent = iFrame.parentElement;
                         while (parent) {
-                            parent.style.background = 'transparent';
+                            parent.style.setProperty("background", "transparent", "important");
                             parent = parent.parentElement;
                         }
                     }
@@ -152,11 +152,11 @@ function initialCommercialState() {
         }
 
         if (myYTOCVideo && shouldHideYTBackground) {
-            myYTOCVideo.style.background = 'transparent';
+            myYTOCVideo.style.setProperty("background", "transparent", "important");
 
             let parent = myYTOCVideo.parentElement;
             while (parent) {
-                parent.style.background = 'transparent';
+                parent.style.setProperty("background", "transparent", "important");
                 parent = parent.parentElement;
             }
         }
