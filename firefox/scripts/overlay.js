@@ -65,11 +65,11 @@ chrome.storage.sync.get([
                     zoomInOnElement(iFrame);
 
                     if (shouldHideYTBackground) {
-                        iFrame.style.background = 'transparent';
+                        iFrame.style.setProperty("background", "transparent", "important");
 
                         let parent = iFrame.parentElement;
                         while (parent) {
-                            parent.style.background = 'transparent';
+                            parent.style.setProperty("background", "transparent", "important");
                             parent = parent.parentElement;
                         }
                     }
@@ -79,18 +79,11 @@ chrome.storage.sync.get([
     }
 
     if (window.location.hostname == overlayHostName || (isOtherSiteTroubleshootMode && overlayHostName != 'www.youtube.com')) {
-        let initialCommercialStateTimeout;
-        if (overlayHostName == 'web.stremio.com') {
-            //delay initial setup longer if web stremio as it takes longer for video to appear on page
-            initialCommercialStateTimeout = 7000;
-        } else {
-            //typical delay waiting for things to load, etc.
-            initialCommercialStateTimeout = 1000;
-        }
-
-        setTimeout(() => {
-            initialCommercialState();
-        }, initialCommercialStateTimeout); //note: don't want to wait longer than initial cooldown in content.js to avoid potential issues
+        waitForElement('video').then(() => {
+            setTimeout(() => {
+                initialCommercialState();
+            }, 500);
+        });
     } else {
         isCorrectOverlayFrame = false;
     }
@@ -159,11 +152,11 @@ function initialCommercialState() {
         }
 
         if (myYTOCVideo && shouldHideYTBackground) {
-            myYTOCVideo.style.background = 'transparent';
+            myYTOCVideo.style.setProperty("background", "transparent", "important");
 
             let parent = myYTOCVideo.parentElement;
             while (parent) {
-                parent.style.background = 'transparent';
+                parent.style.setProperty("background", "transparent", "important");
                 parent = parent.parentElement;
             }
         }
@@ -551,4 +544,25 @@ function toggleVideoControls(video) {
     } else {
         video.setAttribute('controls', 'controls');
     }
+}
+
+
+function waitForElement(target) {
+    return new Promise(resolve => {
+        if (document.querySelector(target)) {
+            return resolve(document.querySelector(target));
+        }
+
+        const observer = new MutationObserver(mutations => {
+            if (document.querySelector(target)) {
+                observer.disconnect();
+                resolve(document.querySelector(target));
+            }
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    });
 }

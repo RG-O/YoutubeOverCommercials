@@ -993,6 +993,9 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         startCommercialMode();
 
+                        if (overlayVideoType == 'spotify') {
+                            logoBoxText = 'PLAYING SPOTIFY'
+                        }
                         logoBox.textContent = logoBoxText;
                         if (commercialDetectionMode === 'auto-pixel-normal') {
                             logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
@@ -1403,9 +1406,9 @@ function initialLogoBoxTextUpdate() {
     if (!isAudioOnlyOverlay || isDebugMode) {
         logoBoxText = 'LIVE COMMERCIAL BLOCKER';
     } else if (overlayVideoType == 'spotify') {
-        logoBoxText = 'Playing Spotify'; //TODO: Maybe also set this to Live Commercial Blocker
+        logoBoxText = 'PLAYING SPOTIFY';
     } else if (overlayVideoType == 'other-tabs') {
-        logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
+        logoBoxText = "PLAYING OTHER TAB AUDIO"; //speaker with three sound waves symbol
     }
     logoBox.textContent = logoBoxText;
 
@@ -1430,13 +1433,13 @@ function spotifyLogoBoxUpdate(text) {
             audioLevelIndicatorContainer.style.display = 'flex';
         }
 
-        //TODO: either add user preference to always show song title during commercial even when not in debug mode or just do it and have this timeout set logo to black or white
-        if (!isDebugMode && commercialDetectionMode !== 'auto-audio') {
-            setTimeout(() => {
-                logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
-                logoBox.textContent = logoBoxText;
-            }, 10000);
-        }
+        //TODO: add user preference for this?
+        //if (!isDebugMode && commercialDetectionMode !== 'auto-audio') {
+        //    setTimeout(() => {
+        //        logoBoxText = "\uD83D\uDD0A"; //speaker with three sound waves symbol
+        //        logoBox.textContent = logoBoxText;
+        //    }, 10000);
+        //}
 
     }
 
