@@ -233,7 +233,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "chrome-view-tab-video") {
 
-        chromeViewTab(message, sender);
+        let aiMode = false;
+        chromeViewTab(message, sender, aiMode);
+
+    } else if (message.action === "chrome-view-tab-video-ai-openai") {
+
+        let aiMode = 'openai';
+        chromeViewTab(message, sender, aiMode);
 
     } else if (message.action === "chrome-view-tab-audio") {
 
@@ -243,7 +249,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
-async function chromeViewTab(message, sender) {
+async function chromeViewTab(message, sender, aiMode) {
 
     await chrome.offscreen.createDocument({
         url: 'offscreen.html',
@@ -270,11 +276,23 @@ async function chromeViewTab(message, sender) {
         }
     }
 
-    chrome.runtime.sendMessage({
-        target: 'offscreen',
-        action: 'start-viewing',
-        constraints: constraints
-    });
+    if (!aiMode) {
+        chrome.runtime.sendMessage({
+            target: 'offscreen',
+            action: 'start-viewing',
+            constraints: constraints
+        });
+    } else if (aiMode === 'openai') {
+        chrome.storage.sync.get(['openAIAPIKey'], (result) => {
+            let openAIAPIKey = result.openAIAPIKey ?? false;
+            chrome.runtime.sendMessage({
+                target: 'offscreen',
+                action: 'start-viewing-ai-openai',
+                api: openAIAPIKey,
+                constraints: constraints
+            });
+        });
+    }
 
 }
 

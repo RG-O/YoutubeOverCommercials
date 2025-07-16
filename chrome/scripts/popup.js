@@ -37,6 +37,7 @@ chrome.storage.sync.get([
     'audioLevelThreshold',
     'shouldOverlayVideoSizeAndLocationAutoSet',
     'shouldShuffleYTPlaylist',
+    'openAIAPIKey',
     'profiles'
 ], (result) => {
 
@@ -77,6 +78,7 @@ chrome.storage.sync.get([
     optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
+    optionsForm.openAIAPIKey.value = result.openAIAPIKey ?? false;
     profiles = result.profiles || {};
     for (const name in profiles) {
         const option = document.createElement("option");
@@ -296,7 +298,8 @@ document.getElementById("save-button").onclick = function () {
             isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
             audioLevelThreshold: optionsForm.audioLevelThreshold.value,
             shouldOverlayVideoSizeAndLocationAutoSet: optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked,
-            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked
+            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
+            openAIAPIKey: optionsForm.openAIAPIKey.value
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences

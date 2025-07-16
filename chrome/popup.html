@@ -49,6 +49,19 @@
         </div>
 
         <div>
+            <input type="radio" id="commercialDetectionMode-auto-ai-openai" name="commercialDetectionMode" value="auto-ai-openai">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-ai-openai">AI - OpenAI</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">.........</span></span><span class="badge badge-experimental">Requires Paid API Key</span>
+        </div>
+        <div id="auto-ai-openai" class="commercial-detection-mode-instructions-wrapper">
+            <div class="mode-how-to">
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span>
+            </div>
+        </div>
+        <label>Personal OpenAI API Key:</label>
+        <input type="text" name="openAIAPIKey" id="openAIAPIKey">
+
+        <div>
             <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
             <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
         </div>

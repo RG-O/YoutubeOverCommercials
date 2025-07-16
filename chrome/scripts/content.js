@@ -611,9 +611,25 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                     startListeningToTab();
 
-                                    //give a split sec for recording to start before asking user to pick a pixel
+                                    //give a split sec for recording to start
                                     setTimeout(() => {
                                         prepForAudioMonitor();
+                                    }, 500);
+
+                                }
+
+                            } else if (commercialDetectionMode == 'auto-ai-openai') {
+
+                                if (!isAutoModeInitiated) {
+
+                                    isAutoModeInitiated = true;
+
+                                    windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+                                    startViewingTab(windowDimensions);
+
+                                    //give a split sec for recording to start
+                                    setTimeout(() => {
+                                        prepForAIMonitor();
                                     }, 500);
 
                                 }
@@ -1367,6 +1383,249 @@ function setAudioLevelBar(level) {
 }
 
 
+function prepForAIMonitor() {
+
+    //setAudioLevelIndicator();
+
+    ////wait a sec to remove initiated message to let the user read message before replacing with logo
+    //setTimeout(() => {
+    //    initialLogoBoxTextUpdate();
+    //    if (!isDebugMode) { audioLevelIndicatorContainer.style.display = 'none'; }
+    //}, 2000);
+
+    document.addEventListener('fullscreenchange', fullscreenChanged);
+
+    if (overlayVideoType == 'spotify') {
+        //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
+        setTimeout(() => {
+            chrome.runtime.sendMessage({ action: "open_spotify" });
+            window.addEventListener('beforeunload', closeSpotify);
+        }, 2000);
+    } else if (overlayVideoType == 'other-tabs') {
+        //if user has extension set to other-tabs, mute the other tabs now
+        chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+    }
+
+    aiMonitor();
+
+}
+
+
+function aiMonitor() {
+    const startTime = Date.now();
+
+    getAIChanceOfCommercial().then(function (chanceOfCommercial) {
+
+        let consoleMessage = chanceOfCommercial + '% Chance of Commercial';
+
+        //let match;
+        //if (
+        //    (isCommercialState && chanceOfCommercial <= .05) || (!isCommercialState && chanceOfCommercial >= .6)
+        //) {
+        //    match = false;
+        //} else {
+        //    match = true;
+        //}
+
+        if (!isCommercialState && chanceOfCommercial >= 75) {
+            //color indicating potential commercial break
+
+            mismatchCount++;
+            matchCount = 0;
+            //logoCountdownMismatchesRemaining = (mismatchCountThreshold - mismatchCount);
+
+            ////show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
+            //if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
+
+            //    if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
+
+            //        logoBox.textContent = cooldownCountRemaining;
+            //        logoBox.style.display = 'block';
+            //        countdownOngoing = true;
+
+            //    } else if (logoCountdownMismatchesRemaining >= 1) {
+
+            //        logoBox.textContent = logoCountdownMismatchesRemaining;
+            //        logoBox.style.display = 'block';
+            //        countdownOngoing = true;
+
+            //    } else {
+            //        countdownOngoing = false;
+            //    }
+
+            //} else {
+            //    countdownOngoing = false;
+            //}
+
+            if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
+
+                if (!isCommercialState) {
+
+                    if (isDebugMode) { console.log('commercial detected'); }
+
+                    consoleMessage += ' - 2 consecutive checks greater than %75; Muting stream.';
+
+                    startCommercialMode();
+
+                    //if (overlayVideoType == 'spotify') {
+                    //    logoBoxText = 'PLAYING SPOTIFY'
+                    //}
+                    //logoBox.textContent = logoBoxText;
+                    //if (commercialDetectionMode === 'auto-pixel-normal') {
+                    //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+                    //}
+                    //logoBox.style.display = 'block';
+                    //if (!isDebugMode && !isAudioOnlyOverlay) {
+
+                    //    setTimeout(() => {
+
+                    //        logoBox.style.display = 'none';
+
+                    //    }, 5000);
+
+                    //}
+
+                }
+
+                //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                mismatchCount = 0;
+
+            }
+
+        } else if (isCommercialState && chanceOfCommercial <= 10) {
+            //color indicating potentially out of commercial break
+
+            matchCount++;
+            mismatchCount = 0;
+
+            ////TODO: is this the best way to do this considering audio and video options?
+            //if (!isDebugMode && !isCommercialState) {
+            //    logoBox.style.display = 'none';
+            //}
+
+            //countdownOngoing = false;
+            //logoBox.textContent = logoBoxText;
+
+            if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
+
+                if (isCommercialState) {
+
+                    if (isDebugMode) { console.log('commercial undetected'); }
+
+                    //if (isAudioOnlyOverlay) {
+                    //    if (isDebugMode) {
+                    //        logoBoxText = 'LIVE COMMERCIAL BLOCKER';
+                    //        logoBox.textContent = logoBoxText;
+                    //    } else {
+                    //        logoBox.style.display = 'none';
+                    //    }
+                    //}
+
+                    consoleMessage += ' - 2 consecutive checks less than %10; Unmuting stream.';
+
+                    endCommercialMode();
+
+                }
+
+                //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                matchCount = 0;
+
+            }
+
+        } else {
+            matchCount = 0;
+            mismatchCount = 0;
+        }
+
+
+        //console.log('match count = ' + matchCount);
+        //console.log('mismatch count = ' + mismatchCount);
+
+
+        //if (commercialDetectionMode === 'auto-pixel-normal') {
+        //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+        //}
+
+        cooldownCountRemaining--;
+
+        console.log(consoleMessage);
+
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 2000 - elapsed);
+        setTimeout(aiMonitor, delay);
+
+    })
+    .catch(function (error) {
+        console.error(error);
+
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 2000 - elapsed);
+        setTimeout(aiMonitor, delay);
+    });
+
+}
+
+
+//grabs color of plugged in pixel by asking background.js to take a screenshot of said pixel
+function getAIChanceOfCommercial() {
+
+    return new Promise(function (resolve, reject) {
+
+        if (isFirefox) {
+
+            //let rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
+
+            //chrome.runtime.sendMessage({ action: "firefox-capture-screenshot", rect: rect }, function (response) {
+
+            //    let image = new Image();
+            //    image.src = response.imgSrc;
+
+            //    image.addEventListener('load', function () {
+
+            //        let canvas = document.createElement('canvas');
+            //        let context = canvas.getContext('2d');
+
+            //        canvas.width = image.width; //TODO: figure out is this necessary with setting it in draw image?
+            //        canvas.height = image.height;
+            //        context.drawImage(image, 0, 0);
+
+            //        let pixelColor = context.getImageData(0, 0, 1, 1).data;
+            //        pixelColor = { r: pixelColor[0], g: pixelColor[1], b: pixelColor[2] };
+
+            //        resolve(pixelColor); // Resolve the promise with pixelColor value
+
+            //    });
+
+            //});
+
+        } else {
+
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "capture-ai-commercial-chance"
+            }, function (response) {
+
+                //console.log(response.myCoordinates); //debug-high
+                //console.log(response.pixelColor); //debug-high
+                //console.log(response.image); //debug-high
+
+                //console.log('fetch time: ' + response.fetchTime);
+                //console.log(response.chanceOfCommercial);
+                //console.log(response.image);
+                //console.log('tokens: ' + response.totalTokens);
+                //console.log(response.data);
+
+                resolve(response.chanceOfCommercial);
+
+            });
+
+        }
+
+    });
+
+}
+
+
 //sets element to show user color differences next to selected pixel when commercial is detected
 function setCommercialDetectedIndicator(selectedPixel) {
 
@@ -1420,7 +1679,7 @@ function spotifyLogoBoxUpdate(text) {
 
     //strangley, an unnecessary delay feels smoother here
     setTimeout(() => {
-        if (!countdownOngoing) {
+        if (!countdownOngoing && commercialDetectionMode !== 'auto-ai-openai') {
             logoBox.textContent = logoBoxText;
         }
     }, 2000);
@@ -1429,7 +1688,7 @@ function spotifyLogoBoxUpdate(text) {
 
         if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
             logoBox.style.display = 'block';
-        } else {
+        } else if (commercialDetectionMode !== 'auto-ai-openai') {
             audioLevelIndicatorContainer.style.display = 'flex';
         }
 
@@ -1462,7 +1721,12 @@ function startViewingTab(windowDimensions) {
 
     if (!isFirefox) {
 
-        chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions });
+        if (commercialDetectionMode === 'auto-ai-openai') {
+            chrome.runtime.sendMessage({ action: "chrome-view-tab-video-ai-openai", windowDimensions: windowDimensions });
+        } else {
+            chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions });
+        }
+
         window.addEventListener('beforeunload', stopViewingTab);
 
     }
