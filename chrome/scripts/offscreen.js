@@ -196,7 +196,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     //    max_tokens: 50
                     //})
                     body: JSON.stringify({
-                        model: "gpt-4.1-mini",
+                        //model: "gpt-4.1-mini",
+                        model: "gpt-4.1",
                         messages: [
                             {
                                 role: "system",
@@ -218,8 +219,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                                         //text: "Pretend you are a TV watching expert that only answers in percentages and always gives their best guess. This is a screenshot of my TV. Judging by this screenshot alone, what is the percentage chance that this screenshot is of a TV commercial or break away from the programming? Only answer in a percentage. Do not tell me that you can't."
                                         //text: "This is a screenshot of live TV. What is the percentage chance that this TV channel is currently on commercial break?"
                                         //text: "This is a screenshot of live TV of sports. What is the percentage chance that this TV channel is currently on commercial break? Look for clues like lack of graphics or lack of sports."
+                                        text: "This is a screenshot of live TV. What is the percentage chance that this TV channel is currently on commercial break? The NBC logo in the top right corner is a good indicator that it is not a commercial."
                                         //text: "This is a screenshot from a live sports TV broadcast. Based only on this image, estimate the probability that the TV channel is currently on a commercial break. For this purpose, define 'commercial break' broadly to include traditional ads, movie trailers, network promos, sports promos, upcoming show previews, or anything not part of the live sports event or its immediate commentary. Please take into account that you are only seeing a single frame in time, and your confidence should reflect that uncertainty."
-                                        text: "This is a screenshot of live TV. What are the chances this is a commercial break and not a live baseball broadcast?"
+                                        //text: "This is a screenshot of live TV. What are the chances this is a commercial break and not a live baseball broadcast?"
                                     },
                                     {
                                         type: "image_url",

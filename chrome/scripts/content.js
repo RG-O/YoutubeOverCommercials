@@ -1427,7 +1427,7 @@ function aiMonitor() {
         //    match = true;
         //}
 
-        if (!isCommercialState && chanceOfCommercial >= 75) {
+        if (!isCommercialState && chanceOfCommercial >= 70) {
             //color indicating potential commercial break
 
             mismatchCount++;
@@ -1463,7 +1463,7 @@ function aiMonitor() {
 
                     if (isDebugMode) { console.log('commercial detected'); }
 
-                    consoleMessage += ' - 2 consecutive checks greater than %75; Muting stream.';
+                    consoleMessage += ' - 2 consecutive checks greater than %70; Muting stream.';
 
                     startCommercialMode();
 
@@ -1492,7 +1492,7 @@ function aiMonitor() {
 
             }
 
-        } else if (isCommercialState && chanceOfCommercial <= 10) {
+        } else if (isCommercialState && chanceOfCommercial <= 20) {
             //color indicating potentially out of commercial break
 
             matchCount++;
@@ -1521,7 +1521,7 @@ function aiMonitor() {
                     //    }
                     //}
 
-                    consoleMessage += ' - 2 consecutive checks less than %10; Unmuting stream.';
+                    consoleMessage += ' - 2 consecutive checks less than %20; Unmuting stream.';
 
                     endCommercialMode();
 
