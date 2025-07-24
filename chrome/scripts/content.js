@@ -65,6 +65,21 @@ var audioLevelBar;
 var audioLevelThresholdLine;
 var shouldOverlayVideoSizeAndLocationAutoSet;
 var shouldShuffleYTPlaylist;
+//var advancedLogoSelectionBoxStartX;
+//var advancedLogoSelectionBoxStartY;
+var advancedLogoSelectionTopLeftLocation;
+var advancedLogoSelectionBottomRightLocation;
+var advancedLogoSelectionDimensions;
+var advancedLogoSelectionBox;
+var requiredAdvancedLogoMaskCollectionSamples = 8;
+var advancedLogoMaskCollectionSamples = 0;
+var advancedLogoMatchThreshold = 0.7;
+var advancedLogoMaskImageContainer;
+var currentEdgeImage;
+var advancedLogoMaskImage;
+var logoImageCaptureGrey;
+var logoImageCaptureBlur;
+var logoImageCaptureDiff;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 //variables for Firefox auto audio commercial detection mode:
@@ -541,7 +556,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                             if (mainVideoVolumeDuringNonCommercials > 0) {
                                 mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
                             }
-                            commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+                            //commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+                            commercialDetectionMode = 'auto-pixel-advanced-logo'; //555
                             //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings)
                             if (commercialDetectionMode === 'auto') {
                                 commercialDetectionMode = 'auto-pixel-normal';
@@ -598,7 +614,11 @@ chrome.runtime.onMessage.addListener(function (message) {
                                     //give a split sec for recording to start before asking user to pick a pixel
                                     setTimeout(() => {
                                         setBlockersAndPixelSelectionInstructions();
-                                        document.addEventListener('click', pixelSelection);
+                                        if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
+                                            document.addEventListener('mousedown', fullLogoSelectionInitiation, { once: true });
+                                        } else {
+                                            document.addEventListener('click', pixelSelection);
+                                        }
                                     }, 500);
 
                                 }
@@ -1126,6 +1146,439 @@ function getPixelColor(coordinates) {
 
     });
 
+}
+
+
+function fullLogoSelectionInitiation(event) {
+    //TODO: figure out if this check is really necessary
+    if (!selectedPixel) {
+        let startX = event.clientX;
+        let startY = event.clientY;
+
+        advancedLogoSelectionBox = document.createElement("div");
+        advancedLogoSelectionBox.className = 'ytoc-advanced-logo-selection-box';
+        advancedLogoSelectionBox.style.left = `${startX}px`;
+        advancedLogoSelectionBox.style.top = `${startY}px`;
+
+        //TODO: add check to make sure user is still in full screen and if not to break and resut isFirstRun
+        let insertLocation = document.fullscreenElement;
+        if (insertLocation.nodeName == 'HTML') {
+            insertLocation = document.getElementsByTagName('body')[0];
+        }
+        insertLocation.insertBefore(advancedLogoSelectionBox, null);
+
+        document.addEventListener("mousemove", function (event) {
+            fullLogoSelectionBoxResize(event, startX, startY);
+        });
+        //TODO: set other one use event listeners like this throughout the extension so I don't have to remove them all
+        document.addEventListener("mouseup", function (event) {
+            fullLogoSelectionCompletion(event, startX, startY);
+        }, { once: true });
+    }
+}
+
+
+function fullLogoSelectionBoxResize(event, startX, startY) {
+    const x = Math.min(event.clientX, startX);
+    const y = Math.min(event.clientY, startY);
+    const width = Math.abs(event.clientX - startX);
+    const height = Math.abs(event.clientY - startY);
+
+    advancedLogoSelectionBox.style.left = `${x}px`;
+    advancedLogoSelectionBox.style.top = `${y}px`;
+    advancedLogoSelectionBox.style.width = `${width}px`;
+    advancedLogoSelectionBox.style.height = `${height}px`;
+}
+
+
+function fullLogoSelectionCompletion(event, startX, startY) {
+    console.log('fullLogoSelectionCompletion');
+    document.removeEventListener("mousemove", fullLogoSelectionBoxResize);
+    //TODO: remove after mask building complete?
+    //setTimeout(() => {
+        advancedLogoSelectionBox.remove();
+    //}, 1000);
+    
+    const endX = event.clientX;
+    const endY = event.clientY;
+
+    const topLeftX = Math.min(startX, endX);
+    const topLeftY = Math.min(startY, endY);
+    const bottomRightX = Math.max(startX, endX);
+    const bottomRightY = Math.max(startY, endY);
+    const width = bottomRightX - topLeftX;
+    const height = bottomRightY - topLeftY;
+
+    advancedLogoSelectionTopLeftLocation = { x: topLeftX, y: topLeftY };
+    advancedLogoSelectionBottomRightLocation = { x: bottomRightX, y: bottomRightY };
+    advancedLogoSelectionDimensions = { width, height };
+
+    console.log("Top-left:", { x: topLeftX, y: topLeftY });
+    console.log("Bottom-right:", { x: bottomRightX, y: bottomRightY });
+    console.log("Dimensions:", { width, height });
+
+    removeBlockersListenersAndPixelSelectionInstructions();
+
+    if (isFirefox) {
+        selectedPixel = { x: event.clientX, y: event.clientY };
+    } else {
+        //subtracting by a couple so it doesn't accidentally capture the cursor in chromium
+        selectedPixel = { x: (event.clientX - 1), y: (event.clientY - 2) };
+    }
+
+    //TODO: move this outside and make better
+    let windowWidth = window.innerWidth;
+    if (advancedLogoSelectionTopLeftLocation.x < windowWidth / 2) {
+        //logo selection on the left side of the page
+        selectedPixel = advancedLogoSelectionBottomRightLocation;
+    } else {
+        //logo selection on the right side of the page
+        selectedPixel = advancedLogoSelectionTopLeftLocation;
+    }
+
+    //indicateSelectedPixel(selectedPixel);
+
+    document.addEventListener('fullscreenchange', fullscreenChanged);
+
+    ////TODO: create user option to turn off logo completely
+    setCommercialDetectedIndicator(selectedPixel);
+
+    setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
+
+    buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
+}
+
+
+function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions) {
+    const startTime = Date.now();
+    console.log(startTime);
+
+    if (document.fullscreenElement) {
+
+        if (advancedLogoMaskCollectionSamples == 0) {
+            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-first").then(function (logoAnalysisData) {
+                //TODO: add failure check to stop
+                ++advancedLogoMaskCollectionSamples;
+
+                console.log(logoAnalysisData);
+
+                const elapsed = Date.now() - startTime;
+                const delay = Math.max(0, 1000 - elapsed);
+
+                console.log("elapsed = ", elapsed);
+                console.log("delay = ", delay);
+
+                setTimeout(() => {
+                    buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                }, delay);
+            })
+        } else if (advancedLogoMaskCollectionSamples > 0 && advancedLogoMaskCollectionSamples < requiredAdvancedLogoMaskCollectionSamples) {
+            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask").then(function (logoAnalysisData) {
+                //TODO: add failure checks to retry a certain number of times?
+                ++advancedLogoMaskCollectionSamples;
+
+                console.log(logoAnalysisData);
+
+                const elapsed = Date.now() - startTime;
+                const delay = Math.max(0, 1000 - elapsed);
+
+                console.log("elapsed = ", elapsed);
+                console.log("delay = ", delay);
+
+                setTimeout(() => {
+                    buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                }, delay);
+            })
+        } else if (advancedLogoMaskCollectionSamples >= requiredAdvancedLogoMaskCollectionSamples) {
+            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-last").then(function (logoAnalysisData) {
+                //TODO: add failure checks to retry a certain number of times?
+                ++advancedLogoMaskCollectionSamples;
+
+                console.log(logoAnalysisData);
+
+                const elapsed = Date.now() - startTime;
+                const delay = Math.max(0, 1000 - elapsed);
+
+                console.log("elapsed = ", elapsed);
+                console.log("delay = ", delay);
+
+                setTimeout(() => {
+                    advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                }, delay);
+            })
+        }
+    } else {
+        //TODO: notified user mask creation canceled
+    }
+}
+
+
+//checks the color of the user set pixel and compares it to the original color in intervals and initiates commercial or non-commercial mode accordingly
+function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions) {
+
+    //TODO: replace this with timeout with delay like above
+    monitorIntervalID = setInterval(() => {
+
+        getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "compare-to-mask").then(function (logoAnalysisData) {
+            //TODO: add failure checks to retry a certain number of times?
+
+            //console.log(logoAnalysisData);
+            logoBox.style.backgroundColor = "white";
+            logoBoxText = (logoAnalysisData.confidence * 100).toFixed(0);
+            logoBox.textContent = logoBoxText;
+
+            //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
+            //advancedLogoMaskImage.src = logoAnalysisData.mask_preview;
+
+            //let match = !isCommercialState;
+            //if (logoAnalysisData.confidence < advancedLogoMatchThreshold) {
+            //    match = false;
+            //} else {
+            //    match = true;
+            //}
+
+            if (!isCommercialState && logoAnalysisData.confidence < 0.2) {
+                //indicating potential commercial break
+
+                mismatchCount++;
+                matchCount = 0;
+                logoCountdownMismatchesRemaining = (mismatchCountThreshold - mismatchCount);
+
+                //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
+                if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
+
+                    if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
+
+                        logoBox.textContent = cooldownCountRemaining;
+                        logoBox.style.display = 'block';
+                        countdownOngoing = true;
+
+                    } else if (logoCountdownMismatchesRemaining >= 1) {
+
+                        logoBox.textContent = logoCountdownMismatchesRemaining;
+                        logoBox.style.display = 'block';
+                        countdownOngoing = true;
+
+                    } else {
+                        countdownOngoing = false;
+                    }
+
+                } else {
+                    countdownOngoing = false;
+                }
+
+                if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
+
+                    if (!isCommercialState) {
+
+                        if (isDebugMode) { console.log('commercial detected'); }
+
+                        startCommercialMode();
+
+                        if (overlayVideoType == 'spotify') {
+                            logoBoxText = 'PLAYING SPOTIFY'
+                        }
+                        logoBox.textContent = logoBoxText;
+                        //if (commercialDetectionMode === 'auto-pixel-normal') {
+                        //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+                        //}
+                        logoBox.style.display = 'block';
+                        if (!isDebugMode && !isAudioOnlyOverlay) {
+
+                            setTimeout(() => {
+
+                                logoBox.style.display = 'none';
+
+                            }, 5000);
+
+                        }
+
+                    }
+
+                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                    mismatchCount = 0;
+
+                }
+
+            } else if (isCommercialState && logoAnalysisData.confidence > 0.7) {
+                //indicating potentially out of commercial break
+
+                matchCount++;
+                mismatchCount = 0;
+
+                //TODO: is this the best way to do this considering audio and video options?
+                if (!isDebugMode && !isCommercialState) {
+                    logoBox.style.display = 'none';
+                }
+
+                countdownOngoing = false;
+                logoBox.textContent = logoBoxText;
+
+                if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
+
+                    if (isCommercialState) {
+
+                        if (isDebugMode) { console.log('commercial undetected'); }
+
+                        if (isAudioOnlyOverlay) {
+                            if (isDebugMode) {
+                                logoBoxText = 'LIVE COMMERCIAL BLOCKER';
+                                logoBox.textContent = logoBoxText;
+                            } else {
+                                logoBox.style.display = 'none';
+                            }
+                        }
+
+                        endCommercialMode();
+
+                    }
+
+                    //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode
+                    matchCount = 0;
+
+                }
+
+            } else {
+                matchCount = 0;
+                mismatchCount = 0;
+            }
+
+            //if (commercialDetectionMode === 'auto-pixel-normal') {
+            //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+            //}
+
+            cooldownCountRemaining--;
+
+        })
+            .catch(function (error) {
+                console.error(error);
+            });
+
+    }, 1000);
+
+}
+
+
+//grabs color of plugged in pixel by asking background.js to take a screenshot of said pixel
+function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
+
+    return new Promise(function (resolve, reject) {
+
+        console.log(dimensions);
+
+        if (isFirefox) {
+
+            let rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
+
+            chrome.runtime.sendMessage({ action: "firefox-capture-screenshot", rect: rect }, function (response) {
+
+                let image = new Image();
+                image.src = response.imgSrc;
+
+                image.addEventListener('load', function () {
+
+                    let canvas = document.createElement('canvas');
+                    let context = canvas.getContext('2d');
+
+                    canvas.width = image.width; //TODO: figure out is this necessary with setting it in draw image?
+                    canvas.height = image.height;
+                    context.drawImage(image, 0, 0);
+
+                    let pixelColor = context.getImageData(0, 0, 1, 1).data;
+                    pixelColor = { r: pixelColor[0], g: pixelColor[1], b: pixelColor[2] };
+
+                    resolve(pixelColor); // Resolve the promise with pixelColor value
+
+                });
+
+            });
+
+        } else {
+
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "capture-logo-advanced",
+                request: request,
+                coordinates: coordinates,
+                dimensions: dimensions
+            }, function (response) {
+
+                console.log(response.fetchTime);
+
+                currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
+                advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
+                logoImageCaptureGrey.src = response.logoAnalysisData.img_np;
+                logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
+                logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
+
+
+                resolve(response.logoAnalysisData);
+
+            });
+
+        }
+
+    });
+
+}
+
+
+function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions) {
+    //TODO: add check to make sure user is still in fullscreen mode
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    advancedLogoMaskImageContainer = document.createElement('div');
+    advancedLogoMaskImageContainer.className = "ytoc-logo";
+    currentEdgeImage = document.createElement('img');
+    //currentEdgeImage.className = "ytoc-logo";
+    advancedLogoMaskImage = document.createElement('img');
+    //advancedLogoMaskImage.className = "ytoc-logo";
+
+    logoImageCaptureGrey = document.createElement('img');
+    logoImageCaptureBlur = document.createElement('img');
+    logoImageCaptureDiff = document.createElement('img');
+    
+    let windowHeight = window.innerHeight;
+    if (advancedLogoSelectionTopLeftLocation.y < windowHeight / 2) {
+        //user clicked on the top of the page
+
+        advancedLogoMaskImageContainer.style.top = ((advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 3) + 'px';
+        advancedLogoMaskImageContainer.style.bottom = 'auto';
+
+        //currentEdgeImage.style.top = advancedLogoSelectionTopLeftLocation.y + 'px';
+        //currentEdgeImage.style.bottom = 'auto';
+
+        //advancedLogoMaskImage.style.top = (advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 'px';
+        //advancedLogoMaskImage.style.bottom = 'auto';
+    } else {
+        //user clicked on the bottom of the page
+        advancedLogoMaskImageContainer.style.top = 'auto';
+        advancedLogoMaskImageContainer.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
+
+        //currentEdgeImage.style.top = 'auto';
+        //currentEdgeImage.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
+
+        //advancedLogoMaskImage.style.top = 'auto';
+        //advancedLogoMaskImage.style.bottom = ((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) + 'px';
+    }
+    //currentEdgeImage.style.left = advancedLogoSelectionTopLeftLocation.x;
+    //advancedLogoMaskImage.style.left = advancedLogoSelectionTopLeftLocation.x;
+    advancedLogoMaskImageContainer.style.left = advancedLogoSelectionTopLeftLocation.x + 'px';
+
+    //currentEdgeImage.style.top = (advancedLogoSelectionTopLeftLocation.y - 15) + 'px';
+
+    insertLocation.insertBefore(advancedLogoMaskImageContainer, null);
+    //insertLocation.insertBefore(currentEdgeImage, null);
+    //insertLocation.insertBefore(advancedLogoMaskImage, null);
+
+    advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
+    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
+    advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
+    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
 }
 
 
@@ -1668,7 +2121,7 @@ function abortPixelSelection() {
     document.removeEventListener('fullscreenchange', abortPixelSelection);
 
     let abortMessage;
-    if (!document.fullscreen) {
+    if (!document.fullscreenElement) {
         abortMessage = 'Pixel selection aborted! Go back to full screen and hit keyboard shortcut to start again. This message will disappear shortly.';
     } else {
         abortMessage = 'Pixel selection aborted! Hit keyboard shortcut to start again. This message will disappear shortly.';

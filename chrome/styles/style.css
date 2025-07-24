@@ -127,3 +127,10 @@
 .ytoc-audio-level-indicator-countdown {
     margin: 8px !important;
 }
+
+.ytoc-advanced-logo-selection-box {
+    position: fixed !important;
+    border: 2px solid red !important;
+    pointer-events: none !important;
+    z-index: 2147483647 !important;
+}

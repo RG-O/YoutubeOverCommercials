@@ -17,10 +17,14 @@ chrome.runtime.onMessage.addListener(function (message) {
         if (message.action == 'start-viewing') {
             constraints = message.constraints;
             startViewing(constraints);
+        } else if (message.action == 'start-viewing-logo-advanced') {
+            constraints = message.constraints;
+            startViewing(constraints);
         } else if (message.action == 'start-listening') {
             constraints = message.constraints;
             startListening(constraints);
         } else if (message.action == 'stop-viewing') {
+            //not currently being used, as offscreen is just closed and reopened in order to pause and resume viewing tab
             stopViewing();
         } else if (message.action == 'resume-viewing') {
             //does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
@@ -53,17 +57,20 @@ async function startViewing(constraints) {
         videoElement.muted = true;
         videoElement.play();
 
-        canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        //canvas.width = 30; //debug-high
-        //canvas.height = 30; //debug-high
-        ctx = canvas.getContext('2d', { willReadFrequently: true });
-
         viewing = true;
 
     }
 
+}
+
+
+function createCanvas(width, height) {
+    canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    //canvas.width = 30; //debug-high
+    //canvas.height = 30; //debug-high
+    ctx = canvas.getContext('2d', { willReadFrequently: true });
 }
 
 
@@ -100,8 +107,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             if (viewing) {
 
+                //TODO: retest this
                 ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, 1, 1, 0, 0, 1, 1);
                 //ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, 30, 30, 0, 0, 30, 30); //debug-high
+                //if (!canvas) {
+                //    createCanvas(1, 1);
+                //} //debug-high
                 //let image = canvas.toDataURL('image/png'); //debug-high
 
                 let pixelColorUnformated = ctx.getImageData(0, 0, 1, 1).data;
@@ -132,6 +143,58 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             sendResponse({ audioLevel: audioLevel });
 
+        }
+    }
+});
+
+
+//separated from above due to async reasons
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.target == 'offscreen') {
+        if (message.action == 'capture-logo-advanced') {
+            if (viewing) {
+                if (!canvas) {
+                    console.log(message.dimensions);
+                    createCanvas(message.dimensions.width, message.dimensions.height);
+                }
+
+                ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, message.dimensions.width, message.dimensions.height, 0, 0, message.dimensions.width, message.dimensions.height);
+                let logoScreenshotBase64 = canvas.toDataURL('image/png'); //debug-high
+
+                const fetchStart = performance.now();
+                fetch("http://localhost:64143/upload", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        image: logoScreenshotBase64,
+                        request: message.request
+                    })
+                })
+                    .then(response => response.json())
+                    .then(logoAnalysisData => {
+                        //return jsonify({
+                        //    "status": "ready",
+                        //    "logo": match,
+                        //    "confidence": float(similarity),
+                        //    "current_edge_preview": image_to_base64(current_edge.astype(np.uint8)),
+                        //    "mask_preview": image_to_base64(avg_edge_mask),
+                        //    "diff_preview": image_to_base64(diff.astype(np.uint8))
+                        //})
+                        const fetchEnd = performance.now();
+                        const fetchTime = ((fetchEnd - fetchStart) / 1000).toFixed(3);
+                        //console.log(data);
+                        sendResponse({ logoAnalysisData: logoAnalysisData, fetchTime: fetchTime });
+                    })
+                    .catch(error => {
+                        //TODO: send current state if error
+                        console.error("Error:", error);
+                        sendResponse({ logoAnalysisData: error });
+                    });
+            } else {
+                sendResponse({ logoAnalysisData: null });
+            }
+
+            return true; //keep message channel open for async response
         }
     }
 });
