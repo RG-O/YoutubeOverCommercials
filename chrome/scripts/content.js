@@ -1242,6 +1242,8 @@ function fullLogoSelectionCompletion(event, startX, startY) {
 
     ////TODO: create user option to turn off logo completely
     setCommercialDetectedIndicator(selectedPixel);
+    logoBox.style.backgroundColor = "rgb(240, 238, 236)";
+    logoBox.style.color = "#12384d";
 
     setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
 
@@ -1303,6 +1305,8 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 console.log("delay = ", delay);
 
                 setTimeout(() => {
+                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. IF ISSUE, REFRESH PAGE AND TRY AGAIN.';
+                    logoBox.textContent = logoBoxText;
                     advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
                 }, delay);
             })
@@ -1316,28 +1320,28 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 //checks the color of the user set pixel and compares it to the original color in intervals and initiates commercial or non-commercial mode accordingly
 function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions) {
 
-    //TODO: replace this with timeout with delay like above
+    //TODO: replace this with timeout with delay like above ***
     monitorIntervalID = setInterval(() => {
 
         getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "compare-to-mask").then(function (logoAnalysisData) {
             //TODO: add failure checks to retry a certain number of times?
 
             //console.log(logoAnalysisData);
-            logoBox.style.backgroundColor = "white";
-            logoBoxText = (logoAnalysisData.confidence * 100).toFixed(0);
+            logoBoxText = ((logoAnalysisData.confidence * 100).toFixed(0)).padStart(2, "0") + "%";
             logoBox.textContent = logoBoxText;
 
             //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
             //advancedLogoMaskImage.src = logoAnalysisData.mask_preview;
 
-            //let match = !isCommercialState;
-            //if (logoAnalysisData.confidence < advancedLogoMatchThreshold) {
-            //    match = false;
-            //} else {
-            //    match = true;
-            //}
+            //default to matching logo if not in commercial break and not matching logo if in commercial break
+            let match = !isCommercialState;
+            if (!isCommercialState && logoAnalysisData.confidence < 0.3) {
+                match = false;
+            } else if (isCommercialState && logoAnalysisData.confidence > 0.7) {
+                match = true;
+            }
 
-            if (!isCommercialState && logoAnalysisData.confidence < 0.2) {
+            if (!match) {
                 //indicating potential commercial break
 
                 mismatchCount++;
@@ -1400,7 +1404,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
                 }
 
-            } else if (isCommercialState && logoAnalysisData.confidence > 0.7) {
+            } else {
                 //indicating potentially out of commercial break
 
                 matchCount++;
@@ -1438,10 +1442,10 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
                 }
 
-            } else {
-                matchCount = 0;
-                mismatchCount = 0;
-            }
+            } //else {
+            //    matchCount = 0;
+            //    mismatchCount = 0;
+            //}
 
             //if (commercialDetectionMode === 'auto-pixel-normal') {
             //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
@@ -1500,15 +1504,16 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
                 action: "capture-logo-advanced",
                 request: request,
                 coordinates: coordinates,
-                dimensions: dimensions
+                dimensions: dimensions,
+                isCommercialState: isCommercialState
             }, function (response) {
 
                 console.log(response.fetchTime);
 
                 currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
                 advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
-                logoImageCaptureGrey.src = response.logoAnalysisData.img_np;
-                logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
+                //logoImageCaptureGrey.src = response.logoAnalysisData.img_np;
+                //logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
                 logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
 
 
@@ -1537,8 +1542,8 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     advancedLogoMaskImage = document.createElement('img');
     //advancedLogoMaskImage.className = "ytoc-logo";
 
-    logoImageCaptureGrey = document.createElement('img');
-    logoImageCaptureBlur = document.createElement('img');
+    //logoImageCaptureGrey = document.createElement('img');
+    //logoImageCaptureBlur = document.createElement('img');
     logoImageCaptureDiff = document.createElement('img');
     
     let windowHeight = window.innerHeight;
@@ -1575,8 +1580,8 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     //insertLocation.insertBefore(advancedLogoMaskImage, null);
 
     advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
-    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
-    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
+    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
     advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
     advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
 }
@@ -1831,7 +1836,11 @@ function setCommercialDetectedIndicator(selectedPixel) {
 
     logoBox = document.createElement('div');
     logoBox.className = "ytoc-logo";
-    logoBoxText = 'PIXEL SELECTED!';
+    if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
+        logoBoxText = 'ANALYZING LOGO...';
+    } else {
+        logoBoxText = 'PIXEL SELECTED!';
+    }
     logoBox.textContent = logoBoxText;
     logoBox.style.display = 'block';
 

@@ -41,12 +41,13 @@ app = Flask(__name__)
 logo_edges = []
 avg_edge_mask = None
 
-def preprocess_edge(img_blur):
-    #blurred = cv2.GaussianBlur(image_np, (5, 5), 0)
-    #return cv2.Canny(blurred, 50, 150)
-    #return cv2.Canny(img_blur, 10, 80)
-    #return cv2.Canny(img_blur, 30, 70)
-    return cv2.Canny(img_blur, 20, 50)
+# def preprocess_edge(img_blur):
+#     #blurred = cv2.GaussianBlur(image_np, (5, 5), 0)
+#     #return cv2.Canny(blurred, 50, 150)
+#     #return cv2.Canny(img_blur, 10, 80)
+#     #return cv2.Canny(img_blur, 30, 70)
+#     #TODO: set different levels for mask creation, during commercial, and out of commercial
+#     return cv2.Canny(img_blur, 20, 50)
 
 def image_to_base64(img_np):
     # Convert grayscale numpy image to PNG base64
@@ -58,8 +59,8 @@ def image_to_base64(img_np):
 
 
 
-@app.route("/upload", methods=["POST"])
-def upload():
+@app.route("/advanced-logo-analysis", methods=["POST"])
+def advanced_logo_analysis():
     global logo_edges, avg_edge_mask
 
     data = request.json
@@ -68,12 +69,15 @@ def upload():
     img_pil = Image.open(BytesIO(img_bytes)).convert("L")
     img_np = np.array(img_pil)
 
-    img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+    #img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
     #img_blur = cv2.GaussianBlur(img_np, (9, 9), 0)
 
-    current_edge = preprocess_edge(img_blur)
+    #current_edge = preprocess_edge(img_blur)
 
     if data['request'] == "build-mask-first":
+        img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+        current_edge = cv2.Canny(img_blur, 20, 50)
+        #clear on first mask build
         logo_edges = []
         logo_edges.append(current_edge)
         avg_edge_mask = np.mean(logo_edges, axis=0).astype(np.uint8)
@@ -88,6 +92,9 @@ def upload():
         })
 
     if data['request'] == "build-mask":
+        img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+        #medium edge threshold for mask building
+        current_edge = cv2.Canny(img_blur, 30, 70)
         logo_edges.append(current_edge)
         avg_edge_mask = np.mean(logo_edges, axis=0).astype(np.uint8)
 
@@ -101,7 +108,11 @@ def upload():
         })
 
     if data['request'] == "build-mask-last":
+        img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+        #TODO: compare this to previous to detect if logo went away - display as red error on logobox?
+        current_edge = cv2.Canny(img_blur, 20, 50)
         logo_edges.append(current_edge)
+        ##TODO: display this one as final mask built (even though it isn't the one actually used)
         avg_edge_mask = np.mean(logo_edges, axis=0).astype(np.uint8)
         ##avg_edge = avg_edge_mask.astype(np.float32)
 
@@ -142,6 +153,17 @@ def upload():
     #     })
 
 
+    # if current state is commercial set lower edge threashold
+    if data['commercial']:
+        img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+        current_edge = cv2.Canny(img_blur, 40, 100)
+    else:
+        #img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+        # if current state is not commercial set lower edge threashold as to potentially pick up the logo displaying over whitish background
+        #current_edge = cv2.Canny(img_blur, 20, 30)
+        #current_edge = cv2.Canny(img_blur, 10, 20)
+        current_edge = cv2.Canny(img_np, 8, 12)
+
 
 
     # # --- Masked region-based comparison ---
@@ -170,7 +192,17 @@ def upload():
     avg_edge_mask_boolean_mask = avg_edge_mask > 180  # Ground truth
     current_edge_boolean_mask = current_edge > 20  # Noisy comparison
 
+
+
+    # # Dilate the edges in image2 to tolerate small misalignments
+    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    # current_edge_boolean_mask_dilated = cv2.dilate(current_edge_boolean_mask.astype(np.uint8), kernel, iterations=1) > 0
+
+
+
+
     true_positive = np.logical_and(avg_edge_mask_boolean_mask, current_edge_boolean_mask).sum()
+    #true_positive = np.logical_and(avg_edge_mask_boolean_mask, current_edge_boolean_mask_dilated).sum()
     ground_truth_total = avg_edge_mask_boolean_mask.sum()
 
     if ground_truth_total == 0:
@@ -178,6 +210,22 @@ def upload():
     else: 
         precision = true_positive / ground_truth_total
 
+
+    edge1 = avg_edge_mask_boolean_mask.astype(bool)
+    edge2 = current_edge_boolean_mask.astype(bool)
+
+    #TODO: display this for debug people
+    # Create an RGB image
+    visual = np.zeros((edge1.shape[0], edge1.shape[1], 3), dtype=np.uint8)
+
+    # RED = edge1 only
+    visual[edge1 & ~edge2] = [255, 0, 0]
+
+    # BLUE = edge2 only
+    visual[~edge1 & edge2] = [0, 0, 255]
+
+    # GREEN = match (edge1 and edge2)
+    visual[edge1 & edge2] = [0, 255, 0]
 
     # precision = true_positive / ground_truth_total
     # return precision * 100
@@ -190,11 +238,13 @@ def upload():
         "confidence": float(precision),
         #"current_edge_preview": image_to_base64(current_edge.astype(np.uint8)),
         "current_edge_preview": image_to_base64((current_edge_boolean_mask.astype(np.uint8)) * 255),
+        #"current_edge_preview": image_to_base64((current_edge_boolean_mask_dilated.astype(np.uint8)) * 255),
         #"mask_preview": image_to_base64(avg_edge_mask),
         "mask_preview": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
-        "diff_preview": image_to_base64(diff_region.astype(np.uint8)),
-        "img_np": image_to_base64(img_np),
-        "img_blur": image_to_base64(img_blur),
+        #"diff_preview": image_to_base64(diff_region.astype(np.uint8)),
+        "diff_preview": image_to_base64(visual.astype(np.uint8)),
+        #"img_np": image_to_base64(img_np),
+        #"img_blur": image_to_base64(img_blur),
     })
 
 if __name__ == "__main__":

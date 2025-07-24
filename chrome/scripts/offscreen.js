@@ -162,12 +162,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 let logoScreenshotBase64 = canvas.toDataURL('image/png'); //debug-high
 
                 const fetchStart = performance.now();
-                fetch("http://localhost:64143/upload", {
+                fetch("http://localhost:64143/advanced-logo-analysis", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         image: logoScreenshotBase64,
-                        request: message.request
+                        request: message.request,
+                        commercial: message.isCommercialState
                     })
                 })
                     .then(response => response.json())
