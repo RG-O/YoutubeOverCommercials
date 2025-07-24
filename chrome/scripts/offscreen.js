@@ -184,12 +184,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         const fetchEnd = performance.now();
                         const fetchTime = ((fetchEnd - fetchStart) / 1000).toFixed(3);
                         //console.log(data);
-                        sendResponse({ logoAnalysisData: logoAnalysisData, fetchTime: fetchTime });
+                        sendResponse({ logoAnalysisData: logoAnalysisData, fetchTime: fetchTime, wasSuccessfulCall: true });
                     })
                     .catch(error => {
                         //TODO: send current state if error
                         console.error("Error:", error);
-                        sendResponse({ logoAnalysisData: error });
+                        sendResponse({ wasSuccessfulCall: false });
                     });
             } else {
                 sendResponse({ logoAnalysisData: null });

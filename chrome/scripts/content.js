@@ -80,6 +80,7 @@ var advancedLogoMaskImage;
 var logoImageCaptureGrey;
 var logoImageCaptureBlur;
 var logoImageCaptureDiff;
+var isMaskCompleteMessageDismissable = false;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 //variables for Firefox auto audio commercial detection mode:
@@ -1228,22 +1229,34 @@ function fullLogoSelectionCompletion(event, startX, startY) {
 
     //TODO: move this outside and make better
     let windowWidth = window.innerWidth;
+    let windowHeight = window.innerHeight;
     if (advancedLogoSelectionTopLeftLocation.x < windowWidth / 2) {
         //logo selection on the left side of the page
         selectedPixel = advancedLogoSelectionBottomRightLocation;
+        if (advancedLogoSelectionTopLeftLocation.y < windowHeight / 2) {
+            //logo selection at the top of the page
+            selectedPixel.y -= advancedLogoSelectionDimensions.height;
+        }
     } else {
         //logo selection on the right side of the page
         selectedPixel = advancedLogoSelectionTopLeftLocation;
+        if (advancedLogoSelectionTopLeftLocation.y > windowHeight / 2) {
+            //logo selection at the bottom of the page
+            selectedPixel.y += advancedLogoSelectionDimensions.height;
+        }
     }
 
     //indicateSelectedPixel(selectedPixel);
 
     document.addEventListener('fullscreenchange', fullscreenChanged);
 
-    ////TODO: create user option to turn off logo completely
+    
     setCommercialDetectedIndicator(selectedPixel);
-    logoBox.style.backgroundColor = "rgb(240, 238, 236)";
-    logoBox.style.color = "#12384d";
+    //TODO: decide colors
+    //logoBox.style.backgroundColor = "rgb(240, 238, 236)";
+    //logoBox.style.color = "#12384d";
+    logoBox.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+    logoBox.style.color = "rgb(140, 179, 210, 0.9)";
 
     setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
 
@@ -1259,20 +1272,28 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
         if (advancedLogoMaskCollectionSamples == 0) {
             getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-first").then(function (logoAnalysisData) {
-                //TODO: add failure check to stop
-                ++advancedLogoMaskCollectionSamples;
+                if (logoAnalysisData) {
+                    //TODO: add failure check to stop - review the code?
+                    //TODO: make sure cooldown time and ui blockers last until mask is complete
+                    ++advancedLogoMaskCollectionSamples;
 
-                console.log(logoAnalysisData);
+                    console.log(logoAnalysisData);
 
-                const elapsed = Date.now() - startTime;
-                const delay = Math.max(0, 1000 - elapsed);
+                    const elapsed = Date.now() - startTime;
+                    const delay = Math.max(0, 1000 - elapsed);
 
-                console.log("elapsed = ", elapsed);
-                console.log("delay = ", delay);
+                    console.log("elapsed = ", elapsed);
+                    console.log("delay = ", delay);
 
-                setTimeout(() => {
-                    buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
-                }, delay);
+                    currentEdgeImage.src = logoAnalysisData.mask_preview;
+
+                    setTimeout(() => {
+                        buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
+                    }, delay);
+                } else {
+                    addMessageAlertToMainVideo('Error calling Advanced Logo Analyzer Companion App. Please make sure app is running, refresh page, and try again.');
+                    //pauseAutoMode();
+                }
             })
         } else if (advancedLogoMaskCollectionSamples > 0 && advancedLogoMaskCollectionSamples < requiredAdvancedLogoMaskCollectionSamples) {
             getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask").then(function (logoAnalysisData) {
@@ -1287,8 +1308,10 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 console.log("elapsed = ", elapsed);
                 console.log("delay = ", delay);
 
+                currentEdgeImage.src = logoAnalysisData.mask_preview;
+
                 setTimeout(() => {
-                    buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                    buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                 }, delay);
             })
         } else if (advancedLogoMaskCollectionSamples >= requiredAdvancedLogoMaskCollectionSamples) {
@@ -1304,10 +1327,21 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 console.log("elapsed = ", elapsed);
                 console.log("delay = ", delay);
 
+                currentEdgeImage.src = logoAnalysisData.mask_preview;
+                logoBoxText = 'BASELINE LOGO MASK COMPLETE. IF ISSUE, REFRESH PAGE AND TRY AGAIN.';
+                logoBox.textContent = logoBoxText;
+                if (!isDebugMode) {
+                    setTimeout(() => {
+                        advancedLogoMaskImageContainer.style.display = 'none';
+                        logoBox.style.display = 'none';
+                        isMaskCompleteMessageDismissable = true;
+                        logoBoxText = 'LIVE COMMERCIAL BLOCKER';
+                        logoBox.textContent = logoBoxText;
+                    }, 5000);
+                }
+
                 setTimeout(() => {
-                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. IF ISSUE, REFRESH PAGE AND TRY AGAIN.';
-                    logoBox.textContent = logoBoxText;
-                    advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                    advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                 }, delay);
             })
         }
@@ -1326,18 +1360,25 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
         getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "compare-to-mask").then(function (logoAnalysisData) {
             //TODO: add failure checks to retry a certain number of times?
 
+            if (isDebugMode) {
+                currentEdgeImage.src = logoAnalysisData.diff_preview;
+                if (isMaskCompleteMessageDismissable) {
+                    logoBoxText = ((logoAnalysisData.confidence * 100).toFixed(0)).padStart(2, "0") + "%";
+                    logoBox.textContent = logoBoxText;
+                }
+            }
+
             //console.log(logoAnalysisData);
-            logoBoxText = ((logoAnalysisData.confidence * 100).toFixed(0)).padStart(2, "0") + "%";
-            logoBox.textContent = logoBoxText;
+            
 
             //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
             //advancedLogoMaskImage.src = logoAnalysisData.mask_preview;
 
             //default to matching logo if not in commercial break and not matching logo if in commercial break
             let match = !isCommercialState;
-            if (!isCommercialState && logoAnalysisData.confidence < 0.3) {
+            if (!isCommercialState && logoAnalysisData.confidence < 0.33) {
                 match = false;
-            } else if (isCommercialState && logoAnalysisData.confidence > 0.7) {
+            } else if (isCommercialState && logoAnalysisData.confidence > 0.63) {
                 match = true;
             }
 
@@ -1411,7 +1452,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 mismatchCount = 0;
 
                 //TODO: is this the best way to do this considering audio and video options?
-                if (!isDebugMode && !isCommercialState) {
+                if (!isDebugMode && !isCommercialState && isMaskCompleteMessageDismissable) {
                     logoBox.style.display = 'none';
                 }
 
@@ -1508,16 +1549,23 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
                 isCommercialState: isCommercialState
             }, function (response) {
 
-                console.log(response.fetchTime);
+                //console.log(response.fetchTime);
 
-                currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
-                advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
+                //currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
+                //advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
                 //logoImageCaptureGrey.src = response.logoAnalysisData.img_np;
                 //logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
-                logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
+                //logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
 
+                console.log(response.wasSuccessfulCall);
 
-                resolve(response.logoAnalysisData);
+                if (response.wasSuccessfulCall) {
+                    resolve(response.logoAnalysisData);
+                } else {
+                    resolve(false);
+                }
+
+                
 
             });
 
@@ -1537,14 +1585,6 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
 
     advancedLogoMaskImageContainer = document.createElement('div');
     advancedLogoMaskImageContainer.className = "ytoc-logo";
-    currentEdgeImage = document.createElement('img');
-    //currentEdgeImage.className = "ytoc-logo";
-    advancedLogoMaskImage = document.createElement('img');
-    //advancedLogoMaskImage.className = "ytoc-logo";
-
-    //logoImageCaptureGrey = document.createElement('img');
-    //logoImageCaptureBlur = document.createElement('img');
-    logoImageCaptureDiff = document.createElement('img');
     
     let windowHeight = window.innerHeight;
     if (advancedLogoSelectionTopLeftLocation.y < windowHeight / 2) {
@@ -1579,11 +1619,20 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     //insertLocation.insertBefore(currentEdgeImage, null);
     //insertLocation.insertBefore(advancedLogoMaskImage, null);
 
-    advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
+    currentEdgeImage = document.createElement('img');
+    //currentEdgeImage.className = "ytoc-logo";
+    //advancedLogoMaskImage = document.createElement('img');
+    //advancedLogoMaskImage.className = "ytoc-logo";
+
+    //logoImageCaptureGrey = document.createElement('img');
+    //logoImageCaptureBlur = document.createElement('img');
+    //logoImageCaptureDiff = document.createElement('img');
+
+    //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
     advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
-    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
+    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
 }
 
 

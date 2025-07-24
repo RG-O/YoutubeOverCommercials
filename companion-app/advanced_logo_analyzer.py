@@ -158,7 +158,8 @@ def advanced_logo_analysis():
         img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
         current_edge = cv2.Canny(img_blur, 40, 100)
     else:
-        #img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
+        #less blur
+        #img_blur = cv2.GaussianBlur(img_np, (3, 3), 0)
         # if current state is not commercial set lower edge threashold as to potentially pick up the logo displaying over whitish background
         #current_edge = cv2.Canny(img_blur, 20, 30)
         #current_edge = cv2.Canny(img_blur, 10, 20)
