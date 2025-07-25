@@ -17,7 +17,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-normal" name="commercialDetectionMode" value="auto-pixel-normal">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-recommended">Recommended</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-default">Default</span>
         </div>
         <div id="auto-pixel-normal" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to">
@@ -34,6 +34,17 @@
             <div class="mode-how-to">
                 <b>HOW TO USE:</b><br />
                 Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when there is a commercial break on screen, and then follow the on-screen instructions presented.
+            </div>
+        </div>
+
+        <div>
+            <input type="radio" id="commercialDetectionMode-auto-pixel-advanced-logo" name="commercialDetectionMode" value="auto-pixel-advanced-logo">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Advanced Logo Analysis</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-recommended">Recommended</span>
+        </div>
+        <div id="auto-pixel-advanced-logo" class="commercial-detection-mode-instructions-wrapper">
+            <div class="mode-how-to">
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
             </div>
         </div>
 
@@ -304,12 +315,12 @@
             <h3>AUTOMATIC COMMERCIAL DETECTION</h3>
 
             <div class="general-field">
-                Color Mismatch Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
+                Mismatch Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
                 <input type="number" name="mismatchCountThreshold" id="mismatchCountThreshold" min="1">
             </div>
 
             <div class="general-field">
-                Color Match Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to match its original color at time of selection before declaring the program as resumed and hiding the overlaid video. NOTE: While in Reverse Pixel Detection Mode, this value is used count mismatches before declaring being out of commercial break.</span></span>
+                Match Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to match its original color at time of selection before declaring the program as resumed and hiding the overlaid video. NOTE: While in Reverse Pixel Detection Mode, this value is used count mismatches before declaring being out of commercial break.</span></span>
                 <input type="number" name="matchCountThreshold" id="matchCountThreshold" min="1">
             </div>
 
@@ -374,7 +385,7 @@
         <button class="button" id="save-button">Save & Apply</button>
         <button class="button" id="close-button">Cancel</button>
         <a href="https://www.buymeacoffee.com/ryango" target="_blank">
-            <img style="height: 40px; float: right;" src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" />
+            <img style="height: 40px; float: right;" src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=coffee&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" />
         </a>
     </div>
 

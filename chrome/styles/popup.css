@@ -259,6 +259,11 @@ button {
     color: white;
 }
 
+.badge-default {
+    background-color: dimgrey;
+    color: white;
+}
+
 .badge-experimental {
     background-color: darkorange;
     color: white;

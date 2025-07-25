@@ -169,7 +169,7 @@ def advanced_logo_analysis():
 
     # # --- Masked region-based comparison ---
     # expected_edge_mask = avg_edge_mask > 20  # Only compare where we expect edges
-    diff_region = cv2.absdiff(current_edge.astype(np.float32), avg_edge_mask.astype(np.float32))
+    #diff_region = cv2.absdiff(current_edge.astype(np.float32), avg_edge_mask.astype(np.float32))
     # #TODO: figure out what this means
     # diff_values = diff_region[expected_edge_mask]
 

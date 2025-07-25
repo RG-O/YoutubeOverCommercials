@@ -107,12 +107,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             if (viewing) {
 
-                //TODO: retest this
+                if (!canvas) {
+                    createCanvas(1, 1);
+                }
+
                 ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, 1, 1, 0, 0, 1, 1);
                 //ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, 30, 30, 0, 0, 30, 30); //debug-high
-                //if (!canvas) {
-                //    createCanvas(1, 1);
-                //} //debug-high
                 //let image = canvas.toDataURL('image/png'); //debug-high
 
                 let pixelColorUnformated = ctx.getImageData(0, 0, 1, 1).data;
@@ -188,7 +188,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     })
                     .catch(error => {
                         //TODO: send current state if error
-                        console.error("Error:", error);
+                        //console.error("Error:", error);
                         sendResponse({ wasSuccessfulCall: false });
                     });
             } else {
