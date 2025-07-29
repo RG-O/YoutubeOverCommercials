@@ -83,6 +83,8 @@ var logoImageCaptureDiff;
 var isMaskCompleteMessageDismissable = false;
 var consecutiveAdvancedLogoAnalysisCallFailures = 0;
 var isAdvancedLogoMonitorPaused = false;
+var windowWidth;
+var windowHeight;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 //variables for Firefox auto audio commercial detection mode:
@@ -608,7 +610,10 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                     isAutoModeInitiated = true;
 
-                                    windowDimensions = { x: window.innerWidth, y: window.innerHeight };
+                                    windowWidth = window.innerWidth;
+                                    windowHeight = window.innerHeight;
+                                    windowDimensions = { x: windowWidth, y: windowHeight };
+                                    console.log(windowDimensions);
                                     startViewingTab(windowDimensions);
 
                                     document.addEventListener('fullscreenchange', abortPixelSelection);
@@ -903,8 +908,14 @@ function pixelSelection(event) {
 
         document.addEventListener('fullscreenchange', fullscreenChanged);
 
+        let selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
+
         //TODO: create user option to turn off logo completely
-        setCommercialDetectedIndicator(selectedPixel);
+        setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation);
+
+        if (shouldOverlayVideoSizeAndLocationAutoSet) {
+            autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixelGridLocation);
+        }
 
         captureOriginalPixelColor(selectedPixel);
 
@@ -927,10 +938,6 @@ function captureOriginalPixelColor(selectedPixel) {
             logoBox.style.color = "rgba(0, 0, 0, 1)";
         } else {
             logoBox.style.color = "rgba(255, 255, 255, 1)";
-        }
-
-        if (shouldOverlayVideoSizeAndLocationAutoSet) {
-            autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel);
         }
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
@@ -1236,43 +1243,52 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     advancedLogoSelectionBottomRightLocation = { x: bottomRightX, y: bottomRightY };
     advancedLogoSelectionDimensions = { width, height };
     
-
     console.log("Top-left:", { x: topLeftX, y: topLeftY });
     console.log("Bottom-right:", { x: bottomRightX, y: bottomRightY });
     console.log("Dimensions:", { width, height });
 
+    selectedPixel = { ...advancedLogoSelectionTopLeftLocation };
+    let selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
 
     //TODO: move this outside and make better
-    let windowWidth = window.innerWidth;
-    let windowHeight = window.innerHeight;
-    if (advancedLogoSelectionTopLeftLocation.x < windowWidth / 2) {
+    if (selectedPixelGridLocation.isLeft) {
         //logo selection on the left side of the page
-        selectedPixel = advancedLogoSelectionBottomRightLocation;
-        if (advancedLogoSelectionTopLeftLocation.y < windowHeight / 2) {
-            //logo selection at the top of the page
+        selectedPixel = { ...advancedLogoSelectionBottomRightLocation };
+        if (selectedPixelGridLocation.isTop) {
+            //logo selection at the top left of the page
             selectedPixel.y -= advancedLogoSelectionDimensions.height;
         }
-    } else {
-        //logo selection on the right side of the page
-        selectedPixel = advancedLogoSelectionTopLeftLocation;
-        if (advancedLogoSelectionTopLeftLocation.y > windowHeight / 2) {
-            //logo selection at the bottom of the page
-            selectedPixel.y += advancedLogoSelectionDimensions.height;
-        }
+    } else if (!selectedPixelGridLocation.isTop) {
+        //logo selection at the bottom right of the page
+        selectedPixel.y += advancedLogoSelectionDimensions.height;
     }
 
     //indicateSelectedPixel(selectedPixel);
+    setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation);
 
-    
-    setCommercialDetectedIndicator(selectedPixel);
     //TODO: decide colors
     //logoBox.style.backgroundColor = "rgb(240, 238, 236)";
     //logoBox.style.color = "#12384d";
     logoBox.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
     logoBox.style.color = "rgb(140, 179, 210, 0.9)";
 
-    setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
+    //TODO: I have a lot of different top/bottom and right/left screen checks all over the place, perhaps I should combine them.
+    if (shouldOverlayVideoSizeAndLocationAutoSet) {
+        let locationToBaseAutoOverlaySizeAndLocation;
+        if (selectedPixelGridLocation.isTop) {
+            locationToBaseAutoOverlaySizeAndLocation = advancedLogoSelectionBottomRightLocation;
+        } else {
+            locationToBaseAutoOverlaySizeAndLocation = advancedLogoSelectionTopLeftLocation;
+        }
+        autoUpdateOverlayVideoSizeAndLocationValues(locationToBaseAutoOverlaySizeAndLocation, selectedPixelGridLocation);
+    }
 
+    if (overlayVideoType == 'other-tabs') {
+        //if user has extension set to other-tabs, mute the other tabs now
+        chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+    }
+
+    setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, selectedPixelGridLocation);
     buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
 }
 
@@ -1342,19 +1358,29 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 currentEdgeImage.src = logoAnalysisData.mask_preview;
                 logoBoxText = 'BASELINE LOGO MASK COMPLETE. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 logoBox.textContent = logoBoxText;
-                if (!isDebugMode) {
-                    setTimeout(() => {
-                        //TODO: is there a function i can use for all this?
+                
+                setTimeout(() => {
+                    //TODO: is there a function i can use for all this?
+                    if (!isDebugMode) {
                         advancedLogoMaskImageContainer.style.display = 'none';
                         logoBox.style.display = 'none';
-                        isMaskCompleteMessageDismissable = true;
-                        initialLogoBoxTextUpdate();
-                    }, 8000);
-                }
+                    }
+                    isMaskCompleteMessageDismissable = true;
+                    initialLogoBoxTextUpdate();
+                }, 8000);
+                
 
                 setTimeout(() => {
                     advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                 }, delay);
+
+                if (overlayVideoType == 'spotify') {
+                    //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
+                    setTimeout(() => {
+                        chrome.runtime.sendMessage({ action: "open_spotify" });
+                        window.addEventListener('beforeunload', closeSpotify);
+                    }, delay + 2000);
+                }
             })
         }
     } else {
@@ -1415,15 +1441,22 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 }
             }
 
-            //console.log(logoAnalysisData);
-            
+            console.log(logoAnalysisData);
+
+            //const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 30 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 220);
+            const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 15 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 240);
+            console.log(isBrightAroundLogo);
 
             //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
             //advancedLogoMaskImage.src = logoAnalysisData.mask_preview;
 
             //default to matching logo if not in commercial break and not matching logo if in commercial break
             let match = !isCommercialState;
-            if (!isCommercialState && logoAnalysisData.confidence < 0.33) {
+            if (
+                !isCommercialState &&
+                logoAnalysisData.confidence < 0.33 &&
+                (logoAnalysisData.white_or_colored === 'colored' || !isBrightAroundLogo)
+            ) {
                 match = false;
             } else if (isCommercialState && logoAnalysisData.confidence > 0.63) {
                 match = true;
@@ -1509,7 +1542,9 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 }
 
                 countdownOngoing = false;
-                logoBox.textContent = logoBoxText;
+                if (!isDebugMode) {
+                    logoBox.textContent = logoBoxText;
+                }
 
                 if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
 
@@ -1542,7 +1577,12 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             //}
 
             //if (commercialDetectionMode === 'auto-pixel-normal') {
-            //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
+            if (isBrightAroundLogo) {
+                logoBox.style.color = "red";
+            } else {
+                logoBox.style.color = "rgb(" + logoAnalysisData.avg_logo_color + ")";
+            }
+            
             //}
 
             cooldownCountRemaining--;
@@ -1552,6 +1592,14 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
             console.log("elapsed = ", elapsed);
             console.log("delay = ", delay);
+
+            console.log(logoAnalysisData.outer_hsv);
+            //let [h, s, l] = hsv_to_hsl(logoAnalysisData.outer_hsv[0], logoAnalysisData.outer_hsv[1], logoAnalysisData.outer_hsv[2])
+            //logoBox.style.backgroundColor = "hsl(" + h + ", " + s + ", " + l + ")";
+
+            //TODO: figure out why in BGR
+            logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[2] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[1] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[0] + ")";
+
 
             //call no faster than once per second
             setTimeout(() => {
@@ -1617,7 +1665,7 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
                 //currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
                 //advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
-                //logoImageCaptureGrey.src = response.logoAnalysisData.img_np;
+                logoImageCaptureGrey.src = response.logoAnalysisData.img_np; //TODO: move out of here if I want it anywhere becaus i think it gets in the way of reporting service errors
                 //logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
                 //logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
 
@@ -1656,7 +1704,7 @@ function shutdownAdvancedLogoAnalysis() {
 }
 
 
-function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions) {
+function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, selectedPixelGridLocation) {
     //TODO: add check to make sure user is still in fullscreen mode
     let insertLocation = document.fullscreenElement;
     if (insertLocation.nodeName == 'HTML') {
@@ -1666,8 +1714,7 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     advancedLogoMaskImageContainer = document.createElement('div');
     advancedLogoMaskImageContainer.className = "ytoc-logo";
     
-    let windowHeight = window.innerHeight;
-    if (advancedLogoSelectionTopLeftLocation.y < windowHeight / 2) {
+    if (selectedPixelGridLocation.isTop) {
         //user clicked on the top of the page
 
         advancedLogoMaskImageContainer.style.top = ((advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 3) + 'px';
@@ -1682,6 +1729,8 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
         //user clicked on the bottom of the page
         advancedLogoMaskImageContainer.style.top = 'auto';
         advancedLogoMaskImageContainer.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
+        console.log(advancedLogoSelectionTopLeftLocation);
+        //console.log(advancedLogoMaskImageContainer.style.bottom);
 
         //currentEdgeImage.style.top = 'auto';
         //currentEdgeImage.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
@@ -1704,15 +1753,18 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     //advancedLogoMaskImage = document.createElement('img');
     //advancedLogoMaskImage.className = "ytoc-logo";
 
-    //logoImageCaptureGrey = document.createElement('img');
+    logoImageCaptureGrey = document.createElement('img');
     //logoImageCaptureBlur = document.createElement('img');
     //logoImageCaptureDiff = document.createElement('img');
 
     //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
-    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
     advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
+
+    console.log(advancedLogoSelectionTopLeftLocation);
+    console.log(advancedLogoMaskImageContainer.style.bottom);
 }
 
 
@@ -1955,7 +2007,7 @@ function setAudioLevelBar(level) {
 
 
 //sets element to show user color differences next to selected pixel when commercial is detected
-function setCommercialDetectedIndicator(selectedPixel) {
+function setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation) {
 
     //TODO: add check to make sure user is still in fullscreen mode
     let insertLocation = document.fullscreenElement;
@@ -1973,9 +2025,7 @@ function setCommercialDetectedIndicator(selectedPixel) {
     logoBox.textContent = logoBoxText;
     logoBox.style.display = 'block';
 
-    let windowWidth = window.innerWidth;
-
-    if (selectedPixel.x < windowWidth / 2) {
+    if (selectedPixelGridLocation.isLeft) {
         //user clicked on the left side of the page
         logoBox.style.left = (selectedPixel.x + 10) + 'px';
         logoBox.style.right = 'auto';
@@ -2034,6 +2084,21 @@ function spotifyLogoBoxUpdate(text) {
 
     }
 
+}
+
+
+//returns the quadrant that the selected pixel is in
+function getSelectedPixelGridLocation(selectedPixel) {
+    let selectedPixelGridLocation = { isTop: false, isLeft: false };
+
+    if (selectedPixel.x < windowWidth / 2) {
+        selectedPixelGridLocation.isLeft = true;
+    }
+    if (selectedPixel.y < windowHeight / 2) {
+        selectedPixelGridLocation.isTop = true;
+    }
+
+    return selectedPixelGridLocation;
 }
 
 
@@ -2457,12 +2522,10 @@ function exitPiPMode() {
 }
 
 
-function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel) {
+function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixelGridLocation) {
 
     videoOverlayWidth = 100;
     overlayVideoLocationHorizontal = 'middle';
-
-    let windowHeight = window.innerHeight;
 
     let belowSelectedPixelBuffer = 8;
     let aboveSelectedPixelBuffer = 4;
@@ -2470,8 +2533,7 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel) {
         belowSelectedPixelBuffer = 4;
     }
 
-    //TODO: update for auto-pixel-logo-advanced
-    if (selectedPixel.y < windowHeight / 2) {
+    if (selectedPixelGridLocation.isTop) {
         overlayVideoLocationVertical = 'bottom';
         videoOverlayHeight = 100 - (((selectedPixel.y + belowSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 8px of room to view pixel and don't want to go below 0 in case user selected from very top //TODO: set differently for firefox?
     } else {
