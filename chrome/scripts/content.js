@@ -173,13 +173,28 @@ function addOverlayFade(insertLocation) {
             overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
             insertLocation.insertBefore(overlayScreen, null);
 
+        } else if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
+
+            overlayScreen.className = "ytoc-overlay-screen-with-hole";
+            overlayScreen.style.setProperty("width", `${advancedLogoSelectionDimensions.width}px`, "important");
+            overlayScreen.style.setProperty("height", `${advancedLogoSelectionDimensions.height}px`, "important");
+            //setting location of hole for the advanced logo detector to look through
+            overlayScreen.style.setProperty("left", `${advancedLogoSelectionTopLeftLocation.x}px`, "important");
+            overlayScreen.style.setProperty("top", `${advancedLogoSelectionTopLeftLocation.y}px`, "important");
+            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            insertLocation.insertBefore(overlayScreen, null);
+
         } else if (selectedPixel) {
 
             overlayScreen.className = "ytoc-overlay-screen-with-hole";
+            overlayScreen.style.setProperty("border-radius", "50%", "important");
             if (isFirefox) {
                 //firefox does not need as large of a hole
                 overlayScreen.style.setProperty("width", "6px", "important");
                 overlayScreen.style.setProperty("height", "6px", "important");
+            } else {
+                overlayScreen.style.setProperty("width", "10px", "important");
+                overlayScreen.style.setProperty("height", "10px", "important");
             }
             //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
             overlayScreen.style.left = (selectedPixel.x - 3) + 'px';
@@ -1665,7 +1680,7 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
                 //currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
                 //advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
-                logoImageCaptureGrey.src = response.logoAnalysisData.img_np; //TODO: move out of here if I want it anywhere becaus i think it gets in the way of reporting service errors
+                //logoImageCaptureGrey.src = response.logoAnalysisData.img_np; //TODO: move out of here if I want it anywhere becaus i think it gets in the way of reporting service errors
                 //logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
                 //logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
 
@@ -1753,12 +1768,12 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     //advancedLogoMaskImage = document.createElement('img');
     //advancedLogoMaskImage.className = "ytoc-logo";
 
-    logoImageCaptureGrey = document.createElement('img');
+    //logoImageCaptureGrey = document.createElement('img');
     //logoImageCaptureBlur = document.createElement('img');
     //logoImageCaptureDiff = document.createElement('img');
 
     //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
-    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
     advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);

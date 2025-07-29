@@ -41,6 +41,9 @@ app = Flask(__name__)
 logo_edges = []
 avg_edge_mask = None
 
+logo_edges_from_eroded = []
+avg_edge_mask_from_eroded = None
+
 color_imgs = []
 avg_color_img = None
 
@@ -100,7 +103,8 @@ def is_average_color_white_or_transparent(avg_bgr):
 
     # Decision logic
     #if s < 30 and v > 200:
-    if s < 70 and v > 140:
+    #if s < 70 and v > 140:
+    if s < 70 and v > 100:
         return "white_or_transparent"
     else:
         return "colored"
@@ -219,7 +223,7 @@ def average_hsv_and_rgb_outside_contours(image_bgr, contours):
 @app.route("/advanced-logo-analysis", methods=["POST"])
 def advanced_logo_analysis():
     global logo_edges, avg_edge_mask
-
+    global logo_edges_from_eroded, avg_edge_mask_from_eroded
     global color_imgs, avg_color_img
 
     data = request.json
@@ -238,6 +242,16 @@ def advanced_logo_analysis():
 
     img_np = np.array(img_pil)
 
+
+    # Create kernel for morphological ops
+    kernel = np.ones((2, 2), np.uint8)
+    #kernel = np.ones((3, 3), np.uint8)
+
+    # Step 1: Shrink contour region for cleaner inside
+    img_eroded = cv2.erode(img_np, kernel)
+
+    
+
     #img_blur = cv2.GaussianBlur(img_np, (5, 5), 0)
     #img_blur = cv2.GaussianBlur(img_np, (9, 9), 0)
 
@@ -250,6 +264,12 @@ def advanced_logo_analysis():
         logo_edges = []
         logo_edges.append(current_edge)
         avg_edge_mask = np.mean(logo_edges, axis=0).astype(np.uint8)
+
+        img_blur_from_eroded = cv2.GaussianBlur(img_eroded, (5, 5), 0)
+        current_edge_from_eroded = cv2.Canny(img_blur_from_eroded, 20, 50)
+        logo_edges_from_eroded = []
+        logo_edges_from_eroded.append(current_edge_from_eroded)
+        avg_edge_mask_from_eroded = np.mean(logo_edges_from_eroded, axis=0).astype(np.uint8)
 
         color_imgs = []
         color_imgs.append(img_color_three)
@@ -270,6 +290,11 @@ def advanced_logo_analysis():
         current_edge = cv2.Canny(img_blur, 30, 70)
         logo_edges.append(current_edge)
         avg_edge_mask = np.mean(logo_edges, axis=0).astype(np.uint8)
+
+        img_blur_from_eroded = cv2.GaussianBlur(img_eroded, (5, 5), 0)
+        current_edge_from_eroded = cv2.Canny(img_blur_from_eroded, 30, 70)
+        logo_edges_from_eroded.append(current_edge_from_eroded)
+        avg_edge_mask_from_eroded = np.mean(logo_edges_from_eroded, axis=0).astype(np.uint8)
 
         color_imgs.append(img_color_three)
         avg_color_img = np.mean(color_imgs, axis=0).astype(np.uint8)
@@ -303,6 +328,11 @@ def advanced_logo_analysis():
         #         "confidence": 0.0,
         #         "logo": False
         #     })
+
+        img_blur_from_eroded = cv2.GaussianBlur(img_eroded, (5, 5), 0)
+        current_edge_from_eroded = cv2.Canny(img_blur_from_eroded, 20, 50)
+        logo_edges_from_eroded.append(current_edge_from_eroded)
+        avg_edge_mask_from_eroded = np.mean(logo_edges_from_eroded, axis=0).astype(np.uint8)
 
         color_imgs.append(img_color_three)
         avg_color_img = np.mean(color_imgs, axis=0).astype(np.uint8)
@@ -372,6 +402,7 @@ def advanced_logo_analysis():
     avg_edge_mask_boolean_mask = avg_edge_mask > 180  # Ground truth
     current_edge_boolean_mask = current_edge > 20  # Noisy comparison
 
+    avg_edge_mask_boolean_mask_from_eroded = avg_edge_mask_from_eroded > 180
 
 
     # # Dilate the edges in image2 to tolerate small misalignments
@@ -416,7 +447,8 @@ def advanced_logo_analysis():
 
 
     #contours, _ = cv2.findContours(avg_edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours, _ = cv2.findContours(avg_edge_mask_boolean_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    #contours, _ = cv2.findContours(avg_edge_mask_boolean_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
 
     # for cnt in contours:
@@ -433,7 +465,8 @@ def advanced_logo_analysis():
 
     for cnt in contours:
         # Create a mask for the current contour
-        mask = np.zeros_like(avg_edge_mask)
+        #mask = np.zeros_like(avg_edge_mask)
+        mask = np.zeros_like(avg_edge_mask_from_eroded)
         cv2.drawContours(mask, [cnt], -1, 255, thickness=cv2.FILLED)
 
         # Compute the mean color within the masked region
@@ -474,6 +507,7 @@ def advanced_logo_analysis():
         #"current_edge_preview": image_to_base64((current_edge_boolean_mask_dilated.astype(np.uint8)) * 255),
         #"mask_preview": image_to_base64(avg_edge_mask),
         "mask_preview": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
+        "img_blur": image_to_base64((avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8)) * 255),
         #"diff_preview": image_to_base64(diff_region.astype(np.uint8)),
         "diff_preview": image_to_base64(visual.astype(np.uint8)),
         #"img_np": image_to_base64(img_np),

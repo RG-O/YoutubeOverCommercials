@@ -188,7 +188,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     })
                     .catch(error => {
                         //TODO: send current state if error
-                        console.error("Error:", error); //TODO: comment this out?
+                        //console.error("Error:", error); //TODO: comment this out?
                         sendResponse({ wasSuccessfulCall: false });
                     });
             } else {
