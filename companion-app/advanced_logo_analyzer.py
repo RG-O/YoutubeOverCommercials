@@ -54,6 +54,8 @@ avg_edge_mask_from_eroded = None
 color_imgs = []
 avg_color_img = None
 
+contours = []
+
 # def preprocess_edge(img_blur):
 #     #blurred = cv2.GaussianBlur(image_np, (5, 5), 0)
 #     #return cv2.Canny(blurred, 50, 150)
@@ -105,18 +107,21 @@ def is_average_color_white_or_transparent(avg_bgr):
     hsv = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)
     h, s, v = hsv[0][0]  # unpack the single pixel
 
-    print("s:", s)
-    print("v:", v)
+    # print("s:", s)
+    # print("v:", v)
 
-    # Decision logic
-    #if s < 30 and v > 200:
-    #if s < 70 and v > 140:
-    if s < 70 and v > 100:
-        return "white_or_transparent"
-    else:
-        return "colored"
-        #TODO: somehow get contor to move in a little so it doesn't grab edges
-        #TODO: move decision over to extension
+    # # Decision logic
+    # #if s < 30 and v > 200:
+    # #if s < 70 and v > 140:
+    # if s < 70 and v > 100:
+    #     return "white_or_transparent"
+    # else:
+    #     return "colored"
+    #     #TODO: move decision over to extension
+
+    #return {"h": h, "s": s, "v": v} #not json serializable
+    return (h, s, v)
+
 
 
 
@@ -227,11 +232,16 @@ def average_hsv_and_rgb_outside_contours(image_bgr, contours):
     }
 
 
+
+
+
+
 @app.route("/advanced-logo-analysis", methods=["POST"])
 def advanced_logo_analysis():
     global logo_edges, avg_edge_mask
     global logo_edges_from_eroded, avg_edge_mask_from_eroded
     global color_imgs, avg_color_img
+    global contours
 
     data = request.json
     img_data = data['image'].split(',')[1]
@@ -281,6 +291,9 @@ def advanced_logo_analysis():
         color_imgs = []
         color_imgs.append(img_color_three)
         avg_color_img = np.mean(color_imgs, axis=0).astype(np.uint8)
+
+        contours = []
+
 
         return jsonify({
             "status": data['request'],
@@ -344,13 +357,76 @@ def advanced_logo_analysis():
         color_imgs.append(img_color_three)
         avg_color_img = np.mean(color_imgs, axis=0).astype(np.uint8)
 
+        avg_edge_mask_boolean_mask_from_eroded = avg_edge_mask_from_eroded > 180
+
+        #contours, _ = cv2.findContours(avg_edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        #contours, _ = cv2.findContours(avg_edge_mask_boolean_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+
+        # for cnt in contours:
+        #     mask = np.zeros_like(avg_edge_mask)
+        #     cv2.drawContours(mask, [cnt], -1, 255, thickness=cv2.FILLED)
+        #     average_color_inside = cv2.mean(img_color_two, mask=mask[:])
+        #     print("Average inside color:", average_color_inside)
+
+
+        #contour_vis = img_color_three.copy()
+        contour_vis = avg_color_img.copy()
+
+        individual_avg_colors = []
+
+        for cnt in contours:
+            # Create a mask for the current contour
+            #mask = np.zeros_like(avg_edge_mask)
+            mask = np.zeros_like(avg_edge_mask_from_eroded)
+            cv2.drawContours(mask, [cnt], -1, 255, thickness=cv2.FILLED)
+
+            # Compute the mean color within the masked region
+            # color = cv2.mean(img_color_three, mask=mask)[:3]  # (B, G, R)
+            color = cv2.mean(avg_color_img, mask=mask)[:3]  # (B, G, R)
+
+            #print(color)
+
+            individual_avg_colors.append(color)
+
+            # Draw the contour on the visualization image
+            cv2.drawContours(contour_vis, [cnt], -1, (0, 255, 0), thickness=1)
+
+
+        #print(individual_avg_colors)
+
+        # Compute overall average color from individual contour colors
+        if individual_avg_colors:
+            overall_avg_color = tuple(np.mean(individual_avg_colors, axis=0))
+        else:
+            overall_avg_color = (0, 0, 0)
+
+        print(overall_avg_color)
+
+        overall_avg_color = tuple(float(c) for c in overall_avg_color)
+
+        print(overall_avg_color)
+
+        #print("Average color:", overall_avg_color)
+
+        #TODO: I don't believe I have to use this function if I just keep the average color image in HSV the whole time
+        logo_mask_avg_hsv = is_average_color_white_or_transparent(overall_avg_color)
+
+        logo_mask_avg_hsv = tuple(float(c) for c in logo_mask_avg_hsv)
+
+        print(logo_mask_avg_hsv)
+
         return jsonify({
             "status": data['request'],
             "frames_collected": len(logo_edges),
             "current_edge_preview": image_to_base64(current_edge),
             "mask_preview": image_to_base64(avg_edge_mask),
-            "img_np": image_to_base64(img_np),
-            "img_blur": image_to_base64(img_blur),
+            #"img_np": image_to_base64(img_np),
+            #"img_blur": image_to_base64(img_blur),
+            "logo_mask_avg_hsv": logo_mask_avg_hsv,
+            "avg_logo_color": overall_avg_color,
+            "contour_vis": image_to_base64(contour_vis),
         })
 
     # avg_edge = avg_edge_mask.astype(np.float32)
@@ -409,7 +485,7 @@ def advanced_logo_analysis():
     avg_edge_mask_boolean_mask = avg_edge_mask > 180  # Ground truth
     current_edge_boolean_mask = current_edge > 20  # Noisy comparison
 
-    avg_edge_mask_boolean_mask_from_eroded = avg_edge_mask_from_eroded > 180
+    
 
 
     # # Dilate the edges in image2 to tolerate small misalignments
@@ -453,49 +529,7 @@ def advanced_logo_analysis():
     just_logo = overlay_logo_box(img_color, avg_edge_mask)
 
 
-    #contours, _ = cv2.findContours(avg_edge_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    #contours, _ = cv2.findContours(avg_edge_mask_boolean_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours, _ = cv2.findContours(avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-
-    # for cnt in contours:
-    #     mask = np.zeros_like(avg_edge_mask)
-    #     cv2.drawContours(mask, [cnt], -1, 255, thickness=cv2.FILLED)
-    #     average_color_inside = cv2.mean(img_color_two, mask=mask[:])
-    #     print("Average inside color:", average_color_inside)
-
-
-    #contour_vis = img_color_three.copy()
-    contour_vis = avg_color_img.copy()
-
-    individual_avg_colors = []
-
-    for cnt in contours:
-        # Create a mask for the current contour
-        #mask = np.zeros_like(avg_edge_mask)
-        mask = np.zeros_like(avg_edge_mask_from_eroded)
-        cv2.drawContours(mask, [cnt], -1, 255, thickness=cv2.FILLED)
-
-        # Compute the mean color within the masked region
-        # color = cv2.mean(img_color_three, mask=mask)[:3]  # (B, G, R)
-        color = cv2.mean(avg_color_img, mask=mask)[:3]  # (B, G, R)
-
-        individual_avg_colors.append(color)
-
-        # Draw the contour on the visualization image
-        cv2.drawContours(contour_vis, [cnt], -1, (0, 255, 0), thickness=1)
-
-    # Compute overall average color from individual contour colors
-    if individual_avg_colors:
-        overall_avg_color = tuple(np.mean(individual_avg_colors, axis=0))
-    else:
-        overall_avg_color = (0, 0, 0)
-
-    overall_avg_color = tuple(float(c) for c in overall_avg_color)
-
-    #print("Average color:", overall_avg_color)
-
-    white_or_colored = is_average_color_white_or_transparent(overall_avg_color)
 
 
 
@@ -514,16 +548,16 @@ def advanced_logo_analysis():
         #"current_edge_preview": image_to_base64((current_edge_boolean_mask_dilated.astype(np.uint8)) * 255),
         #"mask_preview": image_to_base64(avg_edge_mask),
         "mask_preview": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
-        "img_blur": image_to_base64((avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8)) * 255),
+        #"img_blur": image_to_base64((avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8)) * 255),
         #"diff_preview": image_to_base64(diff_region.astype(np.uint8)),
         "diff_preview": image_to_base64(visual.astype(np.uint8)),
         #"img_np": image_to_base64(img_np),
         #"img_blur": image_to_base64(img_blur),
         #"img_np": image_to_base64(just_logo),
-        "img_np": image_to_base64(contour_vis),
+        #"img_np": image_to_base64(contour_vis),
         #"img_np": image_to_base64(avg_color_img),
-        "avg_logo_color": overall_avg_color,
-        "white_or_colored": white_or_colored,
+        #"avg_logo_color": overall_avg_color,
+        #"white_or_colored": white_or_colored,
         #"outer_hsv": outer_hsv,
         "outer_hsv_and_rgb": outer_hsv_and_rgb,
     })

@@ -83,6 +83,8 @@ var logoImageCaptureDiff;
 var isMaskCompleteMessageDismissable = false;
 var consecutiveAdvancedLogoAnalysisCallFailures = 0;
 var isAdvancedLogoMonitorPaused = false;
+var isColorLogo = false;
+var averageLogoColor;
 var windowWidth;
 var windowHeight;
 //TODO: Add user preference for spotify to have audio come in gradually
@@ -1287,7 +1289,7 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     //logoBox.style.backgroundColor = "rgb(240, 238, 236)";
     //logoBox.style.color = "#12384d";
     logoBox.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-    logoBox.style.color = "rgb(140, 179, 210, 0.9)";
+    logoBox.style.color = "rgb(140, 179, 210)";
 
     //TODO: I have a lot of different top/bottom and right/left screen checks all over the place, perhaps I should combine them.
     if (shouldOverlayVideoSizeAndLocationAutoSet) {
@@ -1344,6 +1346,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
         } else if (advancedLogoMaskCollectionSamples > 0 && advancedLogoMaskCollectionSamples < requiredAdvancedLogoMaskCollectionSamples) {
             getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask").then(function (logoAnalysisData) {
                 //TODO: add failure checks to retry a certain number of times?
+                //TODO: check for fullscreen to cancel if user exits early
                 ++advancedLogoMaskCollectionSamples;
 
                 console.log(logoAnalysisData);
@@ -1362,32 +1365,54 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
             })
         } else if (advancedLogoMaskCollectionSamples >= requiredAdvancedLogoMaskCollectionSamples) {
             getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-last").then(function (logoAnalysisData) {
-                //TODO: add failure checks to retry a certain number of times?
+                //TODO: add failure checks to retry this one only once
+                //TODO: check for fullscreen to cancel if user exits early
                 ++advancedLogoMaskCollectionSamples;
 
                 console.log(logoAnalysisData);
 
-                const elapsed = Date.now() - startTime;
-                const delay = Math.max(0, 1000 - elapsed);
+                console.log(logoAnalysisData.logo_mask_avg_hsv[1]);
 
-                console.log("elapsed = ", elapsed);
-                console.log("delay = ", delay);
+                console.log(logoAnalysisData.logo_mask_avg_hsv[2]);
+
+                console.log(logoAnalysisData.avg_logo_color);
+                averageLogoColor = logoAnalysisData.avg_logo_color;
+                //logoBox.style.color = "rgb(" + averageLogoColor + ")";
+
+                logoImageCaptureGrey.src = logoAnalysisData.contour_vis;
+
+                //check average color of inside of logo part of mask to see if it is a white / transparent white logo or a colored logo
+                if (logoAnalysisData.logo_mask_avg_hsv[1] < 70 || logoAnalysisData.logo_mask_avg_hsv[2] > 100) {
+                    isColorLogo = false;
+                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. WHITE OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+                } else {
+                    isColorLogo = true;
+                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. COLOR LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+                }
+                logoBox.textContent = logoBoxText;
+                console.log(isColorLogo);
 
                 currentEdgeImage.src = logoAnalysisData.mask_preview;
-                logoBoxText = 'BASELINE LOGO MASK COMPLETE. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
-                logoBox.textContent = logoBoxText;
-                
+
+                console.log('******************************************************************');
+
                 setTimeout(() => {
                     //TODO: is there a function i can use for all this?
                     if (!isDebugMode) {
                         advancedLogoMaskImageContainer.style.display = 'none';
                         logoBox.style.display = 'none';
                     }
+                    logoImageCaptureGrey.remove();
                     isMaskCompleteMessageDismissable = true;
                     initialLogoBoxTextUpdate();
                 }, 8000);
-                
 
+                const elapsed = Date.now() - startTime;
+                const delay = Math.max(0, 1000 - elapsed);
+
+                console.log("elapsed = ", elapsed);
+                console.log("delay = ", delay);
+                
                 setTimeout(() => {
                     advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                 }, delay);
@@ -1473,7 +1498,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             if (
                 !isCommercialState &&
                 logoAnalysisData.confidence < 0.33 &&
-                (logoAnalysisData.white_or_colored === 'colored' || !isBrightAroundLogo)
+                (isColorLogo || !isBrightAroundLogo)
             ) {
                 match = false;
             } else if (isCommercialState && logoAnalysisData.confidence > 0.63) {
@@ -1595,10 +1620,11 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             //}
 
             //if (commercialDetectionMode === 'auto-pixel-normal') {
-            if (isBrightAroundLogo) {
-                logoBox.style.color = "red";
+            if (!isCommercialState && !isColorLogo && isBrightAroundLogo) {
+                logoBox.style.color = "orange";
             } else {
-                logoBox.style.color = "rgb(" + logoAnalysisData.avg_logo_color + ")";
+                //logoBox.style.color = "rgb(" + averageLogoColor + ")";
+                logoBox.style.color = "rgb(140, 179, 210)";
             }
             
             //}
@@ -1616,7 +1642,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             //logoBox.style.backgroundColor = "hsl(" + h + ", " + s + ", " + l + ")";
 
             //TODO: figure out why in BGR
-            logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[2] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[1] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[0] + ")";
+            //logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[2] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[1] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[0] + ")";
 
 
             //call no faster than once per second
@@ -1706,8 +1732,9 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 }
 
 
+//TODO: Somehow use a variation of this for all auto-pixel modes to let users reselect pixel without refreshing tab
 function shutdownAdvancedLogoAnalysis() {
-    addMessageAlertToMainVideo('Error calling Advanced Logo Analyzer Companion App. Please make sure app is running, refresh page, and try again. This message will soon disappear.');
+    addMessageAlertToMainVideo('Error calling Advanced Logo Analyzer Companion App. Please make sure app is running and try again. This message will soon disappear.');
     setTimeout(() => {
         removeElementsByClass('ytoc-main-video-message-alert');
     }, 9000);
@@ -1717,7 +1744,14 @@ function shutdownAdvancedLogoAnalysis() {
     document.removeEventListener('fullscreenchange', fullscreenChanged);
     logoBox.remove();
     advancedLogoMaskImageContainer.remove();
+    removeElementsByClass('ytoc-click-blocker');
+    if (inIFrame()) {
+        htmlElement.style.pointerEvents = nativeInlinePointerEvents;
+    }
 
+    //complete reset
+    cooldownCountRemaining = 8;
+    selectedPixel = false;
     isAutoModeInitiated = false;
 }
 
@@ -1772,12 +1806,12 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     //advancedLogoMaskImage = document.createElement('img');
     //advancedLogoMaskImage.className = "ytoc-logo";
 
-    //logoImageCaptureGrey = document.createElement('img');
+    logoImageCaptureGrey = document.createElement('img');
     //logoImageCaptureBlur = document.createElement('img');
     //logoImageCaptureDiff = document.createElement('img');
 
     //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
-    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
     advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
     //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
