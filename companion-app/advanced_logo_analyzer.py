@@ -35,8 +35,15 @@ import numpy as np
 import cv2
 from PIL import Image
 from io import BytesIO
+import threading
+import webbrowser
+import pystray
+from pystray import MenuItem as item
+import sys
+import os
 
 app = Flask(__name__)
+PORT = 64143
 
 logo_edges = []
 avg_edge_mask = None
@@ -80,7 +87,7 @@ def overlay_logo_box(original_bgr, edge_mask):
 
 
 
-
+#TODO: can I have this all just be hsv from the start?
 def is_average_color_white_or_transparent(avg_bgr):
     """
     Classifies a single average BGR color as white/transparent or colored.
@@ -521,5 +528,33 @@ def advanced_logo_analysis():
         "outer_hsv_and_rgb": outer_hsv_and_rgb,
     })
 
-if __name__ == "__main__":
+
+@app.route("/ping-advanced-logo-analysis", methods=["GET"])
+def ping():
+    return jsonify({"ok": True})
+
+def run_server():
+    #app.run(host="127.0.0.1", port=PORT)
     app.run(port=64143)
+
+# def on_open():
+#     webbrowser.open(f"http://localhost:{PORT}/ping")
+
+def on_restart(icon, item):
+    os.execl(sys.executable, sys.executable, *sys.argv)
+
+def on_exit(icon, item):
+    icon.stop()
+    os._exit(0)
+
+def start_tray():
+    image = Image.new("RGB", (64, 64), color=(0, 128, 255))
+    # menu = (item("Open Ping", on_open), item("Restart", on_restart), item("Exit", on_exit))
+    menu = (item("Restart", on_restart), item("Exit", on_exit))
+    icon = pystray.Icon("TV Logo Detector", image, "TV Logo Detector", menu)
+    icon.run()
+
+if __name__ == "__main__":
+    #app.run(port=64143)
+    threading.Thread(target=run_server, daemon=True).start()
+    start_tray()

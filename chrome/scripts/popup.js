@@ -3,6 +3,7 @@ var isFirefox = false; //********************
 var profiles = {};
 var gridCells;
 var pipGridCells;
+var hasPreviouslyInstalledCompanionApp;
 
 //grab all user set values
 chrome.storage.sync.get([
@@ -37,7 +38,8 @@ chrome.storage.sync.get([
     'audioLevelThreshold',
     'shouldOverlayVideoSizeAndLocationAutoSet',
     'shouldShuffleYTPlaylist',
-    'profiles'
+    'profiles',
+    'hasPreviouslyInstalledCompanionApp'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -84,6 +86,7 @@ chrome.storage.sync.get([
         option.textContent = name;
         optionsForm.profileSelect.appendChild(option);
     }
+    hasPreviouslyInstalledCompanionApp = result.hasPreviouslyInstalledCompanionApp ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -91,6 +94,8 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleModeInstructionsVisability);
         modeRadios[i].addEventListener('change', toggleAutoDimensionsFieldVisability);
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
+        modeRadios[i].addEventListener('change', pingCompanionApp);
+        modeRadios[i].addEventListener('change', enableSaveButton);
     }
 
     document.getElementById(optionsForm.overlayVideoType.value).style.display = 'block';
@@ -534,6 +539,8 @@ function runAllToggles() {
     hideConfirmDeleteProfilePrompt();
     setOverlayDisplayPositionGrid();
     setPiPDisplayPositionGrid();
+    pingCompanionApp();
+    enableSaveButton();
 }
 
 
@@ -776,4 +783,61 @@ function clearAllValidationMessages() {
 
     }
 
+}
+
+
+function pingCompanionApp() {
+    if (optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo') {
+        document.getElementById('companion-app-loading').style.display = 'block';
+        document.getElementById('save-button').disabled = true;
+
+        fetch("http://localhost:64143/ping-advanced-logo-analysis")
+            .then(() => {
+                //successful ping
+                displayPingCompanionAppSuccess();
+            })
+            .catch(() => {
+                //error with ping
+                displayPingCompanionAppError();
+            });
+    }
+}
+
+
+function displayPingCompanionAppSuccess() {
+    document.getElementById('companion-app-loading').style.display = 'none';
+    document.getElementById('companion-app-additional-setup').style.display = 'none';
+    document.getElementById('companion-app-ping-error').style.display = 'none';
+    document.getElementById('companion-app-ping-success').style.display = 'block';
+    document.getElementById('companion-app-instructions').style.display = 'block';
+    document.getElementById('save-button').disabled = false;
+
+    if (!hasPreviouslyInstalledCompanionApp) {
+        //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledCompanionApp = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledCompanionApp: hasPreviouslyInstalledCompanionApp });
+    }
+}
+
+
+function displayPingCompanionAppError() {
+    //TODO: maybe let users save with warning instead of blocking them
+    document.getElementById('companion-app-loading').style.display = 'none';
+    document.getElementById('companion-app-ping-success').style.display = 'none';
+    document.getElementById('companion-app-instructions').style.display = 'none';
+
+    if (hasPreviouslyInstalledCompanionApp) {
+        document.getElementById('companion-app-ping-error').style.display = 'block';
+        document.getElementById('companion-app-additional-setup').style.display = 'none';
+    } else {
+        document.getElementById('companion-app-ping-error').style.display = 'none';
+        document.getElementById('companion-app-additional-setup').style.display = 'block';
+    }
+}
+
+
+function enableSaveButton() {
+    if (optionsForm.commercialDetectionMode.value !== 'auto-pixel-advanced-logo') {
+        document.getElementById('save-button').disabled = false;
+    } //else enabled by function above with successful ping
 }

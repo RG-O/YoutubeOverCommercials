@@ -835,6 +835,8 @@ function setBlockersAndPixelSelectionInstructions() {
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
     if (commercialDetectionMode === 'auto-pixel-opposite') {
         iFrameSource = iFrameSource + '?purpose=opposite-mode-instructions';
+    } else if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
+        iFrameSource = iFrameSource + '?purpose=advanced-logo-mode-instructions';
     }
     iFrame.src = iFrameSource;
     iFrame.width = "100%";
@@ -1291,9 +1293,9 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     if (shouldOverlayVideoSizeAndLocationAutoSet) {
         let locationToBaseAutoOverlaySizeAndLocation;
         if (selectedPixelGridLocation.isTop) {
-            locationToBaseAutoOverlaySizeAndLocation = advancedLogoSelectionBottomRightLocation;
+            locationToBaseAutoOverlaySizeAndLocation = { ...advancedLogoSelectionBottomRightLocation };
         } else {
-            locationToBaseAutoOverlaySizeAndLocation = advancedLogoSelectionTopLeftLocation;
+            locationToBaseAutoOverlaySizeAndLocation = { ...advancedLogoSelectionTopLeftLocation };
         }
         autoUpdateOverlayVideoSizeAndLocationValues(locationToBaseAutoOverlaySizeAndLocation, selectedPixelGridLocation);
     }
@@ -1304,6 +1306,7 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     }
 
     setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, selectedPixelGridLocation);
+
     buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
 }
 
@@ -1728,7 +1731,8 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
 
     advancedLogoMaskImageContainer = document.createElement('div');
     advancedLogoMaskImageContainer.className = "ytoc-logo";
-    
+
+    //TODO: redo this so the logos display to the side instead of top/bottom to get them out of the way more and make sure they don't display under overlay
     if (selectedPixelGridLocation.isTop) {
         //user clicked on the top of the page
 
