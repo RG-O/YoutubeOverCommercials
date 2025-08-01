@@ -1381,8 +1381,10 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
                 logoImageCaptureGrey.src = logoAnalysisData.contour_vis;
 
+                //TODO: have it be like some percentage of pixels that are bright instead of averaging the colors which often ends up being a shade of brown for color logos. or average the s and v's of each pixel?
                 //check average color of inside of logo part of mask to see if it is a white / transparent white logo or a colored logo
-                if (logoAnalysisData.logo_mask_avg_hsv[1] < 70 || logoAnalysisData.logo_mask_avg_hsv[2] > 100) {
+                //if (logoAnalysisData.logo_mask_avg_hsv[1] < 70 || logoAnalysisData.logo_mask_avg_hsv[2] > 100) {
+                if (logoAnalysisData.logo_mask_avg_hsv[1] < 65 && logoAnalysisData.logo_mask_avg_hsv[2] > 110) {
                     isColorLogo = false;
                     logoBoxText = 'BASELINE LOGO MASK COMPLETE. WHITE OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 } else {
@@ -1484,7 +1486,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 }
             }
 
-            console.log(logoAnalysisData);
+            //console.log(logoAnalysisData);
 
             //const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 30 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 220);
             const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 15 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 240);
