@@ -64,7 +64,7 @@ chrome.storage.sync.get([
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
     optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 14;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 120;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 45;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
     optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
     optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
@@ -301,13 +301,11 @@ document.getElementById("save-button").onclick = function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
+
+            //TODO: only show this message if one of these values have been updated and extension has already been initiated
+            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
             //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
             window.close();
-            //TODO: get this message to actually display correctly for firefox
-            if (!isFirefox) {
-                //TODO: only show this message if one of these values have been updated and extension has already been initiated
-                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
-            }
 
         });
 
