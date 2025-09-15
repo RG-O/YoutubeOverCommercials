@@ -9,7 +9,9 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "tabCapture",
+    "offscreen"
   ],
   "host_permissions": [
     "<all_urls>",
@@ -19,8 +21,8 @@
   "commands": {
     "execute_shortcut": {
       "suggested_key": {
-        "default": "Ctrl+Alt+C",
-        "mac": "MacCtrl+Alt+C"
+        "default": "Ctrl+Shift+F",
+        "mac": "MacCtrl+Shift+F"
       },
       "description": "Execute keyboard shortcut"
     }
@@ -35,7 +37,7 @@
     }
   },
   "background": {
-    "scripts": [ "scripts/background.js" ]
+    "service_worker": "scripts/background.js"
   },
   "content_scripts": [
     {
@@ -52,10 +54,5 @@
       "resources": [ "pixel-select-instructions.html" ],
       "matches": [ "<all_urls>" ]
     }
-  ],
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "YouTubeOverCommercials@safd787sfa.xyz"
-    }
-  }
+  ]
 }
