@@ -22,6 +22,8 @@ var countdownOngoing = false;
 var pipBlocker;
 var pipBlockerText;
 var hasFontBeenInjected = false;
+var isAmazonPrimeVideo;
+var pixelSelectionEventType = 'click';
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -603,7 +605,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
                             colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 14;
-                            manualOverrideCooldown = result.manualOverrideCooldown ?? 120;
+                            manualOverrideCooldown = result.manualOverrideCooldown ?? 45;
                             isDebugMode = result.isDebugMode ?? false;
                             isPiPMode = result.isPiPMode ?? true;
                             pipLocationHorizontal = result.pipLocationHorizontal ?? 'top';
@@ -637,11 +639,20 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                     //give a split sec for recording to start before asking user to pick a pixel
                                     setTimeout(() => {
+                                        //TODO: should what I'm doing for amazon be done everywhere?
+                                        if (window.location.hostname === 'www.amazon.com') {
+                                            isAmazonPrimeVideo = true;
+                                            pixelSelectionEventType = 'mouseup';
+                                        } else {
+                                            isAmazonPrimeVideo = false;
+                                            pixelSelectionEventType = 'click';
+                                        }
+
                                         setBlockersAndPixelSelectionInstructions();
                                         if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
                                             document.addEventListener('mousedown', fullLogoSelectionInitiation, { once: true });
                                         } else {
-                                            document.addEventListener('click', pixelSelection);
+                                            document.addEventListener(pixelSelectionEventType, pixelSelection);
                                         }
                                     }, 500);
 
@@ -794,13 +805,17 @@ function setBlockersAndPixelSelectionInstructions() {
 
     insertLocationFullscreenElm.insertBefore(clickBlocker2, null);
 
-    //adding extra level of click blocking and mouse interference when inside iframe
-    if (inIFrame()) {
+    htmlElement = document.getElementsByTagName('html')[0];
 
-        htmlElement = document.getElementsByTagName('html')[0];
+    //adding extra level of click blocking and mouse interference when inside iframe
+    if (inIFrame() && htmlElement) {
         nativeInlinePointerEvents = htmlElement.style.pointerEvents;
         htmlElement.style.pointerEvents = 'none';
+    }
 
+    //add additional click blocker to html element if on amazon prime to prevent UI from coming up. TODO: should I do this for all sites and not just amazon?
+    if (isAmazonPrimeVideo && htmlElement) {
+        htmlElement.addEventListener('click', blockHandler, true);
     }
 
     if (isPiPMode && isLiveOverlayVideo) {
@@ -889,7 +904,10 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
     clickBlocker2.style.setProperty("cursor", "none", "important");
 
     document.removeEventListener('fullscreenchange', abortPixelSelection);
-    document.removeEventListener('click', pixelSelection);
+    if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+        //note: the advanced full logo selection event listeners don't need to be removed since they are set to run only once
+        document.removeEventListener(pixelSelectionEventType, pixelSelection);
+    }
 
     let removeBlockersDelay = 0;
     if (document.fullscreenElement) {
@@ -901,8 +919,14 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
     //wait a sec to remove the click blocker so UI doesn't pop up right away. not waiting if not fullscreen, meaning montoring has paused or ended.
     setTimeout(() => {
         removeElementsByClass('ytoc-click-blocker');
+
         if (inIFrame()) {
             htmlElement.style.pointerEvents = nativeInlinePointerEvents;
+        }
+
+        if (isAmazonPrimeVideo) {
+            //TODO: set this to only run once so I don't have to remove?
+            htmlElement.removeEventListener('click', blockHandler, true);
         }
     }, removeBlockersDelay);
 
@@ -1202,11 +1226,12 @@ function fullLogoSelectionInitiation(event) {
         }
         insertLocation.insertBefore(advancedLogoSelectionBox, null);
 
-        document.addEventListener("mousemove", function (event) {
+        //note: don't need to remove mousedown listener since that is set to only run once
+        document.addEventListener('mousemove', function (event) {
             fullLogoSelectionBoxResize(event, startX, startY);
         });
         //TODO: set other one use event listeners like this throughout the extension so I don't have to remove them all
-        document.addEventListener("mouseup", function (event) {
+        document.addEventListener('mouseup', function (event) {
             fullLogoSelectionCompletion(event, startX, startY);
         }, { once: true });
     }
@@ -1228,7 +1253,7 @@ function fullLogoSelectionBoxResize(event, startX, startY) {
 
 function fullLogoSelectionCompletion(event, startX, startY) {
     console.log('fullLogoSelectionCompletion');
-    document.removeEventListener("mousemove", fullLogoSelectionBoxResize);
+    document.removeEventListener('mousemove', fullLogoSelectionBoxResize);
     //TODO: remove after mask building complete?
     //setTimeout(() => {
         advancedLogoSelectionBox.remove();
@@ -1256,6 +1281,7 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     }
 
     removeBlockersListenersAndPixelSelectionInstructions();
+    //note: don't need to remove mouseup listener because it is set to run only once
     document.addEventListener('fullscreenchange', fullscreenChanged);
 
     advancedLogoSelectionTopLeftLocation = { x: topLeftX, y: topLeftY };
@@ -1391,6 +1417,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                     isColorLogo = true;
                     logoBoxText = 'BASELINE LOGO MASK COMPLETE. COLOR LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 }
+                isColorLogo = false //555
                 logoBox.textContent = logoBoxText;
                 console.log(isColorLogo);
 
@@ -2606,4 +2633,11 @@ function injectFontOntoPage() {
     insertLocation.appendChild(fontInjectionStyle);
 
     hasFontBeenInjected = true;
+}
+
+
+//prevent all javascript from occuring for an event
+function blockHandler(e) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
 }
