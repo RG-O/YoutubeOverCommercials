@@ -1417,11 +1417,12 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
                 //TODO: have it be like some percentage of pixels that are bright instead of averaging the colors which often ends up being a shade of brown for color logos. or average the s and v's of each pixel?
                 //check average color of inside of logo part of mask to see if it is a white / transparent white logo or a colored logo
+                //note: logoAnalysisData.logo_mask_avg_hsv[2] = 255 can be full color or full white, depending on the saturation
                 //if (logoAnalysisData.logo_mask_avg_hsv[1] < 70 || logoAnalysisData.logo_mask_avg_hsv[2] > 100) {
                 if (
-                    logoAnalysisData.logo_mask_avg_hsv[1] < 50 || //low saturation
-                    //logoAnalysisData.logo_mask_avg_hsv[2] > 200 || //high brightness //TODO: Switch to HSL in the python so I can actually use this value
-                    (logoAnalysisData.logo_mask_avg_hsv[1] < 140 && insideVersusOutsideHueDifference < 27 && insideVersusOutsideBrightnessDifference > 15) //lower saturation threashold if hue outside the logo is similar to inside the logo, implying that the logo may be transparent
+                    (logoAnalysisData.logo_mask_avg_hsv[1] < 50 && logoAnalysisData.logo_mask_avg_hsv[2] > 50) || //low saturation
+                    //logoAnalysisData.logo_mask_avg_hsv[2] > 200 || //high brightness //TODO: Switch to HSL in the python so I can actually use this value? or maybe it is fine pretty much just using the S in HSV
+                    (logoAnalysisData.logo_mask_avg_hsv[1] < 140 && logoAnalysisData.logo_mask_avg_hsv[2] > 40 && insideVersusOutsideHueDifference < 27 && insideVersusOutsideBrightnessDifference > 15) //lower saturation threashold if hue outside the logo is similar to inside the logo, implying that the logo may be transparent
                 ) {
                     isColorLogo = false;
                     logoBoxText = 'BASELINE LOGO MASK COMPLETE. WHITE OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
