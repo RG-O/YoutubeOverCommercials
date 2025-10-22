@@ -1529,8 +1529,9 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
             //console.log(logoAnalysisData);
 
+            console.log("outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.outer_hsv_and_rgb.avg_hsv);
             //const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 30 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 220);
-            const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 15 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 240);
+            const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 18 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 230);
             console.log(isBrightAroundLogo);
 
             //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
