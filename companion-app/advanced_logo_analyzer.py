@@ -90,7 +90,8 @@ def overlay_logo_box(original_bgr, edge_mask):
 
 
 #TODO: can I have this all just be hsv from the start?
-def is_average_color_white_or_transparent(avg_bgr):
+# previously titled is_average_color_white_or_transparent
+def bgr_to_hsv(bgr):
     """
     Classifies a single average BGR color as white/transparent or colored.
     
@@ -101,11 +102,11 @@ def is_average_color_white_or_transparent(avg_bgr):
         str: "white_or_transparent" or "colored"
     """
     # Convert to uint8 and reshape for cv2.cvtColor
-    color_bgr = np.uint8([[list(avg_bgr)]])  # shape (1, 1, 3)
+    color_bgr_uint8 = np.uint8([[list(bgr)]])  # shape (1, 1, 3)
 
     # Convert to HSV
-    hsv = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)
-    h, s, v = hsv[0][0]  # unpack the single pixel
+    hsv = cv2.cvtColor(color_bgr_uint8, cv2.COLOR_BGR2HSV)
+    h, s, v = hsv[0][0]
 
     # print("s:", s)
     # print("v:", v)
@@ -255,14 +256,17 @@ def advanced_logo_analysis():
     np_arr = np.frombuffer(img_bytes, dtype=np.uint8)
     img_color_two = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-    img_color_three = cv2.cvtColor(img_color_two, cv2.COLOR_BGR2RGB)
+    #img_color_three = cv2.cvtColor(img_color_two, cv2.COLOR_BGR2RGB)
+    #sounds like I may want to keep the image in BGR since everything seems to be BGR2___ later on
+    img_color_three = img_color_two
 
     img_np = np.array(img_pil)
 
 
     # Create kernel for morphological ops
-    kernel = np.ones((2, 2), np.uint8)
+    #kernel = np.ones((2, 2), np.uint8)
     #kernel = np.ones((3, 3), np.uint8)
+    kernel = np.ones((5, 5), np.uint8)
 
     # Step 1: Shrink contour region for cleaner inside
     img_eroded = cv2.erode(img_np, kernel)
@@ -364,6 +368,42 @@ def advanced_logo_analysis():
         contours, _ = cv2.findContours(avg_edge_mask_boolean_mask_from_eroded.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
 
+        # attempt at average color of eroded edges ##############
+
+        # Get only the pixels where the mask is True
+        masked_pixels = avg_color_img[avg_edge_mask_boolean_mask_from_eroded]
+
+        # Compute the average color (B, G, R)
+        #eroded_edges_average_color_bgr = masked_pixels.mean(axis=0)
+        if masked_pixels.size > 0:
+            eroded_edges_average_color_bgr = masked_pixels.mean(axis=0)
+            eroded_edges_average_color_hsv = bgr_to_hsv(eroded_edges_average_color_bgr)
+            eroded_edges_average_color_hsv = tuple(float(c) for c in eroded_edges_average_color_hsv) #todo: have this in bgr_to_hsv function?
+            eroded_edges_average_color_bgr = tuple(float(c) for c in eroded_edges_average_color_bgr) #todo: some way to not have to do this?
+        else:
+            eroded_edges_average_color_bgr = np.array([0, 0, 0])
+            eroded_edges_average_color_hsv = np.array([0, 0, 0])
+
+        print("eroded edges average color (B, G, R):", eroded_edges_average_color_bgr)
+        print("eroded edges average color (H, S, V):", eroded_edges_average_color_hsv)
+
+        # Make a copy of the color image to overlay on
+        overlay_img = avg_color_img.copy()
+
+        # Create a red overlay (or any color you like)
+        red_overlay = np.zeros_like(overlay_img)
+        red_overlay[:, :, 2] = 255  # full red
+
+        # Make a version of the mask with 3 channels
+        mask_3ch = np.stack([avg_edge_mask_boolean_mask_from_eroded]*3, axis=-1)
+
+        # Blend the red overlay wherever mask is True
+        overlay_img = np.where(mask_3ch, cv2.addWeighted(overlay_img, 0.5, red_overlay, 0.5, 0), overlay_img) #todo: rename
+        overlay_img_rgb = cv2.cvtColor(overlay_img, cv2.COLOR_BGR2RGB) #todo: rename
+        #print(image_to_base64(overlay_img_rgb))
+        ###########
+
+
         # for cnt in contours:
         #     mask = np.zeros_like(avg_edge_mask)
         #     cv2.drawContours(mask, [cnt], -1, 255, thickness=cv2.FILLED)
@@ -411,12 +451,16 @@ def advanced_logo_analysis():
         #print("Average color:", overall_avg_color)
 
         #TODO: I don't believe I have to use this function if I just keep the average color image in HSV the whole time
-        logo_mask_avg_hsv = is_average_color_white_or_transparent(overall_avg_color)
+        logo_mask_avg_hsv = bgr_to_hsv(overall_avg_color)
 
         logo_mask_avg_hsv = tuple(float(c) for c in logo_mask_avg_hsv)
 
+        avg_logo_outer_hsv_and_rgb = average_hsv_and_rgb_outside_contours(avg_color_img, contours)
+
         print(logo_mask_avg_hsv)
 
+        #TODO: add various checks throughout this app because if not edges are detected, it will break plenty of things
+        #TODO: can I also add try brakets like in javascript?
         return jsonify({
             "status": data['request'],
             "frames_collected": len(logo_edges),
@@ -424,9 +468,13 @@ def advanced_logo_analysis():
             "mask_preview": image_to_base64(avg_edge_mask),
             #"img_np": image_to_base64(img_np),
             #"img_blur": image_to_base64(img_blur),
-            "logo_mask_avg_hsv": logo_mask_avg_hsv,
-            "avg_logo_color": overall_avg_color,
-            "contour_vis": image_to_base64(contour_vis),
+            #"logo_mask_avg_hsv": logo_mask_avg_hsv,
+            "logo_mask_avg_hsv": eroded_edges_average_color_hsv, #todo: rename?
+            #"avg_logo_color": overall_avg_color,
+            "avg_logo_color": eroded_edges_average_color_bgr,
+            #"contour_vis": image_to_base64(contour_vis),
+            "contour_vis": image_to_base64(overlay_img_rgb),
+            "avg_logo_outer_hsv_and_rgb": avg_logo_outer_hsv_and_rgb,
         })
 
     # avg_edge = avg_edge_mask.astype(np.float32)
@@ -510,7 +558,8 @@ def advanced_logo_analysis():
 
     #TODO: display this for debug people
     # Create an RGB image
-    visual = np.zeros((edge1.shape[0], edge1.shape[1], 3), dtype=np.uint8)
+    #visual = np.zeros((edge1.shape[0], edge1.shape[1], 3), dtype=np.uint8)
+    visual = img_np_color.copy()
 
     # RED = edge1 only
     visual[edge1 & ~edge2] = [255, 0, 0]

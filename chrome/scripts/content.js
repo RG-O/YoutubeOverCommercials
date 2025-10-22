@@ -909,6 +909,11 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
         document.removeEventListener(pixelSelectionEventType, pixelSelection);
     }
 
+    if (isAmazonPrimeVideo) {
+        //TODO: set this to only run once so I don't have to remove?
+        htmlElement.removeEventListener('click', blockHandler, true);
+    }
+
     let removeBlockersDelay = 0;
     if (document.fullscreenElement) {
         removeBlockersDelay = 5000;
@@ -922,11 +927,6 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
 
         if (inIFrame()) {
             htmlElement.style.pointerEvents = nativeInlinePointerEvents;
-        }
-
-        if (isAmazonPrimeVideo) {
-            //TODO: set this to only run once so I don't have to remove?
-            htmlElement.removeEventListener('click', blockHandler, true);
         }
     }, removeBlockersDelay);
 
@@ -1401,16 +1401,28 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
                 console.log(logoAnalysisData.logo_mask_avg_hsv[2]);
 
-                console.log(logoAnalysisData.avg_logo_color);
+                console.log("avg_logo_color: " + logoAnalysisData.avg_logo_color);
                 averageLogoColor = logoAnalysisData.avg_logo_color;
                 //logoBox.style.color = "rgb(" + averageLogoColor + ")";
+                //TODO: only set it like this for debug mode
+                logoBox.style.color = "rgb(" + logoAnalysisData.avg_logo_color[2] + ", " + logoAnalysisData.avg_logo_color[1] + ", " + logoAnalysisData.avg_logo_color[0] + ")";
 
                 logoImageCaptureGrey.src = logoAnalysisData.contour_vis;
+
+                console.log("logo_mask_avg_hsv: " + logoAnalysisData.logo_mask_avg_hsv);
+                console.log("avg_logo_outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv);
+                let insideVersusOutsideHueDifference = Math.abs(logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[0] - logoAnalysisData.logo_mask_avg_hsv[0]);
+                let insideVersusOutsideBrightnessDifference = Math.abs(logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[2] - logoAnalysisData.logo_mask_avg_hsv[2]);
+
 
                 //TODO: have it be like some percentage of pixels that are bright instead of averaging the colors which often ends up being a shade of brown for color logos. or average the s and v's of each pixel?
                 //check average color of inside of logo part of mask to see if it is a white / transparent white logo or a colored logo
                 //if (logoAnalysisData.logo_mask_avg_hsv[1] < 70 || logoAnalysisData.logo_mask_avg_hsv[2] > 100) {
-                if (logoAnalysisData.logo_mask_avg_hsv[1] < 65 && logoAnalysisData.logo_mask_avg_hsv[2] > 110) {
+                if (
+                    logoAnalysisData.logo_mask_avg_hsv[1] < 50 || //low saturation
+                    //logoAnalysisData.logo_mask_avg_hsv[2] > 200 || //high brightness //TODO: Switch to HSL in the python so I can actually use this value
+                    (logoAnalysisData.logo_mask_avg_hsv[1] < 140 && insideVersusOutsideHueDifference < 27 && insideVersusOutsideBrightnessDifference > 15) //lower saturation threashold if hue outside the logo is similar to inside the logo, implying that the logo may be transparent
+                ) {
                     isColorLogo = false;
                     logoBoxText = 'BASELINE LOGO MASK COMPLETE. WHITE OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 } else {
@@ -1420,6 +1432,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 isColorLogo = false //555
                 logoBox.textContent = logoBoxText;
                 console.log(isColorLogo);
+                //logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[1] < 15 && logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[2]
 
                 currentEdgeImage.src = logoAnalysisData.mask_preview;
 
@@ -1650,10 +1663,12 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
             //if (commercialDetectionMode === 'auto-pixel-normal') {
             if (!isCommercialState && !isColorLogo && isBrightAroundLogo) {
-                logoBox.style.color = "orange";
+                //logoBox.style.color = "orange";
+                logoBox.style.backgroundColor = "red";
             } else {
                 //logoBox.style.color = "rgb(" + averageLogoColor + ")";
-                logoBox.style.color = "rgb(140, 179, 210)";
+                //logoBox.style.color = "rgb(140, 179, 210)";
+                logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb + ")";
             }
             
             //}
