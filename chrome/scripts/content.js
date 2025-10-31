@@ -784,7 +784,6 @@ function addMessageAlertToMainVideo(message) {
 //sets blockers so users cursor movement doesn't trigger any of the main/background video's UI to display and keeps click from pausing video
 //also displays instructions to user for selecting pixel
 function setBlockersAndPixelSelectionInstructions() {
-
     clickBlocker1 = document.createElement('div');
     clickBlocker1.className = "ytoc-click-blocker";
 
@@ -864,6 +863,11 @@ function setBlockersAndPixelSelectionInstructions() {
 
     overlayInstructions.appendChild(iFrame);
 
+    if (isAmazonPrimeVideo) {
+        for (const video of mainVideoCollection) {
+            video.style.zIndex = '2147483645';
+        }
+    }
 }
 
 
@@ -927,6 +931,12 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
 
         if (inIFrame()) {
             htmlElement.style.pointerEvents = nativeInlinePointerEvents;
+        }
+
+        if (isAmazonPrimeVideo) {
+            for (const video of mainVideoCollection) {
+                video.style.removeProperty('z-index');
+            }
         }
     }, removeBlockersDelay);
 
