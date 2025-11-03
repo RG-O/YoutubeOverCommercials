@@ -24,6 +24,8 @@ var pipBlockerText;
 var hasFontBeenInjected = false;
 var isAmazonPrimeVideo;
 var pixelSelectionEventType = 'click';
+var commercialTimerStartTime;
+var commercialTimerEndTime;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -407,6 +409,7 @@ function endCommercialMode() {
     }
 
     unmuteMainVideo();
+    stopCommercialTimer();
 
 }
 
@@ -455,6 +458,8 @@ function startCommercialMode() {
         muteMainVideo();
 
     }
+
+    startCommercialTimer();
 
 }
 
@@ -567,7 +572,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             }
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
-                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 14;
+                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 16;
                             manualOverrideCooldown = result.manualOverrideCooldown ?? 45;
                             isDebugMode = result.isDebugMode ?? false;
                             isPiPMode = result.isPiPMode ?? true;
@@ -741,7 +746,6 @@ function addMessageAlertToMainVideo(message) {
 //sets blockers so users cursor movement doesn't trigger any of the main/background video's UI to display and keeps click from pausing video
 //also displays instructions to user for selecting pixel
 function setBlockersAndPixelSelectionInstructions() {
-
     clickBlocker1 = document.createElement('div');
     clickBlocker1.className = "ytoc-click-blocker";
 
@@ -819,6 +823,13 @@ function setBlockersAndPixelSelectionInstructions() {
 
     overlayInstructions.appendChild(iFrame);
 
+    //set video in front of it's UI to not interupt pixel capture
+    //TODO: do for all sites and not just amazon prime video?
+    if (isAmazonPrimeVideo) {
+        for (const video of mainVideoCollection) {
+            video.style.zIndex = '2147483645';
+        }
+    }
 }
 
 
@@ -849,7 +860,6 @@ function hideVerticleScrollbar() {
 
 
 function removeBlockersListenersAndPixelSelectionInstructions() {
-
     removeNotFullscreenAlerts();
 
     removeElementsByClass('ytoc-overlay-instructions');
@@ -860,6 +870,11 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
 
     document.removeEventListener('fullscreenchange', abortPixelSelection);
     document.removeEventListener(pixelSelectionEventType, pixelSelection);
+
+    if (isAmazonPrimeVideo) {
+        //TODO: set this to only run once so I don't have to remove?
+        htmlElement.removeEventListener('click', blockHandler, true);
+    }
     
     //wait a sec to remove the click blocker so UI doesn't pop up right away
     setTimeout(() => {
@@ -870,10 +885,11 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
         }
 
         if (isAmazonPrimeVideo) {
-            htmlElement.removeEventListener('click', blockHandler, true);
+            for (const video of mainVideoCollection) {
+                video.style.removeProperty('z-index');
+            }
         }
     }, 5000);
-
 }
 
 
@@ -1603,8 +1619,12 @@ function fullscreenChanged() {
             pauseAutoMode();
         }
 
-        if (isCommercialState && !isAudioOnlyOverlay) {
-            endCommercialMode();
+        if (isCommercialState) {
+            if (!isAudioOnlyOverlay) {
+                endCommercialMode();
+            } else {
+                stopCommercialTimer();
+            }
         }
 
         if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
@@ -1910,4 +1930,49 @@ function injectFontOntoPage() {
 function blockHandler(e) {
     e.stopImmediatePropagation();
     e.preventDefault();
+}
+
+
+//start recording how much time this extension is blocking commercials for fun stats
+function startCommercialTimer() {
+    commercialTimerStartTime = Date.now();
+}
+
+
+//stop recording commercial blocking time and add value to historic count
+function stopCommercialTimer() {
+    if (!commercialTimerStartTime) return;
+
+    commercialTimerEndTime = Date.now();
+    const today = new Date().toDateString();
+
+    const sessionCommercialsBlockedSeconds = (commercialTimerEndTime - commercialTimerStartTime) / 1000;
+    //reset timer
+    commercialTimerStartTime = null;
+
+    chrome.storage.sync.get([
+        'totalCommercialsBlockedSeconds',
+        'todayCommercialsBlockedSeconds',
+        'firstCommercialTimerDate',
+        'lastCommercialTimerDate'
+    ], (result) => {
+        let totalCommercialsBlockedSeconds = result.totalCommercialsBlockedSeconds || 0;
+        let todayCommercialsBlockedSeconds = result.todayCommercialsBlockedSeconds || 0;
+        let firstCommercialTimerDate = result.firstCommercialTimerDate || today;
+        let lastCommercialTimerDate = result.lastCommercialTimerDate || today;
+
+        if (lastCommercialTimerDate !== today) {
+            todayCommercialsBlockedSeconds = 0;
+        }
+
+        totalCommercialsBlockedSeconds += sessionCommercialsBlockedSeconds;
+        todayCommercialsBlockedSeconds += sessionCommercialsBlockedSeconds;
+
+        chrome.storage.sync.set({
+            totalCommercialsBlockedSeconds: totalCommercialsBlockedSeconds,
+            todayCommercialsBlockedSeconds: todayCommercialsBlockedSeconds,
+            firstCommercialTimerDate: firstCommercialTimerDate,
+            lastCommercialTimerDate: today,
+        });
+    });
 }

@@ -37,7 +37,10 @@ chrome.storage.sync.get([
     'audioLevelThreshold',
     'shouldOverlayVideoSizeAndLocationAutoSet',
     'shouldShuffleYTPlaylist',
-    'profiles'
+    'profiles',
+    'totalCommercialsBlockedSeconds',
+    'todayCommercialsBlockedSeconds',
+    'firstCommercialTimerDate'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -63,7 +66,7 @@ chrome.storage.sync.get([
     optionsForm.commercialDetectionMode.value = commercialDetectionMode;
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 14;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 16;
     optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 45;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
     optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
@@ -77,6 +80,7 @@ chrome.storage.sync.get([
     optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
+    //TODO: add default profile here
     profiles = result.profiles || {};
     for (const name in profiles) {
         const option = document.createElement("option");
@@ -84,6 +88,10 @@ chrome.storage.sync.get([
         option.textContent = name;
         optionsForm.profileSelect.appendChild(option);
     }
+    const today = new Date().toDateString();
+    const totalCommercialsBlockedSeconds = result.totalCommercialsBlockedSeconds || 0;
+    const todayCommercialsBlockedSeconds = result.todayCommercialsBlockedSeconds || 0;
+    const firstCommercialTimerDate = result.firstCommercialTimerDate || today;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -103,6 +111,7 @@ chrome.storage.sync.get([
 
     setTextFieldsToSelectAll();
     setKeyboardShortcutText();
+    grabCommercialTimeBlockedStats(totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate);
 
     document.getElementById('shouldOverlayVideoSizeAndLocationAutoSet').addEventListener('change', toggleDimensionsFieldsVisability);
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
@@ -774,4 +783,19 @@ function clearAllValidationMessages() {
 
     }
 
+}
+
+
+function grabCommercialTimeBlockedStats(totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate) {
+    let statsElm = document.getElementById('commercial-time-blocked-stats');
+
+    //do not show if no stats collected yet
+    if (!statsElm || totalCommercialsBlockedSeconds === 0) return;
+
+    const totalHours = totalCommercialsBlockedSeconds / 3600;
+    const dailyMinutes = todayCommercialsBlockedSeconds / 60;
+    const roundedTotal = Math.ceil(totalHours * 10) / 10;
+    const roundedDaily = Math.ceil(dailyMinutes * 10) / 10;
+
+    statsElm.textContent = `You blocked ${roundedTotal} hours of commercials since ${firstCommercialTimerDate}.\n${roundedDaily} minutes of commercials blocked today.`;
 }
