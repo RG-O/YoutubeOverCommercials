@@ -24,6 +24,8 @@ var pipBlockerText;
 var hasFontBeenInjected = false;
 var isAmazonPrimeVideo;
 var pixelSelectionEventType = 'click';
+var commercialTimerStartTime;
+var commercialTimerEndTime;
 
 var overlayVideoType;
 var ytPlaylistID;
@@ -444,6 +446,7 @@ function endCommercialMode() {
     }
 
     unmuteMainVideo();
+    stopCommercialTimer();
 
 }
 
@@ -492,6 +495,8 @@ function startCommercialMode() {
         muteMainVideo();
 
     }
+
+    startCommercialTimer();
 
 }
 
@@ -604,7 +609,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             }
                             mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                             matchCountThreshold = result.matchCountThreshold ?? 2;
-                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 14;
+                            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 16;
                             manualOverrideCooldown = result.manualOverrideCooldown ?? 45;
                             isDebugMode = result.isDebugMode ?? false;
                             isPiPMode = result.isPiPMode ?? true;
@@ -2347,8 +2352,12 @@ function fullscreenChanged() {
             pauseAutoMode(true);
         }
 
-        if (isCommercialState && !isAudioOnlyOverlay) {
-            endCommercialMode();
+        if (isCommercialState) {
+            if (!isAudioOnlyOverlay) {
+                endCommercialMode();
+            } else {
+                stopCommercialTimer();
+            }
         }
 
         if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
@@ -2667,4 +2676,49 @@ function injectFontOntoPage() {
 function blockHandler(e) {
     e.stopImmediatePropagation();
     e.preventDefault();
+}
+
+
+//start recording how much time this extension is blocking commercials for fun stats
+function startCommercialTimer() {
+    commercialTimerStartTime = Date.now();
+}
+
+
+//stop recording commercial blocking time and add value to historic count
+function stopCommercialTimer() {
+    if (!commercialTimerStartTime) return;
+
+    commercialTimerEndTime = Date.now();
+    const today = new Date().toDateString();
+
+    const sessionCommercialsBlockedSeconds = (commercialTimerEndTime - commercialTimerStartTime) / 1000;
+    //clear timer
+    commercialTimerStartTime = null;
+
+    chrome.storage.sync.get([
+        'totalCommercialsBlockedSeconds',
+        'todayCommercialsBlockedSeconds',
+        'firstCommercialTimerDate',
+        'lastCommercialTimerDate'
+    ], (result) => {
+        let totalCommercialsBlockedSeconds = result.totalCommercialsBlockedSeconds || 0;
+        let todayCommercialsBlockedSeconds = result.todayCommercialsBlockedSeconds || 0;
+        let firstCommercialTimerDate = result.firstCommercialTimerDate || today;
+        let lastCommercialTimerDate = result.lastCommercialTimerDate || today;
+
+        if (lastCommercialTimerDate !== today) {
+            todayCommercialsBlockedSeconds = 0;
+        }
+
+        totalCommercialsBlockedSeconds += sessionCommercialsBlockedSeconds;
+        todayCommercialsBlockedSeconds += sessionCommercialsBlockedSeconds;
+
+        chrome.storage.sync.set({
+            totalCommercialsBlockedSeconds: totalCommercialsBlockedSeconds,
+            todayCommercialsBlockedSeconds: todayCommercialsBlockedSeconds,
+            firstCommercialTimerDate: firstCommercialTimerDate,
+            lastCommercialTimerDate: today,
+        });
+    });
 }
