@@ -245,6 +245,7 @@ def advanced_logo_analysis():
     global logo_edges_from_eroded, avg_edge_mask_from_eroded
     global color_imgs, avg_color_img
     global contours
+    global avg_edge_mask_boolean_mask
 
     data = request.json
     img_data = data['image'].split(',')[1]
@@ -300,6 +301,24 @@ def advanced_logo_analysis():
 
         contours = []
 
+        ############## Converting to color: ######################
+
+        # step 1 done above
+        # Step 2: Define colors (BGR format since OpenCV uses BGR)
+        styled_background_color = (236, 238, 240)   # RGB(240,238,236) to BGR(236,238,240)
+        styled_edge_color = (18, 56, 77)            # #12384d to BGR(18,56,77)
+
+        # Step 3: Create a 3-channel color image for the background
+        styled_color_img = np.full((*avg_edge_mask.shape, 3), styled_background_color, dtype=np.uint8)
+
+        # Step 4: Normalize the mask to [0,1] range for blending
+        styled_mask_norm = (avg_edge_mask / 255.0)[:, :, None]
+
+        # Step 5: Blend edge color where edges are white
+        styled_color_img = styled_color_img * (1 - styled_mask_norm) + np.array(styled_edge_color, dtype=np.uint8) * styled_mask_norm
+        styled_color_img = styled_color_img.astype(np.uint8)
+
+        ##########################################################
 
         return jsonify({
             "status": data['request'],
@@ -308,7 +327,8 @@ def advanced_logo_analysis():
             "current_edge_preview": image_to_base64(current_edge),
             "img_np": image_to_base64(img_np),
             "img_blur": image_to_base64(img_blur),
-            "mask_preview": image_to_base64(avg_edge_mask)
+            #"mask_preview": image_to_base64(avg_edge_mask)
+            "mask_preview": image_to_base64(styled_color_img),
         })
 
     if data['request'] == "build-mask":
@@ -326,11 +346,31 @@ def advanced_logo_analysis():
         color_imgs.append(img_color_three)
         avg_color_img = np.mean(color_imgs, axis=0).astype(np.uint8)
 
+        ############## Converting to color: ######################
+
+        # step 1 done above
+        # Step 2: Define colors (BGR format since OpenCV uses BGR)
+        styled_background_color = (236, 238, 240)   # RGB(240,238,236) to BGR(236,238,240)
+        styled_edge_color = (18, 56, 77)            # #12384d to BGR(18,56,77)
+
+        # Step 3: Create a 3-channel color image for the background
+        styled_color_img = np.full((*avg_edge_mask.shape, 3), styled_background_color, dtype=np.uint8)
+
+        # Step 4: Normalize the mask to [0,1] range for blending
+        styled_mask_norm = (avg_edge_mask / 255.0)[:, :, None]
+
+        # Step 5: Blend edge color where edges are white
+        styled_color_img = styled_color_img * (1 - styled_mask_norm) + np.array(styled_edge_color, dtype=np.uint8) * styled_mask_norm
+        styled_color_img = styled_color_img.astype(np.uint8)
+
+        ##########################################################
+
         return jsonify({
             "status": data['request'],
             "frames_collected": len(logo_edges),
             "current_edge_preview": image_to_base64(current_edge),
-            "mask_preview": image_to_base64(avg_edge_mask),
+            #"mask_preview": image_to_base64(avg_edge_mask),
+            "mask_preview": image_to_base64(styled_color_img),
             "img_np": image_to_base64(img_np),
             "img_blur": image_to_base64(img_blur),
         })
@@ -462,13 +502,36 @@ def advanced_logo_analysis():
 
         print(logo_mask_avg_hsv)
 
+        ############## Converting to color: ######################
+
+        # step 1 done above
+        # Step 2: Define colors (BGR format since OpenCV uses BGR)
+        styled_background_color = (236, 238, 240)   # RGB(240,238,236) to BGR(236,238,240)
+        styled_edge_color = (18, 56, 77)            # #12384d to BGR(18,56,77)
+
+        # Step 3: Create a 3-channel color image for the background
+        styled_color_img = np.full((*avg_edge_mask.shape, 3), styled_background_color, dtype=np.uint8)
+
+        # Step 4: Normalize the mask to [0,1] range for blending
+        styled_mask_norm = (avg_edge_mask / 255.0)[:, :, None]
+
+        # Step 5: Blend edge color where edges are white
+        styled_color_img = styled_color_img * (1 - styled_mask_norm) + np.array(styled_edge_color, dtype=np.uint8) * styled_mask_norm
+        styled_color_img = styled_color_img.astype(np.uint8)
+
+        ##########################################################
+
+        avg_edge_mask_boolean_mask = avg_edge_mask > 180  # Ground truth
+
         #TODO: add various checks throughout this app because if not edges are detected, it will break plenty of things
         #TODO: can I also add try brakets like in javascript?
         return jsonify({
             "status": data['request'],
             "frames_collected": len(logo_edges),
             "current_edge_preview": image_to_base64(current_edge),
-            "mask_preview": image_to_base64(avg_edge_mask),
+            #"mask_preview": image_to_base64(avg_edge_mask),
+            "mask_preview": image_to_base64(styled_color_img),
+            "final_mask_preview": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
             #"img_np": image_to_base64(img_np),
             #"img_blur": image_to_base64(img_blur),
             #"logo_mask_avg_hsv": logo_mask_avg_hsv,
@@ -533,7 +596,7 @@ def advanced_logo_analysis():
 
 
 
-    avg_edge_mask_boolean_mask = avg_edge_mask > 180  # Ground truth
+    #avg_edge_mask_boolean_mask = avg_edge_mask > 180  # Ground truth
     current_edge_boolean_mask = current_edge > 20  # Noisy comparison
 
     
@@ -559,10 +622,21 @@ def advanced_logo_analysis():
     edge1 = avg_edge_mask_boolean_mask.astype(bool)
     edge2 = current_edge_boolean_mask.astype(bool)
 
+    # img_np_gray = np.array(img_pil)
+    # img_np_gray_blur = cv2.GaussianBlur(img_np_gray, (9, 9), 0)  # adjust (9,9) as desired
+
+    # # Convert blurred grayscale to 3-channel RGB (so we can colorize edges)
+    # visual = cv2.cvtColor(img_np_gray_blur, cv2.COLOR_GRAY2BGR)
+
+    styled_background_color = (236, 238, 240)   # RGB(240,238,236) to BGR(236,238,240)
+
+    visual = np.full((*avg_edge_mask.shape, 3), styled_background_color, dtype=np.uint8)
+
     #TODO: display this for debug people
     # Create an RGB image
     #visual = np.zeros((edge1.shape[0], edge1.shape[1], 3), dtype=np.uint8)
-    visual = img_np_color.copy()
+    #visual = img_np_color.copy()
+    #visual = img_np.copy()
 
     # RED = edge1 only
     visual[edge1 & ~edge2] = [255, 0, 0]

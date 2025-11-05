@@ -1422,9 +1422,12 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 averageLogoColor = logoAnalysisData.avg_logo_color;
                 //logoBox.style.color = "rgb(" + averageLogoColor + ")";
                 //TODO: only set it like this for debug mode
-                logoBox.style.color = "rgb(" + logoAnalysisData.avg_logo_color[2] + ", " + logoAnalysisData.avg_logo_color[1] + ", " + logoAnalysisData.avg_logo_color[0] + ")";
+                if (isDebugMode) {
+                    logoBox.style.color = "rgb(" + logoAnalysisData.avg_logo_color[2] + ", " + logoAnalysisData.avg_logo_color[1] + ", " + logoAnalysisData.avg_logo_color[0] + ")";
+                }
 
                 logoImageCaptureGrey.src = logoAnalysisData.contour_vis;
+                advancedLogoMaskImage.src = logoAnalysisData.final_mask_preview;
 
                 console.log("logo_mask_avg_hsv: " + logoAnalysisData.logo_mask_avg_hsv);
                 console.log("avg_logo_outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv);
@@ -1463,6 +1466,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                         logoBox.style.display = 'none';
                     }
                     logoImageCaptureGrey.remove();
+                    advancedLogoMaskImage.remove();
                     isMaskCompleteMessageDismissable = true;
                     initialLogoBoxTextUpdate();
                 }, 8000);
@@ -1546,10 +1550,10 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
             //console.log(logoAnalysisData);
 
-            console.log("outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.outer_hsv_and_rgb.avg_hsv);
+            //console.log("outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.outer_hsv_and_rgb.avg_hsv);
             //const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 30 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 220);
             const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 18 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 230);
-            console.log(isBrightAroundLogo);
+            //console.log(isBrightAroundLogo);
 
             //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
             //advancedLogoMaskImage.src = logoAnalysisData.mask_preview;
@@ -1683,14 +1687,17 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             //}
 
             //if (commercialDetectionMode === 'auto-pixel-normal') {
-            if (!isCommercialState && !isColorLogo && isBrightAroundLogo) {
-                //logoBox.style.color = "orange";
-                logoBox.style.backgroundColor = "red";
-            } else {
-                //logoBox.style.color = "rgb(" + averageLogoColor + ")";
-                //logoBox.style.color = "rgb(140, 179, 210)";
-                logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb + ")";
+            if (isDebugMode) {
+                if (!isCommercialState && !isColorLogo && isBrightAroundLogo) {
+                    //logoBox.style.color = "orange";
+                    logoBox.style.backgroundColor = "red";
+                } else {
+                    //logoBox.style.color = "rgb(" + averageLogoColor + ")";
+                    //logoBox.style.color = "rgb(140, 179, 210)";
+                    logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb + ")";
+                }
             }
+            
             
             //}
 
@@ -1699,10 +1706,10 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             const elapsed = Date.now() - startTime;
             const delay = Math.max(0, 1000 - elapsed);
 
-            console.log("elapsed = ", elapsed);
-            console.log("delay = ", delay);
+            //console.log("elapsed = ", elapsed);
+            //console.log("delay = ", delay);
 
-            console.log(logoAnalysisData.outer_hsv);
+            //console.log(logoAnalysisData.outer_hsv);
             //let [h, s, l] = hsv_to_hsl(logoAnalysisData.outer_hsv[0], logoAnalysisData.outer_hsv[1], logoAnalysisData.outer_hsv[2])
             //logoBox.style.backgroundColor = "hsl(" + h + ", " + s + ", " + l + ")";
 
@@ -1730,7 +1737,7 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
     return new Promise(function (resolve, reject) {
 
-        console.log(dimensions);
+        //console.log(dimensions);
 
         if (isFirefox) {
 
@@ -1778,7 +1785,7 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
                 //logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
                 //logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
 
-                console.log(response.wasSuccessfulCall);
+                //console.log(response.wasSuccessfulCall);
 
                 if (response.wasSuccessfulCall) {
                     resolve(response.logoAnalysisData);
@@ -1864,7 +1871,7 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
 
     currentEdgeImage = document.createElement('img');
     //currentEdgeImage.className = "ytoc-logo";
-    //advancedLogoMaskImage = document.createElement('img');
+    advancedLogoMaskImage = document.createElement('img');
     //advancedLogoMaskImage.className = "ytoc-logo";
 
     logoImageCaptureGrey = document.createElement('img');
@@ -1877,16 +1884,16 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     logoBox.style.display = 'inline-block';
     logoBox.style.paddingLeft = '5px';
     logoBox.style.paddingRight = '5px';
+    logoBox.style.verticalAlign = 'top';
 
     if (selectedPixelGridLocation.isTop) {
         advancedLogoMaskImageContainer.style.top = advancedLogoSelectionTopLeftLocation.y + 'px';
         advancedLogoMaskImageContainer.style.bottom = 'auto';
-        logoBox.style.position = 'relative';
-        logoBox.style.top = '-6px';
+        //logoBox.style.position = 'relative';
+        //logoBox.style.top = '-6px';
     } else {
         advancedLogoMaskImageContainer.style.top = 'auto';
         advancedLogoMaskImageContainer.style.bottom = (((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) - 3) + 'px';
-        logoBox.style.verticalAlign = 'top';
     }
 
     if (selectedPixelGridLocation.isLeft) {
@@ -1910,7 +1917,7 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
         //TODO: do this elsewhere? either way I don't have to do all of setCommercialDetectedIndicator if I'm putting it here
         advancedLogoMaskImageContainer.insertBefore(logoBox, null);
 
-        //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
+        advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
         advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
         //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
         advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
