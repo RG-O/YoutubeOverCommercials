@@ -69,6 +69,13 @@
     font-family: "Montserrat", sans-serif !important;
 }
 
+.ytoc-advanced-logo-container {
+    z-index: 2147483647 !important;
+    position: absolute !important;
+    font-size: 22px !important;
+    font-family: "Montserrat", sans-serif !important;
+}
+
 .ytoc-selection-indicator {
     z-index: 2147483646 !important;
     position: absolute !important;

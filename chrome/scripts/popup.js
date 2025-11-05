@@ -821,9 +821,10 @@ function pingCompanionApp() {
         document.getElementById('save-button').disabled = true;
 
         fetch("http://localhost:64143/ping-advanced-logo-analysis")
-            .then(() => {
+            .then(response => response.json())
+            .then((response) => {
                 //successful ping
-                displayPingCompanionAppSuccess();
+                displayPingCompanionAppSuccess(response.version);
             })
             .catch(() => {
                 //error with ping
@@ -833,10 +834,11 @@ function pingCompanionApp() {
 }
 
 
-function displayPingCompanionAppSuccess() {
+function displayPingCompanionAppSuccess(version) {
     document.getElementById('companion-app-loading').style.display = 'none';
     document.getElementById('companion-app-additional-setup').style.display = 'none';
     document.getElementById('companion-app-ping-error').style.display = 'none';
+    document.getElementById('companion-app-ping-success').textContent = `Verified Advanced Logo Analysis companion app version ${version} (latest) is running properly on this machine.`;
     document.getElementById('companion-app-ping-success').style.display = 'block';
     document.getElementById('companion-app-instructions').style.display = 'block';
     document.getElementById('save-button').disabled = false;

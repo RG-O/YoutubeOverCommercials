@@ -1323,14 +1323,7 @@ function fullLogoSelectionCompletion(event, startX, startY) {
         selectedPixel.y += advancedLogoSelectionDimensions.height;
     }
 
-    //indicateSelectedPixel(selectedPixel);
-    setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation);
-
-    //TODO: decide colors
-    //logoBox.style.backgroundColor = "rgb(240, 238, 236)";
-    //logoBox.style.color = "#12384d";
-    logoBox.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
-    logoBox.style.color = "rgb(140, 179, 210)";
+    
 
     //TODO: I have a lot of different top/bottom and right/left screen checks all over the place, perhaps I should combine them.
     if (shouldOverlayVideoSizeAndLocationAutoSet) {
@@ -1349,6 +1342,15 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     }
 
     setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, selectedPixelGridLocation);
+
+    //indicateSelectedPixel(selectedPixel);
+    //setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation);
+
+    //TODO: decide colors
+    logoBox.style.backgroundColor = "rgb(240, 238, 236)";
+    logoBox.style.color = "#12384d";
+    //logoBox.style.backgroundColor = "rgba(0, 0, 0, 0.8)";
+    //logoBox.style.color = "rgb(140, 179, 210)";
 
     buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
 }
@@ -1445,7 +1447,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                     isColorLogo = true;
                     logoBoxText = 'BASELINE LOGO MASK COMPLETE. COLOR LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 }
-                isColorLogo = false //555
+                //isColorLogo = false //555
                 logoBox.textContent = logoBoxText;
                 console.log(isColorLogo);
                 //logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[1] < 15 && logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[2]
@@ -1505,7 +1507,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
                 console.log('Error fetching advanced logo analysis. Consecutive errors = ' + consecutiveAdvancedLogoAnalysisCallFailures);
                 logoBox.textContent = 'ADVANCED LOGO ANALYSIS ERROR. CONSECUTIVE ERRORS = ' + consecutiveAdvancedLogoAnalysisCallFailures;
-                logoBox.style.display = 'block';
+                logoBox.style.display = 'inline-block'; //555
                 if (!isDebugMode && (!isAudioOnlyOverlay || !isCommercialState)) {
                     setTimeout(() => {
                         logoBox.style.display = 'none';
@@ -1577,14 +1579,14 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                     if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
 
                         logoBox.textContent = cooldownCountRemaining;
-                        logoBox.style.display = 'block';
+                        logoBox.style.display = 'inline-block'; //555
                         advancedLogoMaskImageContainer.style.display = 'block'; //555
                         countdownOngoing = true;
 
                     } else if (logoCountdownMismatchesRemaining >= 1) {
 
                         logoBox.textContent = logoCountdownMismatchesRemaining;
-                        logoBox.style.display = 'block';
+                        logoBox.style.display = 'inline-block'; //555
                         advancedLogoMaskImageContainer.style.display = 'block'; //555
                         countdownOngoing = true;
 
@@ -1611,7 +1613,9 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                         //if (commercialDetectionMode === 'auto-pixel-normal') {
                         //    logoBox.style.color = "rgba(" + pixelColor.r + ", " + pixelColor.g + ", " + pixelColor.b + ", 1)";
                         //}
-                        logoBox.style.display = 'block';
+
+                        //TODO:could just show/hide the mask image container and not show/hide the logoBox?
+                        logoBox.style.display = 'inline-block'; //555
                         advancedLogoMaskImageContainer.style.display = 'block'; //555
                         if (!isDebugMode && !isAudioOnlyOverlay) {
 
@@ -1825,42 +1829,38 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     }
 
     advancedLogoMaskImageContainer = document.createElement('div');
-    advancedLogoMaskImageContainer.className = "ytoc-logo";
+    advancedLogoMaskImageContainer.className = "ytoc-advanced-logo-container";
 
-    //TODO: redo this so the logos display to the side instead of top/bottom to get them out of the way more and make sure they don't display under overlay
-    if (selectedPixelGridLocation.isTop) {
-        //user clicked on the top of the page
+    ////TODO: redo this so the logos display to the side instead of top/bottom to get them out of the way more and make sure they don't display under overlay
+    //if (selectedPixelGridLocation.isTop) {
+    //    //user clicked on the top of the page
 
-        advancedLogoMaskImageContainer.style.top = ((advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 3) + 'px';
-        advancedLogoMaskImageContainer.style.bottom = 'auto';
+    //    advancedLogoMaskImageContainer.style.top = ((advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 3) + 'px';
+    //    advancedLogoMaskImageContainer.style.bottom = 'auto';
 
-        //currentEdgeImage.style.top = advancedLogoSelectionTopLeftLocation.y + 'px';
-        //currentEdgeImage.style.bottom = 'auto';
+    //    //currentEdgeImage.style.top = advancedLogoSelectionTopLeftLocation.y + 'px';
+    //    //currentEdgeImage.style.bottom = 'auto';
 
-        //advancedLogoMaskImage.style.top = (advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 'px';
-        //advancedLogoMaskImage.style.bottom = 'auto';
-    } else {
-        //user clicked on the bottom of the page
-        advancedLogoMaskImageContainer.style.top = 'auto';
-        advancedLogoMaskImageContainer.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
-        console.log(advancedLogoSelectionTopLeftLocation);
-        //console.log(advancedLogoMaskImageContainer.style.bottom);
+    //    //advancedLogoMaskImage.style.top = (advancedLogoSelectionTopLeftLocation.y + advancedLogoSelectionDimensions.height) + 'px';
+    //    //advancedLogoMaskImage.style.bottom = 'auto';
+    //} else {
+    //    //user clicked on the bottom of the page
+    //    advancedLogoMaskImageContainer.style.top = 'auto';
+    //    advancedLogoMaskImageContainer.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
+    //    console.log(advancedLogoSelectionTopLeftLocation);
+    //    //console.log(advancedLogoMaskImageContainer.style.bottom);
 
-        //currentEdgeImage.style.top = 'auto';
-        //currentEdgeImage.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
+    //    //currentEdgeImage.style.top = 'auto';
+    //    //currentEdgeImage.style.bottom = (windowHeight - advancedLogoSelectionTopLeftLocation.y) + 'px';
 
-        //advancedLogoMaskImage.style.top = 'auto';
-        //advancedLogoMaskImage.style.bottom = ((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) + 'px';
-    }
-    //currentEdgeImage.style.left = advancedLogoSelectionTopLeftLocation.x;
-    //advancedLogoMaskImage.style.left = advancedLogoSelectionTopLeftLocation.x;
-    advancedLogoMaskImageContainer.style.left = advancedLogoSelectionTopLeftLocation.x + 'px';
-
-    //currentEdgeImage.style.top = (advancedLogoSelectionTopLeftLocation.y - 15) + 'px';
+    //    //advancedLogoMaskImage.style.top = 'auto';
+    //    //advancedLogoMaskImage.style.bottom = ((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) + 'px';
+    //}
+    ////currentEdgeImage.style.left = advancedLogoSelectionTopLeftLocation.x;
+    ////advancedLogoMaskImage.style.left = advancedLogoSelectionTopLeftLocation.x;
+    //advancedLogoMaskImageContainer.style.left = advancedLogoSelectionTopLeftLocation.x + 'px';
 
     insertLocation.insertBefore(advancedLogoMaskImageContainer, null);
-    //insertLocation.insertBefore(currentEdgeImage, null);
-    //insertLocation.insertBefore(advancedLogoMaskImage, null);
 
     currentEdgeImage = document.createElement('img');
     //currentEdgeImage.className = "ytoc-logo";
@@ -1871,11 +1871,75 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     //logoImageCaptureBlur = document.createElement('img');
     //logoImageCaptureDiff = document.createElement('img');
 
-    //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
-    advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
-    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
-    advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
-    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
+    logoBox = document.createElement('div');
+    logoBoxText = 'ANALYZING LOGO...';
+    logoBox.textContent = logoBoxText;
+    logoBox.style.display = 'inline-block';
+    logoBox.style.paddingLeft = '5px';
+    logoBox.style.paddingRight = '5px';
+
+    if (selectedPixelGridLocation.isTop) {
+        advancedLogoMaskImageContainer.style.top = advancedLogoSelectionTopLeftLocation.y + 'px';
+        advancedLogoMaskImageContainer.style.bottom = 'auto';
+        logoBox.style.position = 'relative';
+        logoBox.style.top = '-6px';
+    } else {
+        advancedLogoMaskImageContainer.style.top = 'auto';
+        advancedLogoMaskImageContainer.style.bottom = (((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) - 3) + 'px';
+        logoBox.style.verticalAlign = 'top';
+    }
+
+    if (selectedPixelGridLocation.isLeft) {
+        advancedLogoMaskImageContainer.style.left = (advancedLogoSelectionTopLeftLocation.x + advancedLogoSelectionDimensions.width) + 'px';
+        advancedLogoMaskImageContainer.style.right = 'auto';
+
+        //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
+        advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+        //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
+        advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
+        //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
+
+        //TODO: do this elsewhere? either way I don't have to do all of setCommercialDetectedIndicator if I'm putting it here
+        advancedLogoMaskImageContainer.insertBefore(logoBox, null);
+    } else {
+        advancedLogoMaskImageContainer.style.left = 'auto';
+        advancedLogoMaskImageContainer.style.right = (windowWidth - advancedLogoSelectionTopLeftLocation.x) + 'px';
+        //currentEdgeImage.style.float = 'right';
+        //logoImageCaptureGrey.style.float = 'right';
+
+        //TODO: do this elsewhere? either way I don't have to do all of setCommercialDetectedIndicator if I'm putting it here
+        advancedLogoMaskImageContainer.insertBefore(logoBox, null);
+
+        //advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
+        advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+        //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
+        advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
+        //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
+    }
+
+
+
+    //currentEdgeImage.style.top = (advancedLogoSelectionTopLeftLocation.y - 15) + 'px';
+
+    
+    //insertLocation.insertBefore(currentEdgeImage, null);
+    //insertLocation.insertBefore(advancedLogoMaskImage, null);
+
+    
+
+    
+    
+    ////TODO: do this elsewhere? either way I don't have to do all of setCommercialDetectedIndicator if I'm putting it here
+    //advancedLogoMaskImageContainer.insertBefore(logoBox, null);
+
+    ////advancedLogoMaskImageContainer.insertBefore(advancedLogoMaskImage, null);
+    //advancedLogoMaskImageContainer.insertBefore(logoImageCaptureGrey, null);
+    ////advancedLogoMaskImageContainer.insertBefore(logoImageCaptureBlur, null);
+    //advancedLogoMaskImageContainer.insertBefore(currentEdgeImage, null);
+    ////advancedLogoMaskImageContainer.insertBefore(logoImageCaptureDiff, null);
+
+    
+    
 
     console.log(advancedLogoSelectionTopLeftLocation);
     console.log(advancedLogoMaskImageContainer.style.bottom);
@@ -2647,7 +2711,7 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixe
 
     let belowSelectedPixelBuffer = 8;
     let aboveSelectedPixelBuffer = 4;
-    if (isFirefox) {
+    if (isFirefox || commercialDetectionMode === 'auto-pixel-advanced-logo') {
         belowSelectedPixelBuffer = 4;
     }
 

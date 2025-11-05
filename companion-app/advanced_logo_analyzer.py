@@ -42,6 +42,8 @@ from pystray import MenuItem as item
 import sys
 import os
 
+version = "1.0"
+
 app = Flask(__name__)
 PORT = 64143
 
@@ -301,6 +303,7 @@ def advanced_logo_analysis():
 
         return jsonify({
             "status": data['request'],
+            "version": version,
             "frames_collected": len(logo_edges),
             "current_edge_preview": image_to_base64(current_edge),
             "img_np": image_to_base64(img_np),
@@ -614,7 +617,10 @@ def advanced_logo_analysis():
 
 @app.route("/ping-advanced-logo-analysis", methods=["GET"])
 def ping():
-    return jsonify({"ok": True})
+    return jsonify({
+        "ok": True,
+        "version": version,
+    })
 
 def run_server():
     #app.run(host="127.0.0.1", port=PORT)
