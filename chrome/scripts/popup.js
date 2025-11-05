@@ -42,6 +42,7 @@ chrome.storage.sync.get([
     'totalCommercialsBlockedSeconds',
     'todayCommercialsBlockedSeconds',
     'firstCommercialTimerDate',
+    'lastCommercialTimerDate',
     'hasPreviouslyInstalledCompanionApp'
 ], (result) => {
 
@@ -95,6 +96,7 @@ chrome.storage.sync.get([
     const totalCommercialsBlockedSeconds = result.totalCommercialsBlockedSeconds || 0;
     const todayCommercialsBlockedSeconds = result.todayCommercialsBlockedSeconds || 0;
     const firstCommercialTimerDate = result.firstCommercialTimerDate || today;
+    const lastCommercialTimerDate = result.lastCommercialTimerDate || today;
     hasPreviouslyInstalledCompanionApp = result.hasPreviouslyInstalledCompanionApp ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
@@ -117,7 +119,7 @@ chrome.storage.sync.get([
 
     setTextFieldsToSelectAll();
     setKeyboardShortcutText();
-    grabCommercialTimeBlockedStats(totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate);
+    grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate, lastCommercialTimerDate);
 
     document.getElementById('shouldOverlayVideoSizeAndLocationAutoSet').addEventListener('change', toggleDimensionsFieldsVisability);
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
@@ -794,18 +796,22 @@ function clearAllValidationMessages() {
 }
 
 
-function grabCommercialTimeBlockedStats(totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate) {
+function grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate, lastCommercialTimerDate) {
     let statsElm = document.getElementById('commercial-time-blocked-stats');
 
-    //do not show if no stats collected yet
+    //do not show at all if no stats collected yet
     if (!statsElm || totalCommercialsBlockedSeconds === 0) return;
 
     const totalHours = totalCommercialsBlockedSeconds / 3600;
-    const dailyMinutes = todayCommercialsBlockedSeconds / 60;
     const roundedTotal = Math.ceil(totalHours * 10) / 10;
-    const roundedDaily = Math.ceil(dailyMinutes * 10) / 10;
+    statsElm.textContent = `You blocked ${roundedTotal} hours of commercials since ${firstCommercialTimerDate}.`;
 
-    statsElm.textContent = `You blocked ${roundedTotal} hours of commercials since ${firstCommercialTimerDate}.\n${roundedDaily} minutes of commercials blocked today.`;
+    //do not show daily count if no count yet today
+    if (lastCommercialTimerDate === today) {
+        const dailyMinutes = todayCommercialsBlockedSeconds / 60;
+        const roundedDaily = Math.ceil(dailyMinutes * 10) / 10;
+        statsElm.textContent += `\n${roundedDaily} minutes of commercials blocked today.`;
+    }
 }
 
 
