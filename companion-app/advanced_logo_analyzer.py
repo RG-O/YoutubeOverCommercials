@@ -639,13 +639,13 @@ def advanced_logo_analysis():
     #visual = img_np.copy()
 
     # RED = edge1 only
-    visual[edge1 & ~edge2] = [255, 0, 0]
+    visual[edge1 & ~edge2] = [158, 52, 46]
 
     # BLUE = edge2 only
-    visual[~edge1 & edge2] = [0, 0, 255]
+    visual[~edge1 & edge2] = [94, 136, 158]
 
     # GREEN = match (edge1 and edge2)
-    visual[edge1 & edge2] = [0, 255, 0]
+    visual[edge1 & edge2] = [56, 122, 76]
 
     # precision = true_positive / ground_truth_total
     # return precision * 100
