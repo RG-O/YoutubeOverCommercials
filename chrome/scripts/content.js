@@ -1383,7 +1383,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                         buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                     }, delay);
                 } else {
-                    shutdownAdvancedLogoAnalysis();
+                    shutdownAdvancedLogoAnalysis('Error calling Advanced Logo Analyzer Companion App. Please make sure app is running and try again. This message will soon disappear.');
                 }
             })
         } else if (advancedLogoMaskCollectionSamples > 0 && advancedLogoMaskCollectionSamples < requiredAdvancedLogoMaskCollectionSamples) {
@@ -1412,7 +1412,15 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 //TODO: check for fullscreen to cancel if user exits early
                 ++advancedLogoMaskCollectionSamples;
 
+                if (logoAnalysisData.error || logoAnalysisData.ground_truth_total < 10) {
+                    //TODO: add more here
+                    shutdownAdvancedLogoAnalysis('No logo found. Please try again. This message will soon disappear.');
+                    return;
+                }
+
                 console.log(logoAnalysisData);
+
+                console.log(logoAnalysisData.ground_truth_total);
 
                 console.log(logoAnalysisData.logo_mask_avg_hsv[1]);
 
@@ -1478,6 +1486,9 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 console.log("delay = ", delay);
                 
                 setTimeout(() => {
+                    //TODO: Best to set this here in case use is retrying after errors?
+                    isAdvancedLogoMonitorPaused = false;
+
                     advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                 }, delay);
 
@@ -1519,7 +1530,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 }
 
                 if (consecutiveAdvancedLogoAnalysisCallFailures > 3) {
-                    shutdownAdvancedLogoAnalysis();
+                    shutdownAdvancedLogoAnalysis('Error calling Advanced Logo Analyzer Companion App. Please make sure app is running and try again. This message will soon disappear.');
                 } else {
                     const elapsed = Date.now() - startTime;
                     const delay = Math.max(0, 1000 - elapsed);
@@ -1642,8 +1653,12 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             } else {
                 //indicating potentially out of commercial break
 
-                matchCount++;
-                mismatchCount = 0;
+                //do not want bright around logo clearing out mismatch count while potentially going to commercial
+                //TODO: need more testing and analysis on this
+                if (isColorLogo || isCommercialState || !isBrightAroundLogo) {
+                    matchCount++;
+                    mismatchCount = 0;
+                }
 
                 //TODO: is this the best way to do this considering audio and video options?
                 if (!isDebugMode && !isCommercialState && isMaskCompleteMessageDismissable) {
@@ -1805,8 +1820,8 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
 
 //TODO: Somehow use a variation of this for all auto-pixel modes to let users reselect pixel without refreshing tab
-function shutdownAdvancedLogoAnalysis() {
-    addMessageAlertToMainVideo('Error calling Advanced Logo Analyzer Companion App. Please make sure app is running and try again. This message will soon disappear.');
+function shutdownAdvancedLogoAnalysis(message) {
+    addMessageAlertToMainVideo(message);
     setTimeout(() => {
         removeElementsByClass('ytoc-main-video-message-alert');
     }, 9000);
@@ -1823,6 +1838,7 @@ function shutdownAdvancedLogoAnalysis() {
 
     //complete reset
     cooldownCountRemaining = 8;
+    advancedLogoMaskCollectionSamples = 0;
     selectedPixel = false;
     isAutoModeInitiated = false;
 }
