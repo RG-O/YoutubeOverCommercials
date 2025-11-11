@@ -1655,7 +1655,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
                 //do not want bright around logo clearing out mismatch count while potentially going to commercial
                 //TODO: need more testing and analysis on this
-                if (isColorLogo || isCommercialState || !isBrightAroundLogo) {
+                if (isColorLogo || isCommercialState || !isBrightAroundLogo || logoAnalysisData.confidence > 0.33) {
                     matchCount++;
                     mismatchCount = 0;
                 }
