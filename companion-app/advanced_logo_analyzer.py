@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 TV Logo Detector - Flask service
 
@@ -23,7 +23,7 @@ import numpy as np
 from flask import Flask, jsonify, request
 from PIL import Image
 import pystray
-from pystray import MenuItem as item
+from pystray import Menu as menu, MenuItem as item
 
 __version__ = "1.0"
 PORT = 64143
@@ -112,16 +112,6 @@ def get_logo_bounding_box(edge_mask: np.ndarray) -> Optional[Tuple[int, int, int
         return None
     largest = max(cnts, key=cv2.contourArea)
     return cv2.boundingRect(largest)
-
-
-def overlay_logo_box(original_bgr: np.ndarray, edge_mask: np.ndarray) -> np.ndarray:
-    """Draw a green rectangle around the detected logo bounding box (if present)."""
-    out = original_bgr.copy()
-    box = get_logo_bounding_box(edge_mask)
-    if box:
-        x, y, w, h = box
-        cv2.rectangle(out, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    return out
 
 
 def bgr_to_hsv_tuple(bgr: Tuple[float, float, float]) -> Tuple[int, int, int]:
@@ -236,11 +226,7 @@ def advanced_logo_analysis():
             {
                 "status": req,
                 "version": __version__,
-                "frames_collected": len(logo_edges),
-                "current_edge_preview": image_to_base64(current_edge),
-                "img_np": image_to_base64(gray_np),
-                "img_blur": image_to_base64(img_blur),
-                "mask_preview": image_to_base64(styled_preview),
+                "maskBuildPreviewImage": image_to_base64(styled_preview),
             }
         )
 
@@ -265,11 +251,7 @@ def advanced_logo_analysis():
         return jsonify(
             {
                 "status": req,
-                "frames_collected": len(logo_edges),
-                "current_edge_preview": image_to_base64(current_edge),
-                "mask_preview": image_to_base64(styled_preview),
-                "img_np": image_to_base64(gray_np),
-                "img_blur": image_to_base64(img_blur),
+                "maskBuildPreviewImage": image_to_base64(styled_preview),
             }
         )
 
@@ -328,12 +310,10 @@ def advanced_logo_analysis():
         return jsonify(
             {
                 "status": req,
-                "frames_collected": len(logo_edges),
-                "current_edge_preview": image_to_base64(current_edge),
-                "ground_truth_total": float(ground_truth_total),
-                "mask_preview": image_to_base64(styled_preview),
-                "final_mask_preview": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
-                "logo_mask_avg_hsv": eroded_edges_avg_hsv,
+                "edgeSum": float(ground_truth_total),
+                "maskBuildPreviewImage": image_to_base64(styled_preview),
+                "finalMaskImage": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
+                "averageColorInsideLogoHSV": eroded_edges_avg_hsv,
                 "avg_logo_color": eroded_edges_avg_bgr,
                 "contour_vis": image_to_base64(overlay_img_rgb),
                 "avg_logo_outer_hsv_and_rgb": outer_hsv_and_rgb,
@@ -367,8 +347,6 @@ def advanced_logo_analysis():
     visual[~edge1 & edge2] = [94, 136, 158]  # BLUE = edge in current only
     visual[edge1 & edge2] = [56, 122, 76]    # GREEN = both
 
-    just_logo = overlay_logo_box(color_bgr, avg_edge_mask if avg_edge_mask is not None else np.zeros_like(gray_np))
-
     outer_hsv_and_rgb = average_hsv_and_rgb_outside_contours(color_bgr, contours)
 
     return jsonify(
@@ -376,7 +354,6 @@ def advanced_logo_analysis():
             "status": req,
             "confidence": precision,
             "current_edge_preview": image_to_base64((current_edge_boolean_mask.astype(np.uint8)) * 255),
-            "mask_preview": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
             "diff_preview": image_to_base64(visual.astype(np.uint8)),
             "outer_hsv_and_rgb": outer_hsv_and_rgb,
         }
@@ -390,7 +367,7 @@ def ping():
 
 
 # -----------------------------------------------------------------------------
-# Tray helpers (kept for UX parity with original)
+# Tray helpers
 # -----------------------------------------------------------------------------
 def run_server() -> None:
     """Run the Flask server in the background thread."""
@@ -399,6 +376,7 @@ def run_server() -> None:
 
 def on_restart(icon, item) -> None:
     """Restart the Python process."""
+    icon.stop()
     os.execl(sys.executable, sys.executable, *sys.argv)
 
 
@@ -411,8 +389,8 @@ def on_exit(icon, item) -> None:
 def start_tray() -> None:
     """Create system tray icon with Restart and Exit options."""
     image = Image.new("RGB", (64, 64), color=(0, 128, 255))
-    menu = (item("Restart", on_restart), item("Exit", on_exit))
-    icon = pystray.Icon("TV Logo Detector", image, "TV Logo Detector", menu)
+    tray_menu = menu(item("Exit", on_exit))
+    icon = pystray.Icon("Live Commercial Blocker - Advanced Logo Analysis", image, "Live Commercial Blocker - Advanced Logo Analysis", tray_menu)
     icon.run()
 
 
