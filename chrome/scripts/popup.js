@@ -367,10 +367,9 @@ function setTextFieldsToSelectAll() {
 
 async function getIDFromCurrentTab(param) {
     let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = new URL(tab.url);
 
     if (param) {
-        const url = new URL(tab.url);
-
         if (url.hostname === 'www.youtube.com') {
             let id = url.searchParams.get(param);
 
@@ -394,6 +393,10 @@ async function getIDFromCurrentTab(param) {
             return false;
         }
     } else {
+        if (url.hostname === 'www.youtube.com') {
+            alert('Warning: It is highly recommended that you use one of the YouTube options above for YouTube overlays.');
+        }
+
         return tab.url;
     }
 }

@@ -166,6 +166,12 @@ function setOverlayVideo() {
 }
 
 
+function removeOverlayVideo() {
+    overlayVideo.remove();
+    overlayScreen.remove();
+}
+
+
 //adding an overlay to darken the main/background video during commercials if user has chosen to do so
 function addOverlayFade(insertLocation) {
 
@@ -2629,6 +2635,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             //note: this is an async function
             //TODO: figure out how to update all the preferences that I'm not updating here after extension has already been initiated
             chrome.storage.sync.get([
+                'overlayVideoType',
+                'ytPlaylistID',
+                'ytVideoID',
+                'ytLiveID',
+                'otherVideoURL',
+                'otherLiveURL',
                 'mismatchCountThreshold',
                 'matchCountThreshold',
                 'colorDifferenceMatchingThreshold',
@@ -2654,6 +2666,39 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
                 }
+
+                //TODO: make more versitle to handle changing types
+                if (overlayVideoType === result.overlayVideoType && !isAudioOnlyOverlay) {
+
+                    //if user changes video source, update for next commercial
+                    if (
+                        ytPlaylistID !== result.ytPlaylistID ||
+                        ytVideoID !== result.ytVideoID ||
+                        ytLiveID !== result.ytLiveID ||
+                        otherVideoURL !== result.otherVideoURL ||
+                        otherLiveURL !== result.otherLiveURL
+                    ) {
+
+                        //TODO: get to work for both auto and manual modes
+                        if (commercialDetectionMode.indexOf('auto') >= 0) {
+
+                            if (!isAutoModeFirstCommercial) {
+                                removeOverlayVideo();
+                                isAutoModeFirstCommercial = true;
+                            }
+
+                            ytPlaylistID = result.ytPlaylistID;
+                            ytVideoID = result.ytVideoID;
+                            ytLiveID = result.ytLiveID;
+                            otherVideoURL = result.otherVideoURL;
+                            otherLiveURL = result.otherLiveURL;
+
+                        }
+
+                    }
+
+                }
+                
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
