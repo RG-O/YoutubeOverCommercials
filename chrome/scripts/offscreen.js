@@ -172,7 +172,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     })
                 })
                     .then(response => response.json())
-                    .then(logoAnalysisData => {
+                    .then(logoAnalysisResponse => {
                         //return jsonify({
                         //    "status": "ready",
                         //    "logo": match,
@@ -184,7 +184,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         const fetchEnd = performance.now();
                         const fetchTime = ((fetchEnd - fetchStart) / 1000).toFixed(3);
                         //console.log(data);
-                        sendResponse({ logoAnalysisData: logoAnalysisData, fetchTime: fetchTime, wasSuccessfulCall: true });
+                        sendResponse({ logoAnalysisResponse: logoAnalysisResponse, fetchTime: fetchTime, wasSuccessfulCall: true });
                     })
                     .catch(error => {
                         //TODO: send current state if error
@@ -192,7 +192,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         sendResponse({ wasSuccessfulCall: false });
                     });
             } else {
-                sendResponse({ logoAnalysisData: null });
+                sendResponse({ logoAnalysisResponse: null });
             }
 
             return true; //keep message channel open for async response

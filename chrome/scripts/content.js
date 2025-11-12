@@ -1363,13 +1363,13 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
     if (document.fullscreenElement) {
 
         if (advancedLogoMaskCollectionSamples == 0) {
-            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-first").then(function (logoAnalysisData) {
-                if (logoAnalysisData) {
+            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-first").then(function (logoAnalysisResponse) {
+                if (logoAnalysisResponse) {
                     //TODO: add failure check to stop - review the code?
                     //TODO: make sure cooldown time and ui blockers last until mask is complete
                     ++advancedLogoMaskCollectionSamples;
 
-                    console.log(logoAnalysisData);
+                    console.log(logoAnalysisResponse);
 
                     const elapsed = Date.now() - startTime;
                     const delay = Math.max(0, 1000 - elapsed);
@@ -1377,7 +1377,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                     console.log("elapsed = ", elapsed);
                     console.log("delay = ", delay);
 
-                    currentEdgeImage.src = logoAnalysisData.mask_preview;
+                    currentEdgeImage.src = logoAnalysisResponse.maskBuildPreviewImage;
 
                     setTimeout(() => {
                         buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
@@ -1387,12 +1387,12 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 }
             })
         } else if (advancedLogoMaskCollectionSamples > 0 && advancedLogoMaskCollectionSamples < requiredAdvancedLogoMaskCollectionSamples) {
-            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask").then(function (logoAnalysisData) {
+            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask").then(function (logoAnalysisResponse) {
                 //TODO: add failure checks to retry a certain number of times?
                 //TODO: check for fullscreen to cancel if user exits early
                 ++advancedLogoMaskCollectionSamples;
 
-                console.log(logoAnalysisData);
+                console.log(logoAnalysisResponse);
 
                 const elapsed = Date.now() - startTime;
                 const delay = Math.max(0, 1000 - elapsed);
@@ -1400,70 +1400,71 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
                 console.log("elapsed = ", elapsed);
                 console.log("delay = ", delay);
 
-                currentEdgeImage.src = logoAnalysisData.mask_preview;
+                currentEdgeImage.src = logoAnalysisResponse.maskBuildPreviewImage;
 
                 setTimeout(() => {
                     buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
                 }, delay);
             })
         } else if (advancedLogoMaskCollectionSamples >= requiredAdvancedLogoMaskCollectionSamples) {
-            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-last").then(function (logoAnalysisData) {
+            getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "build-mask-last").then(function (logoAnalysisResponse) {
                 //TODO: add failure checks to retry this one only once
                 //TODO: check for fullscreen to cancel if user exits early
                 ++advancedLogoMaskCollectionSamples;
 
-                if (logoAnalysisData.error || logoAnalysisData.ground_truth_total < 10) {
+                if (logoAnalysisResponse.error || logoAnalysisResponse.edgeSum < 10) {
                     //TODO: add more here
                     shutdownAdvancedLogoAnalysis('No logo found. Please try again. This message will soon disappear.');
                     return;
                 }
 
-                console.log(logoAnalysisData);
+                console.log(logoAnalysisResponse);
 
-                console.log(logoAnalysisData.ground_truth_total);
+                console.log(logoAnalysisResponse.edgeSum);
 
-                console.log(logoAnalysisData.logo_mask_avg_hsv[1]);
+                console.log(logoAnalysisResponse.averageColorInsideLogoHSV[1]);
 
-                console.log(logoAnalysisData.logo_mask_avg_hsv[2]);
+                console.log(logoAnalysisResponse.averageColorInsideLogoHSV[2]);
 
-                console.log("avg_logo_color: " + logoAnalysisData.avg_logo_color);
-                averageLogoColor = logoAnalysisData.avg_logo_color;
+                console.log("averageColorInsideLogoBGR: " + logoAnalysisResponse.averageColorInsideLogoBGR);
+                averageLogoColor = logoAnalysisResponse.averageColorInsideLogoBGR;
                 //logoBox.style.color = "rgb(" + averageLogoColor + ")";
                 //TODO: only set it like this for debug mode
                 if (isDebugMode) {
-                    logoBox.style.color = "rgb(" + logoAnalysisData.avg_logo_color[2] + ", " + logoAnalysisData.avg_logo_color[1] + ", " + logoAnalysisData.avg_logo_color[0] + ")";
+                    logoBox.style.color = "rgb(" + logoAnalysisResponse.averageColorInsideLogoBGR[2] + ", " + logoAnalysisResponse.averageColorInsideLogoBGR[1] + ", " + logoAnalysisResponse.averageColorInsideLogoBGR[0] + ")";
                 }
 
-                logoImageCaptureGrey.src = logoAnalysisData.contour_vis;
-                advancedLogoMaskImage.src = logoAnalysisData.final_mask_preview;
+                logoImageCaptureGrey.src = logoAnalysisResponse.averageColorInsideLogoCaptureRegionImage; //TODO: set to debug-high
+                advancedLogoMaskImage.src = logoAnalysisResponse.finalMaskImage;
 
-                console.log("logo_mask_avg_hsv: " + logoAnalysisData.logo_mask_avg_hsv);
-                console.log("avg_logo_outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv);
-                let insideVersusOutsideHueDifference = Math.abs(logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[0] - logoAnalysisData.logo_mask_avg_hsv[0]);
-                let insideVersusOutsideBrightnessDifference = Math.abs(logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[2] - logoAnalysisData.logo_mask_avg_hsv[2]);
+                console.log("averageColorInsideLogoHSV: " + logoAnalysisResponse.averageColorInsideLogoHSV);
+                console.log("averageColorOutsideLogoHSV: " + logoAnalysisResponse.averageColorOutsideLogoHSV);
+                console.log("averageColorOutsideLogo.hsv: " + logoAnalysisResponse.averageColorOutsideLogo.hsv);
+                let insideVersusOutsideHueDifference = Math.abs(logoAnalysisResponse.averageColorOutsideLogo.hsv[0] - logoAnalysisResponse.averageColorInsideLogoHSV[0]);
+                let insideVersusOutsideBrightnessDifference = Math.abs(logoAnalysisResponse.averageColorOutsideLogo.hsv[2] - logoAnalysisResponse.averageColorInsideLogoHSV[2]);
 
 
                 //TODO: have it be like some percentage of pixels that are bright instead of averaging the colors which often ends up being a shade of brown for color logos. or average the s and v's of each pixel?
                 //check average color of inside of logo part of mask to see if it is a white / transparent white logo or a colored logo
-                //note: logoAnalysisData.logo_mask_avg_hsv[2] = 255 can be full color or full white, depending on the saturation
-                //if (logoAnalysisData.logo_mask_avg_hsv[1] < 70 || logoAnalysisData.logo_mask_avg_hsv[2] > 100) {
+                //note: logoAnalysisResponse.averageColorInsideLogoHSV[2] = 255 can be full color or full white, depending on the saturation
+                //if (logoAnalysisResponse.averageColorInsideLogoHSV[1] < 70 || logoAnalysisResponse.averageColorInsideLogoHSV[2] > 100) {
                 if (
-                    (logoAnalysisData.logo_mask_avg_hsv[1] < 50 && logoAnalysisData.logo_mask_avg_hsv[2] > 50) || //low saturation
-                    //logoAnalysisData.logo_mask_avg_hsv[2] > 200 || //high brightness //TODO: Switch to HSL in the python so I can actually use this value? or maybe it is fine pretty much just using the S in HSV
-                    (logoAnalysisData.logo_mask_avg_hsv[1] < 140 && logoAnalysisData.logo_mask_avg_hsv[2] > 40 && insideVersusOutsideHueDifference < 27 && insideVersusOutsideBrightnessDifference > 15) //lower saturation threashold if hue outside the logo is similar to inside the logo, implying that the logo may be transparent
+                    (logoAnalysisResponse.averageColorInsideLogoHSV[1] < 50 && logoAnalysisResponse.averageColorInsideLogoHSV[2] > 50) || //low saturation
+                    //logoAnalysisResponse.averageColorInsideLogoHSV[2] > 200 || //high brightness //TODO: Switch to HSL in the python so I can actually use this value? or maybe it is fine pretty much just using the S in HSV
+                    (logoAnalysisResponse.averageColorInsideLogoHSV[1] < 140 && logoAnalysisResponse.averageColorInsideLogoHSV[2] > 40 && insideVersusOutsideHueDifference < 27 && insideVersusOutsideBrightnessDifference > 15) //lower saturation threashold if hue outside the logo is similar to inside the logo, implying that the logo may be transparent
                 ) {
                     isColorLogo = false;
-                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. WHITE OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. BRIGHT OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 } else {
                     isColorLogo = true;
-                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. COLOR LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+                    logoBoxText = 'BASELINE LOGO MASK COMPLETE. LOGO WITH COLOR DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
                 }
                 //isColorLogo = false //555
                 logoBox.textContent = logoBoxText;
                 console.log(isColorLogo);
-                //logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[1] < 15 && logoAnalysisData.avg_logo_outer_hsv_and_rgb.avg_hsv[2]
+                //logoAnalysisResponse.averageColorOutsideLogo.hsv[1] < 15 && logoAnalysisResponse.averageColorOutsideLogo.hsv[2]
 
-                currentEdgeImage.src = logoAnalysisData.mask_preview;
+                currentEdgeImage.src = logoAnalysisResponse.maskBuildPreviewImage;
 
                 console.log('******************************************************************');
 
@@ -1514,10 +1515,10 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
         const startTime = Date.now();
 
-        getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "compare-to-mask").then(function (logoAnalysisData) {
+        getAdvancedLogoAnalysis(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions, "compare-to-mask").then(function (logoAnalysisResponse) {
             //TODO: add failure checks to retry a certain number of times?
 
-            if (!logoAnalysisData) {
+            if (!logoAnalysisResponse) {
                 ++consecutiveAdvancedLogoAnalysisCallFailures;
 
                 console.log('Error fetching advanced logo analysis. Consecutive errors = ' + consecutiveAdvancedLogoAnalysisCallFailures);
@@ -1548,36 +1549,35 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
             //TODO: is this wasteful in non debug mode?
             if (isMaskCompleteMessageDismissable) {
-                currentEdgeImage.src = logoAnalysisData.diff_preview;
+                currentEdgeImage.src = logoAnalysisResponse.edgeMatchVisualImage;
             }
 
             if (isDebugMode) {
-                //currentEdgeImage.src = logoAnalysisData.diff_preview; //being done above. for now....
+                //currentEdgeImage.src = logoAnalysisResponse.edgeMatchVisualImage; //being done above. for now....
                 if (isMaskCompleteMessageDismissable) {
-                    //logoBoxText = ((logoAnalysisData.confidence * 100).toFixed(0)).padStart(2, "0") + "%";
-                    logoBox.textContent = ((logoAnalysisData.confidence * 100).toFixed(0)).padStart(2, "0") + "%";
+                    //logoBoxText = ((logoAnalysisResponse.edgeMatchConfidence * 100).toFixed(0)).padStart(2, "0") + "%";
+                    logoBox.textContent = ((logoAnalysisResponse.edgeMatchConfidence * 100).toFixed(0)).padStart(2, "0") + "%";
                 }
             }
 
-            //console.log(logoAnalysisData);
+            //console.log(logoAnalysisResponse);
 
-            //console.log("outer_hsv_and_rgb.avg_hsv: " + logoAnalysisData.outer_hsv_and_rgb.avg_hsv);
-            //const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 30 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 220);
-            const isBrightAroundLogo = (logoAnalysisData.outer_hsv_and_rgb.avg_hsv[1] < 18 && logoAnalysisData.outer_hsv_and_rgb.avg_hsv[2] > 230);
+            //console.log("averageColorOutsideLogo.hsv: " + logoAnalysisResponse.averageColorOutsideLogo.hsv);
+            //const isBrightAroundLogo = (logoAnalysisResponse.averageColorOutsideLogo.hsv[1] < 30 && logoAnalysisResponse.averageColorOutsideLogo.hsv[2] > 220);
+            const isBrightAroundLogo = (logoAnalysisResponse.averageColorOutsideLogo.hsv[1] < 18 && logoAnalysisResponse.averageColorOutsideLogo.hsv[2] > 230);
             //console.log(isBrightAroundLogo);
 
-            //currentEdgeImage.src = logoAnalysisData.current_edge_preview;
-            //advancedLogoMaskImage.src = logoAnalysisData.mask_preview;
+            //advancedLogoMaskImage.src = logoAnalysisResponse.maskBuildPreviewImage;
 
             //default to matching logo if not in commercial break and not matching logo if in commercial break
             let match = !isCommercialState;
             if (
                 !isCommercialState &&
-                logoAnalysisData.confidence < 0.33 &&
+                logoAnalysisResponse.edgeMatchConfidence < 0.33 &&
                 (isColorLogo || !isBrightAroundLogo)
             ) {
                 match = false;
-            } else if (isCommercialState && logoAnalysisData.confidence > 0.63) {
+            } else if (isCommercialState && logoAnalysisResponse.edgeMatchConfidence > 0.63) {
                 match = true;
             }
 
@@ -1655,7 +1655,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 
                 //do not want bright around logo clearing out mismatch count while potentially going to commercial
                 //TODO: need more testing and analysis on this
-                if (isColorLogo || isCommercialState || !isBrightAroundLogo || logoAnalysisData.confidence > 0.33) {
+                if (isColorLogo || isCommercialState || !isBrightAroundLogo || logoAnalysisResponse.edgeMatchConfidence > 0.33) {
                     matchCount++;
                     mismatchCount = 0;
                 }
@@ -1709,7 +1709,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 } else {
                     //logoBox.style.color = "rgb(" + averageLogoColor + ")";
                     //logoBox.style.color = "rgb(140, 179, 210)";
-                    logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb + ")";
+                    logoBox.style.backgroundColor = "rgb(" + logoAnalysisResponse.averageColorOutsideLogo.rgb + ")";
                 }
             }
             
@@ -1724,12 +1724,12 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             //console.log("elapsed = ", elapsed);
             //console.log("delay = ", delay);
 
-            //console.log(logoAnalysisData.outer_hsv);
-            //let [h, s, l] = hsv_to_hsl(logoAnalysisData.outer_hsv[0], logoAnalysisData.outer_hsv[1], logoAnalysisData.outer_hsv[2])
+            //console.log(logoAnalysisResponse.outer_hsv);
+            //let [h, s, l] = hsv_to_hsl(logoAnalysisResponse.outer_hsv[0], logoAnalysisResponse.outer_hsv[1], logoAnalysisResponse.outer_hsv[2])
             //logoBox.style.backgroundColor = "hsl(" + h + ", " + s + ", " + l + ")";
 
             //TODO: figure out why in BGR
-            //logoBox.style.backgroundColor = "rgb(" + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[2] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[1] + ", " + logoAnalysisData.outer_hsv_and_rgb.avg_rgb[0] + ")";
+            //logoBox.style.backgroundColor = "rgb(" + logoAnalysisResponse.averageColorOutsideLogo.rgb[2] + ", " + logoAnalysisResponse.averageColorOutsideLogo.rgb[1] + ", " + logoAnalysisResponse.averageColorOutsideLogo.rgb[0] + ")";
 
 
             //call no faster than once per second
@@ -1794,16 +1794,13 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
                 //console.log(response.fetchTime);
 
-                //currentEdgeImage.src = response.logoAnalysisData.current_edge_preview;
-                //advancedLogoMaskImage.src = response.logoAnalysisData.mask_preview;
-                //logoImageCaptureGrey.src = response.logoAnalysisData.img_np; //TODO: move out of here if I want it anywhere becaus i think it gets in the way of reporting service errors
-                //logoImageCaptureBlur.src = response.logoAnalysisData.img_blur;
-                //logoImageCaptureDiff.src = response.logoAnalysisData.diff_preview;
+                //advancedLogoMaskImage.src = response.logoAnalysisResponse.maskBuildPreviewImage;
+                //logoImageCaptureDiff.src = response.logoAnalysisResponse.edgeMatchVisualImage;
 
                 //console.log(response.wasSuccessfulCall);
 
                 if (response.wasSuccessfulCall) {
-                    resolve(response.logoAnalysisData);
+                    resolve(response.logoAnalysisResponse);
                 } else {
                     resolve(false);
                 }

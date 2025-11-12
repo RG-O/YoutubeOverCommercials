@@ -153,12 +153,12 @@ def average_hsv_and_rgb_outside_contours(image_bgr: np.ndarray, contours_list: L
     b_out = b[outside_mask == 255]
 
     if h_out.size == 0 or r_out.size == 0:
-        return {"avg_hsv": None, "avg_rgb": None}
+        return {"hsv": None, "rgb": None}
 
     avg_hsv = (float(h_out.mean()), float(s_out.mean()), float(v_out.mean()))
     avg_rgb = (float(r_out.mean()), float(g_out.mean()), float(b_out.mean()))
 
-    return {"avg_hsv": avg_hsv, "avg_rgb": avg_rgb}
+    return {"hsv": avg_hsv, "rgb": avg_rgb}
 
 
 # -----------------------------------------------------------------------------
@@ -224,7 +224,7 @@ def advanced_logo_analysis():
 
         return jsonify(
             {
-                "status": req,
+                "request": req,
                 "version": __version__,
                 "maskBuildPreviewImage": image_to_base64(styled_preview),
             }
@@ -250,7 +250,7 @@ def advanced_logo_analysis():
 
         return jsonify(
             {
-                "status": req,
+                "request": req,
                 "maskBuildPreviewImage": image_to_base64(styled_preview),
             }
         )
@@ -285,7 +285,7 @@ def advanced_logo_analysis():
             eroded_edges_avg_bgr = (255.0, 255.0, 255.0) # White
             eroded_edges_avg_hsv = (0.0, 0.0, 255.0) # White
 
-        # Visual overlay: tint detected mask region with red for easy inspection
+        # Visual overlay: color red the location of pixels used to get average logo color
         overlay_img = avg_color_img.copy()
         red_overlay = np.zeros_like(overlay_img)
         red_overlay[:, :, 2] = 255
@@ -300,7 +300,7 @@ def advanced_logo_analysis():
         outer_hsv_and_rgb = average_hsv_and_rgb_outside_contours(avg_color_img, contours)
 
         # Ground truth mask for comparisons
-        avg_edge_mask_boolean_mask = avg_edge_mask > 180  
+        avg_edge_mask_boolean_mask = avg_edge_mask > 180
         ground_truth_total = avg_edge_mask_boolean_mask.sum()
 
         # Return error if no logo is detected
@@ -309,14 +309,14 @@ def advanced_logo_analysis():
 
         return jsonify(
             {
-                "status": req,
+                "request": req,
                 "edgeSum": float(ground_truth_total),
                 "maskBuildPreviewImage": image_to_base64(styled_preview),
                 "finalMaskImage": image_to_base64((avg_edge_mask_boolean_mask.astype(np.uint8)) * 255),
                 "averageColorInsideLogoHSV": eroded_edges_avg_hsv,
-                "avg_logo_color": eroded_edges_avg_bgr,
-                "contour_vis": image_to_base64(overlay_img_rgb),
-                "avg_logo_outer_hsv_and_rgb": outer_hsv_and_rgb,
+                "averageColorInsideLogoBGR": eroded_edges_avg_bgr,
+                "averageColorInsideLogoCaptureRegionImage": image_to_base64(overlay_img_rgb),
+                "averageColorOutsideLogo": outer_hsv_and_rgb,
             }
         )
 
@@ -351,11 +351,10 @@ def advanced_logo_analysis():
 
     return jsonify(
         {
-            "status": req,
-            "confidence": precision,
-            "current_edge_preview": image_to_base64((current_edge_boolean_mask.astype(np.uint8)) * 255),
-            "diff_preview": image_to_base64(visual.astype(np.uint8)),
-            "outer_hsv_and_rgb": outer_hsv_and_rgb,
+            "request": req,
+            "edgeMatchConfidence": precision,
+            "edgeMatchVisualImage": image_to_base64(visual.astype(np.uint8)),
+            "averageColorOutsideLogo": outer_hsv_and_rgb,
         }
     )
 
