@@ -387,7 +387,10 @@ def on_exit(icon, item) -> None:
 
 def start_tray() -> None:
     """Create system tray icon with Restart and Exit options."""
-    image = Image.new("RGB", (64, 64), color=(0, 128, 255))
+    #image = Image.open("icon.png")
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    icon_path = os.path.join(base_path, "icon.png")
+    image = Image.open(icon_path)
     tray_menu = menu(item("Exit", on_exit))
     icon = pystray.Icon("Live Commercial Blocker - Advanced Logo Analysis", image, "Live Commercial Blocker - Advanced Logo Analysis", tray_menu)
     icon.run()
