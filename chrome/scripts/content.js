@@ -2667,11 +2667,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
                 }
 
-                //TODO: make more versitle to handle changing types
-                if (overlayVideoType === result.overlayVideoType && !isAudioOnlyOverlay) {
+                //verify user is not switching from or to audio only overlays //TODO: get that to work
+                if (!isAudioOnlyOverlay && result.overlayVideoType !== 'spotify' && result.overlayVideoType !== 'other-tabs') {
 
                     //if user changes video source, update for next commercial
                     if (
+                        overlayVideoType !== result.overlayVideoType ||
                         ytPlaylistID !== result.ytPlaylistID ||
                         ytVideoID !== result.ytVideoID ||
                         ytLiveID !== result.ytLiveID ||
@@ -2687,6 +2688,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                                 isAutoModeFirstCommercial = true;
                             }
 
+                            overlayVideoType = result.overlayVideoType;
+                            if (overlayVideoType == 'yt-live' || overlayVideoType == 'other-live') {
+                                isLiveOverlayVideo = true;
+                            } else {
+                                isLiveOverlayVideo = false;
+                            }
                             ytPlaylistID = result.ytPlaylistID;
                             ytVideoID = result.ytVideoID;
                             ytLiveID = result.ytLiveID;

@@ -154,12 +154,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         if (message.action == 'capture-logo-advanced') {
             if (viewing) {
                 if (!canvas) {
-                    console.log(message.dimensions);
                     createCanvas(message.dimensions.width, message.dimensions.height);
                 }
 
                 ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, message.dimensions.width, message.dimensions.height, 0, 0, message.dimensions.width, message.dimensions.height);
-                let logoScreenshotBase64 = canvas.toDataURL('image/png'); //debug-high
+                const logoScreenshotBase64 = canvas.toDataURL('image/png');
 
                 const fetchStart = performance.now();
                 fetch("http://localhost:64143/advanced-logo-analysis", {
@@ -173,22 +172,11 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 })
                     .then(response => response.json())
                     .then(logoAnalysisResponse => {
-                        //return jsonify({
-                        //    "status": "ready",
-                        //    "logo": match,
-                        //    "confidence": float(similarity),
-                        //    "current_edge_preview": image_to_base64(current_edge.astype(np.uint8)),
-                        //    "mask_preview": image_to_base64(avg_edge_mask),
-                        //    "diff_preview": image_to_base64(diff.astype(np.uint8))
-                        //})
                         const fetchEnd = performance.now();
                         const fetchTime = ((fetchEnd - fetchStart) / 1000).toFixed(3);
-                        //console.log(data);
                         sendResponse({ logoAnalysisResponse: logoAnalysisResponse, fetchTime: fetchTime, wasSuccessfulCall: true });
                     })
                     .catch(error => {
-                        //TODO: send current state if error
-                        //console.error("Error:", error); //TODO: comment this out?
                         sendResponse({ wasSuccessfulCall: false });
                     });
             } else {
