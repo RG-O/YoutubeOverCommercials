@@ -76,6 +76,20 @@
     font-family: "Montserrat", sans-serif !important;
 }
 
+    .ytoc-advanced-logo-container img {
+        width: auto !important;
+        height: auto !important;
+    }
+
+.ytoc-logo-advanced {
+    height: 100% !important;
+    color: #12384d;
+    background-color: rgb(240, 238, 236);
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+    /*font-variant-numeric: tabular-nums !important;*/
+}
+
 .ytoc-selection-indicator {
     z-index: 2147483646 !important;
     position: absolute !important;

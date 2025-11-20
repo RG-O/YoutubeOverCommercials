@@ -185,7 +185,9 @@ function initialSetup() {
 
                 waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]:not([disabled])').then(() => {
 
-                    //wait a split sec so things feel smoother
+                    banner.innerText = 'Syncing...';
+
+                    //wait a sec so things feel smoother and to avoid errors
                     setTimeout(() => {
 
                         if (document.querySelector('[data-testid="now-playing-widget"]')) {
@@ -205,7 +207,7 @@ function initialSetup() {
 
                         }, 500);
 
-                    }, 500);
+                    }, 1000);
 
                 });
 
