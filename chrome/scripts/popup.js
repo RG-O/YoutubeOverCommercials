@@ -151,6 +151,11 @@ chrome.storage.sync.get([
         updateSaveProfileButtonsText();
     });
 
+    optionsForm.companionAppPingRetry.addEventListener("click", function (event) {
+        event.preventDefault(); //prevent popup from being reloaded
+        pingCompanionApp();
+    });
+
     //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
     if (isFirefox) {
         document.getElementsByClassName('firefox-experimental')[0].style.display = 'inline';
@@ -822,6 +827,7 @@ function pingCompanionApp() {
     if (optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo') {
         document.getElementById('companion-app-loading').style.display = 'block';
         document.getElementById('save-button').disabled = true;
+        document.getElementById('companion-app-ping-error').style.display = 'none'; //here for when retriggered from error
 
         fetch("http://localhost:64143/ping-advanced-logo-analysis")
             .then(response => response.json())
@@ -847,6 +853,10 @@ function displayPingCompanionAppSuccess(version) {
     document.getElementById('save-button').disabled = false;
 
     if (!hasPreviouslyInstalledCompanionApp) {
+        //setting values to recommended settings for this mode //TODO: better way for UX for this?
+        optionsForm.mismatchCountThreshold.value = 10;
+        optionsForm.matchCountThreshold.value = 1;
+
         //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
         hasPreviouslyInstalledCompanionApp = true;
         chrome.storage.sync.set({ hasPreviouslyInstalledCompanionApp: hasPreviouslyInstalledCompanionApp });
