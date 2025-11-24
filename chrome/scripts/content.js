@@ -116,7 +116,6 @@ function setOverlayVideo() {
     insertLocation.insertBefore(overlayVideo, null);
     overlayVideo.style.visibility = "visible";
 
-    //TODO: Add option to auto set overlay video location and size based on selected pixel location for auto-pixel mode
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
     let url;
@@ -156,7 +155,7 @@ function setOverlayVideo() {
     iFrame.src = url;
     iFrame.width = "100%";
     iFrame.height = "100%";
-    iFrame.allow = "autoplay; encrypted-media";
+    iFrame.allow = "autoplay; encrypted-media; local-network-access;"; //after Chrome version 142 update, need local-network-access so permissions prompt occurs for stremio and maybe others
     iFrame.frameBorder = "0";
 
     overlayVideo.appendChild(iFrame);
@@ -711,22 +710,41 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                 if (!isDebugMode) {
                     if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
-                        logoBox.style.display = 'none';
+                        if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+                            logoBox.style.display = 'none';
+                        } else {
+                            advancedLogoInfoContainer.style.display = 'none';
+                        }
                     } else if (commercialDetectionMode === 'auto-audio') {
                         audioLevelIndicatorContainer.style.display = 'none';
-                    } //else don't need to hide for auto mode
+                    } //else don't need to hide for manual mode
                 }
 
             } else {
 
                 startCommercialMode();
 
+                //hide logo for non audio overlays and not debug mode
                 if (isAudioOnlyOverlay) {
                     if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
-                        logoBox.style.display = 'block';
+                        if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+                            logoBox.style.display = 'block';
+                        } else {
+                            advancedLogoInfoContainer.style.display = 'flex';
+                        }
                     } else if (commercialDetectionMode === 'auto-audio') {
                         audioLevelIndicatorContainer.style.display = 'flex';
-                    } //else don't show for auto mode
+                    }
+                } else if (!isDebugMode) {
+                    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+                        if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+                            logoBox.style.display = 'none';
+                        } else {
+                            advancedLogoInfoContainer.style.display = 'none';
+                        }
+                    } else if (commercialDetectionMode === 'auto-audio') {
+                        audioLevelIndicatorContainer.style.display = 'none';
+                    }
                 }
 
             }
@@ -865,7 +883,7 @@ function setBlockersAndPixelSelectionInstructions() {
     iFrame.src = iFrameSource;
     iFrame.width = "100%";
     iFrame.height = "100%";
-    iFrame.allow = "autoplay; encrypted-media";
+    iFrame.allow = "autoplay; encrypted-media;";
     iFrame.frameBorder = "0";
     //iFrame.style.setProperty("border", "3px red solid", "important");
 
