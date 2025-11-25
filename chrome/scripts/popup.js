@@ -233,6 +233,9 @@ chrome.storage.sync.get([
         }
     });
 
+    //clear cache on buy me a coffee image to show updated supporter count
+    document.getElementById('buy-me-coffee').src = `https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=${today}&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff`;
+
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
     runAllToggles();
 

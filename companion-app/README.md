@@ -12,7 +12,7 @@ This is a lightweight Python app that runs in the system tray and provides a loc
 
 ### Option 1: Install from exe
 
-Download the latest Advanced Logo Analyzer release from the [Releases tab](https://github.com/YOUR_USERNAME/YOUR_REPO/releases) and install the application. After installation, run it and it will appear in your system tray.
+Download the latest Advanced Logo Analyzer release from the [Releases tab](https://github.com/RG-O/YoutubeOverCommercials/releases) and install the application. After installation, run it and it will appear in your system tray.
 
 ### Option 2 (Advanced): Run from Python
 

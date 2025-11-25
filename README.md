@@ -11,9 +11,15 @@ Browser extension that automatically detects commercials on any streaming platfo
 
 ## Installation
 
+### Browser Extension
+
 Chrome: https://chromewebstore.google.com/detail/youtube-over-commercials/eikhblhblnhmagncgpfbofhbkpgbohif
 
 Firefox: https://addons.mozilla.org/en-US/firefox/addon/youtube-over-commercials/
+
+### Companion App
+
+Download the latest Advanced Logo Analyzer release from the [Releases tab](https://github.com/RG-O/YoutubeOverCommercials/releases) and install the application. After installation, run it and it will appear in your system tray.
 
 ## Support Me
 
