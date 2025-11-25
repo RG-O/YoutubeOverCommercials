@@ -1504,11 +1504,11 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 advancedLogoEdgeImage.src = logoAnalysisResponse.edgeMatchVisualImage;
             }
 
-            //const formattedEdgeMatchPercentage = ((logoAnalysisResponse.edgeMatchConfidence * 100).toFixed(0)).padStart(2, "0") + "%"; //TODO: need this if I change my mind below
+            const formattedEdgeMatchPercentage = ((logoAnalysisResponse.edgeMatchConfidence * 100).toFixed(0)).padStart(2, "0") + "%";
             if (isDebugMode) {
                 if (hasMaskCompleteMessageBeenDismissed) {
-                    //logoBox.textContent = formattedEdgeMatchPercentage;
-                    logoBox.textContent = ((logoAnalysisResponse.edgeMatchConfidence * 100).toFixed(0)).padStart(2, "0") + "%";
+                    logoBox.textContent = formattedEdgeMatchPercentage;
+                    //logoBox.textContent = ((logoAnalysisResponse.edgeMatchConfidence * 100).toFixed(0)).padStart(2, "0") + "%";
                 }
             }
 
@@ -1538,14 +1538,14 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                 //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
                 if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
                     if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
-                        logoBox.textContent = cooldownCountRemaining;
-                        //logoBox.textContent = formattedEdgeMatchPercentage; //TODO: is this useful?
+                        //logoBox.textContent = cooldownCountRemaining;
+                        logoBox.textContent = formattedEdgeMatchPercentage; //TODO: is this useful?
                         advancedLogoInfoContainer.style.display = 'flex';
 
                         countdownOngoing = true;
                     } else if (logoCountdownMismatchesRemaining >= 1) {
-                        logoBox.textContent = logoCountdownMismatchesRemaining; 
-                        //logoBox.textContent = formattedEdgeMatchPercentage; //TODO: is this useful?
+                        //logoBox.textContent = logoCountdownMismatchesRemaining; 
+                        logoBox.textContent = formattedEdgeMatchPercentage; //TODO: is this useful?
                         advancedLogoInfoContainer.style.display = 'flex';
 
                         countdownOngoing = true;

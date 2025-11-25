@@ -38,8 +38,8 @@
             <p>
                 This mode works by the user (you) selecting a specific pixel on a logo/graphic that only displays when your game/program is on. Then, the extension continuously checks to
                 see if the pixel selected remains the same color when the logo/graphic is displayed. When the color changes, we know this is most likely due to a commercial because the logo/graphic went away and since
-                commercials are boring, the extension starts playing your YouTube video over top of the commercial. When the logo/graphic color comes back, we know your game/program is most likely back on,
-                so the extension pauses/hides your YouTube video.
+                commercials are boring, the extension starts playing your YouTube video or whatever over top of the commercial. When the logo/graphic color comes back, we know your game/program is most likely back on,
+                so the extension pauses/hides your YouTube video or whatever.
             </p>
             <h2 style="color: red;">QUICK START INSTRUCTIONS</h2>
             <ol>
@@ -78,27 +78,24 @@
                     What will make your experience the best is selecting the best pixel to monitor that you can.
                     <ul>
                         <li>
-                            You'll want to prioritize selecting a pixel within the channel logo (e.g. the NBC logo) if it is not semi-transparent.
+                            You'll want to prioritize selecting a pixel within the channel logo (e.g. the NBC logo) if it is not completely white/black or semi-transparent.
                             <ul>
                                 <li>
-                                    Within the channel logo, you'll want to try to select a color that isn't completely white or completely black (e.g. the blue inside the NBC logo). You'll want to aim for as center mass of the color as possible.
-                                    <ul>
-                                        <li>
-                                            If the logo is only black or white, these will do, just prioritize white then black, the only issue you may run into with these are if a commercial has a lot of white or black in them, it could trigger
-                                            a false flag indicating that the commercials have ended when they have not.
-                                        </li>
-                                    </ul>
+                                    Within the channel logo, you'll want to try to select a color that isn't white or black (e.g. the blue inside the NBC logo). You'll want to aim for as center mass of the color as possible.
+                                </li>
+                                <li>
+                                    If the logo is completely white/black or semi-transparent, it is best to exit now, switch the commercial detection mode to "Advanced Logo Analysis" (note: this will require an additional install), refresh this page, and then start again.
                                 </li>
                             </ul>
                         </li>
                         <li>
-                            If the full channel logo is semi-transparent, it might not work well. Instead, try to select any color that seems to be the most consistent on a graphic over the game.
+                            If there is no consistent channel logo on your broadcast, try to select any color that seems to be the most consistent on a graphic over the game.
                             <ul>
                                 <li>
                                     This is most often some part of the score graphic.
                                 </li>
                                 <li>
-                                    Again, prioritize non-black/non-white colors, then white, then black.
+                                    Prioritize non-black/non-white colors, then white, then black.
                                 </li>
                                 <li>
                                     If you chose this to be your pixel location, make sure to set your "Color Mismatch Count Threshold" in the advanced settings of the extension settings to a higher number
@@ -107,16 +104,11 @@
                             </ul>
                         </li>
                         <li>
-                            If you only have semi-transparent logo/graphic options, select from there
-                            and then crank up the Color Difference Threshold in the settings to 20 or higher to account for different colors showing through the logo/graphic.
-                        </li>
-                        <li>
                             If this instruction box is blocking your desired pixel location,
-                            go into the advanced settings of the extension settings and modify the overlay video width, height, and/or X/Y display, as this is where the YouTube video is going to display.
+                            go into the advanced settings of the extension settings and modify the overlay video width, height, and/or X/Y display, as this is where the overlay video is going to display.
                         </li>
                         <li>
-                            If you would like to change your
-                            pixel selection location at any point, refresh the page and hit the extension keyboard shortcut.
+                            If you would like to change your pixel selection location at any point, refresh the page and hit the extension keyboard shortcut.
                         </li>
                     </ul>
                 </li>
@@ -176,7 +168,7 @@
         <div id="advanced-logo-mode" style="display: none;">
             <h1>ADVANCED LOGO ANALYSIS MODE</h1>
             <p>
-                ...
+                This mode works by the user (you) selecting the full channel logo on the on the broadcast. It then sends images of this logo to the Advanced Logo Analyzer app on your desktop which uses computer vision to detect the edges of the logo. It first builds a mask of this logo's edges and then compares future images of this area to see if the edges match up to the original mask. If the edges don't match up, that means the logo went away, so it is most likely a commercial.
             </p>
             <h2 style="color: red;">QUICK START INSTRUCTIONS</h2>
             <ol>
@@ -184,12 +176,47 @@
                     Make sure your live game/program is on (out of commercial).
                     <ol type="i">
                         <li>
-                            If this isn't going to be anytime soon, without selecting a pixel, hit the extension keyboard shortcut now and then again when the game/program is back.
+                            If this isn't going to be anytime soon, without selecting the logo, hit the extension keyboard shortcut now and then again when the game/program is back.
+                        </li>
+                    </ol>
+                </li>
+                <li>
+                    Click and drag to frame a box around the channel logo on your broadcast
+                    <ol type="i">
+                        <li>
+                            If it is a really big logo, you only need to select a part of it. (e.g. Just select the ESPN part of the ESPN/ABC logo that shows on monday night football on ABC.)
+                        </li>
+                    </ol>
+                </li>
+                <li>
+                    Once you finish framing the logo by lifting off your mouse, the extension will automatically start building a mask of the logo's edges
+                    <ol type="i">
+                        <li>
+                            Watch as the mask is being built for things that could jeopordize the end result like a stationary edge behind the logo
+                        </li>
+                    </ol>
+                </li>
+                <li>
+                    After mask is complete, evaluate the end result and if things seem ok, you are good to relax and enjoy! :)
+                    <ol type="i">
+                        <li>
+                            If the mask did not come out alright, refresh and try again. (e.g. There was a stationary tree behing the logo the whole time and it significantly captured the edge of the tree.)
+                        </li>
+                        <li>
+                            Note: Not all the logo's edges need to be captured, just a decent portion of them. It is more important that no not a part of the logo were significantly captured.
+                        </li>
+                        <li>
+                            You can also manually display/hide your overlay video, temporarily disabling the auto-detection, at any point by hitting the extension keyboard shortcut.
                         </li>
                     </ol>
                 </li>
             </ol>
             <h2>TIPS & TRICKS</h2>
+            <ul>
+                <li>
+                    If you are having trouble capturing a decent mask (note: it does not need to be perfect), try pausing the stream while the logo sits in front of a solid background.
+                </li>
+            </ul>
         </div>
     </div>
 
