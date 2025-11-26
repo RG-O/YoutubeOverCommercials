@@ -12,6 +12,13 @@ if (purpose === 'opposite-mode-instructions') {
     let oppositeModeElms = document.getElementById('opposite-mode');
     oppositeModeElms.style.display = 'block';
 
+} else if (purpose === 'advanced-logo-mode-instructions') {
+
+    let regularModeElms = document.getElementById('regular-mode');
+    regularModeElms.style.display = 'none';
+    let advancedLogoModeElms = document.getElementById('advanced-logo-mode');
+    advancedLogoModeElms.style.display = 'block';
+
 } else if (purpose === 'overlay-video-container') {
 
     document.getElementById('all-content').style.display = 'none';

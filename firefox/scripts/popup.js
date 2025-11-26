@@ -3,6 +3,7 @@ var isFirefox = true; //********************
 var profiles = {};
 var gridCells;
 var pipGridCells;
+var hasPreviouslyInstalledCompanionApp;
 
 //grab all user set values
 chrome.storage.sync.get([
@@ -37,7 +38,12 @@ chrome.storage.sync.get([
     'audioLevelThreshold',
     'shouldOverlayVideoSizeAndLocationAutoSet',
     'shouldShuffleYTPlaylist',
-    'profiles'
+    'profiles',
+    'totalCommercialsBlockedSeconds',
+    'todayCommercialsBlockedSeconds',
+    'firstCommercialTimerDate',
+    'lastCommercialTimerDate',
+    'hasPreviouslyInstalledCompanionApp'
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -63,8 +69,8 @@ chrome.storage.sync.get([
     optionsForm.commercialDetectionMode.value = commercialDetectionMode;
     optionsForm.mismatchCountThreshold.value = result.mismatchCountThreshold ?? 8;
     optionsForm.matchCountThreshold.value = result.matchCountThreshold ?? 2;
-    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 14;
-    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 120;
+    optionsForm.colorDifferenceMatchingThreshold.value = result.colorDifferenceMatchingThreshold ?? 16;
+    optionsForm.manualOverrideCooldown.value = result.manualOverrideCooldown ?? 45;
     optionsForm.isDebugMode.checked = result.isDebugMode ?? false;
     optionsForm.isPiPMode.checked = result.isPiPMode ?? true;
     optionsForm.pipLocationHorizontal.value = result.pipLocationHorizontal ?? 'left';
@@ -77,6 +83,8 @@ chrome.storage.sync.get([
     optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
+    //TODO: add default profile here
+    //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
     for (const name in profiles) {
         const option = document.createElement("option");
@@ -84,6 +92,12 @@ chrome.storage.sync.get([
         option.textContent = name;
         optionsForm.profileSelect.appendChild(option);
     }
+    const today = new Date().toDateString();
+    const totalCommercialsBlockedSeconds = result.totalCommercialsBlockedSeconds || 0;
+    const todayCommercialsBlockedSeconds = result.todayCommercialsBlockedSeconds || 0;
+    const firstCommercialTimerDate = result.firstCommercialTimerDate || today;
+    const lastCommercialTimerDate = result.lastCommercialTimerDate || today;
+    hasPreviouslyInstalledCompanionApp = result.hasPreviouslyInstalledCompanionApp ?? false;
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -91,6 +105,8 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleModeInstructionsVisability);
         modeRadios[i].addEventListener('change', toggleAutoDimensionsFieldVisability);
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
+        modeRadios[i].addEventListener('change', pingCompanionApp);
+        modeRadios[i].addEventListener('change', enableSaveButton);
     }
 
     document.getElementById(optionsForm.overlayVideoType.value).style.display = 'block';
@@ -103,6 +119,7 @@ chrome.storage.sync.get([
 
     setTextFieldsToSelectAll();
     setKeyboardShortcutText();
+    grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate, lastCommercialTimerDate);
 
     document.getElementById('shouldOverlayVideoSizeAndLocationAutoSet').addEventListener('change', toggleDimensionsFieldsVisability);
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
@@ -132,6 +149,11 @@ chrome.storage.sync.get([
         //only allow letters, numbers, dashes, and underscores
         optionsForm.profileName.value = optionsForm.profileName.value.replace(/[^A-Za-z0-9-_]/g, '');
         updateSaveProfileButtonsText();
+    });
+
+    optionsForm.companionAppPingRetry.addEventListener("click", function (event) {
+        event.preventDefault(); //prevent popup from being reloaded
+        pingCompanionApp();
     });
 
     //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
@@ -210,6 +232,9 @@ chrome.storage.sync.get([
             optionsForm.otherLiveURL.value = id;
         }
     });
+
+    //clear cache on buy me a coffee image to show updated supporter count
+    document.getElementById('buy-me-coffee').src = `https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=${today}&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff`;
 
     //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
     runAllToggles();
@@ -301,13 +326,11 @@ document.getElementById("save-button").onclick = function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
+
+            //TODO: only show this message if one of these values have been updated and extension has already been initiated
+            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
             //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
             window.close();
-            //TODO: get this message to actually display correctly for firefox
-            if (!isFirefox) {
-                //TODO: only show this message if one of these values have been updated and extension has already been initiated
-                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
-            }
 
         });
 
@@ -352,10 +375,9 @@ function setTextFieldsToSelectAll() {
 
 async function getIDFromCurrentTab(param) {
     let [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const url = new URL(tab.url);
 
     if (param) {
-        const url = new URL(tab.url);
-
         if (url.hostname === 'www.youtube.com') {
             let id = url.searchParams.get(param);
 
@@ -379,6 +401,10 @@ async function getIDFromCurrentTab(param) {
             return false;
         }
     } else {
+        if (url.hostname === 'www.youtube.com') {
+            alert('Warning: It is highly recommended that you use one of the YouTube options above for YouTube overlays.');
+        }
+
         return tab.url;
     }
 }
@@ -534,6 +560,8 @@ function runAllToggles() {
     hideConfirmDeleteProfilePrompt();
     setOverlayDisplayPositionGrid();
     setPiPDisplayPositionGrid();
+    pingCompanionApp();
+    enableSaveButton();
 }
 
 
@@ -776,4 +804,88 @@ function clearAllValidationMessages() {
 
     }
 
+}
+
+
+function grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, todayCommercialsBlockedSeconds, firstCommercialTimerDate, lastCommercialTimerDate) {
+    let statsElm = document.getElementById('commercial-time-blocked-stats');
+
+    //do not show at all if no stats collected yet
+    if (!statsElm || totalCommercialsBlockedSeconds === 0) return;
+
+    const totalHours = totalCommercialsBlockedSeconds / 3600;
+    const roundedTotal = Math.ceil(totalHours * 10) / 10;
+    statsElm.textContent = `You blocked ${roundedTotal} hours of commercials since ${firstCommercialTimerDate}.`;
+
+    //do not show daily count if no count yet today
+    if (lastCommercialTimerDate === today) {
+        const dailyMinutes = todayCommercialsBlockedSeconds / 60;
+        const roundedDaily = Math.ceil(dailyMinutes * 10) / 10;
+        statsElm.textContent += `\n${roundedDaily} minutes of commercials blocked today.`;
+    }
+}
+
+
+function pingCompanionApp() {
+    if (optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo') {
+        document.getElementById('companion-app-loading').style.display = 'block';
+        document.getElementById('save-button').disabled = true;
+        document.getElementById('companion-app-ping-error').style.display = 'none'; //here for when retriggered from error
+
+        fetch("http://localhost:64143/ping-advanced-logo-analysis")
+            .then(response => response.json())
+            .then((response) => {
+                //successful ping
+                displayPingCompanionAppSuccess(response.version);
+            })
+            .catch(() => {
+                //error with ping
+                displayPingCompanionAppError();
+            });
+    }
+}
+
+
+function displayPingCompanionAppSuccess(version) {
+    document.getElementById('companion-app-loading').style.display = 'none';
+    document.getElementById('companion-app-additional-setup').style.display = 'none';
+    document.getElementById('companion-app-ping-error').style.display = 'none';
+    //TODO: Add dynamic check to show "(latest)" here
+    document.getElementById('companion-app-ping-success').textContent = `Verified Advanced Logo Analysis companion app version ${version} (latest) is running properly on this machine.`;
+    document.getElementById('companion-app-ping-success').style.display = 'block';
+    document.getElementById('companion-app-instructions').style.display = 'block';
+    document.getElementById('save-button').disabled = false;
+
+    if (!hasPreviouslyInstalledCompanionApp) {
+        //setting values to recommended settings for this mode //TODO: better way for UX for this?
+        optionsForm.mismatchCountThreshold.value = 10;
+        optionsForm.matchCountThreshold.value = 1;
+
+        //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledCompanionApp = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledCompanionApp: hasPreviouslyInstalledCompanionApp });
+    }
+}
+
+
+function displayPingCompanionAppError() {
+    //TODO: maybe let users save with warning instead of blocking them
+    document.getElementById('companion-app-loading').style.display = 'none';
+    document.getElementById('companion-app-ping-success').style.display = 'none';
+    document.getElementById('companion-app-instructions').style.display = 'none';
+
+    if (hasPreviouslyInstalledCompanionApp) {
+        document.getElementById('companion-app-ping-error').style.display = 'block';
+        document.getElementById('companion-app-additional-setup').style.display = 'none';
+    } else {
+        document.getElementById('companion-app-ping-error').style.display = 'none';
+        document.getElementById('companion-app-additional-setup').style.display = 'block';
+    }
+}
+
+
+function enableSaveButton() {
+    if (optionsForm.commercialDetectionMode.value !== 'auto-pixel-advanced-logo') {
+        document.getElementById('save-button').disabled = false;
+    } //else enabled by function above with successful ping
 }

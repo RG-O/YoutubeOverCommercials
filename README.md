@@ -17,7 +17,7 @@ Chrome: https://chromewebstore.google.com/detail/youtube-over-commercials/eikhbl
 
 Firefox: https://addons.mozilla.org/en-US/firefox/addon/youtube-over-commercials/
 
-### Companion App
+### Companion Desktop Application (optional)
 
 Download the latest Advanced Logo Analyzer release from the [Releases tab](https://github.com/RG-O/YoutubeOverCommercials/releases) and install the application. After installation, run it and it will appear in your system tray.
 

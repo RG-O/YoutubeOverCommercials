@@ -160,7 +160,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, message.dimensions.width, message.dimensions.height, 0, 0, message.dimensions.width, message.dimensions.height);
                 const logoScreenshotBase64 = canvas.toDataURL('image/png');
 
-                const fetchStart = performance.now();
                 fetch("http://localhost:64143/advanced-logo-analysis", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -172,9 +171,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 })
                     .then(response => response.json())
                     .then(logoAnalysisResponse => {
-                        const fetchEnd = performance.now();
-                        const fetchTime = ((fetchEnd - fetchStart) / 1000).toFixed(3);
-                        sendResponse({ logoAnalysisResponse: logoAnalysisResponse, fetchTime: fetchTime, wasSuccessfulCall: true });
+                        sendResponse({ logoAnalysisResponse: logoAnalysisResponse, wasSuccessfulCall: true });
                     })
                     .catch(error => {
                         sendResponse({ wasSuccessfulCall: false });

@@ -19,11 +19,8 @@
 }
 
 .ytoc-overlay-screen-with-hole {
-    border-radius: 50% !important;
     z-index: 2147483646 !important;
     position: absolute !important;
-    width: 10px !important;
-    height: 10px !important;
     pointer-events: none !important;
 }
 
@@ -70,6 +67,27 @@
     padding: 1px 5px !important;
     font-size: 22px !important;
     font-family: "Montserrat", sans-serif !important;
+}
+
+.ytoc-advanced-logo-container {
+    z-index: 2147483647 !important;
+    position: absolute !important;
+    font-size: 22px !important;
+    font-family: "Montserrat", sans-serif !important;
+}
+
+    .ytoc-advanced-logo-container img {
+        width: auto !important;
+        height: auto !important;
+    }
+
+.ytoc-logo-advanced {
+    height: 100% !important;
+    color: #12384d;
+    background-color: rgb(240, 238, 236);
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+    /*font-variant-numeric: tabular-nums !important;*/
 }
 
 .ytoc-selection-indicator {
@@ -126,4 +144,11 @@
 
 .ytoc-audio-level-indicator-countdown {
     margin: 8px !important;
+}
+
+.ytoc-advanced-logo-selection-box {
+    position: fixed !important;
+    border: 2px solid red !important;
+    pointer-events: none !important;
+    z-index: 2147483647 !important;
 }
