@@ -41,7 +41,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-advanced-logo" name="commercialDetectionMode" value="auto-pixel-advanced-logo">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Advanced Logo Analysis</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-recommended">Recommended</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Advanced Logo Analysis</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">This mode works by the user (you) selecting the full channel logo on the on the broadcast. It then sends images of this logo to the Advanced Logo Analyzer app on your desktop which uses computer vision to detect the edges of the logo. It first builds a mask of this logo's edges and then compares future images of this area to see if the edges match up to the original mask. If the edges don't match up, that means the logo went away, so it is most likely a commercial.</span></span><span class="badge badge-recommended">Recommended</span>
         </div>
         <div id="auto-pixel-advanced-logo" class="commercial-detection-mode-instructions-wrapper">
             <div id="companion-app-loading" class="loading-spinner"></div>
@@ -63,7 +63,6 @@
                 Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
             </div>
         </div>
-        <!--TODO: add ping here and as a requirement before save-->
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-audio" name="commercialDetectionMode" value="auto-audio">
@@ -84,7 +83,6 @@
             <div class="mode-how-to settings-box">
                 <b>HOW TO USE:</b><br />
                 Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when commercials begin and again when commercials end.
-                <a href="/instructions.html" target="_blank">Full manual instructions.</a>
             </div>
         </div>
 

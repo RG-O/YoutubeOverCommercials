@@ -889,6 +889,7 @@ function setBlockersAndPixelSelectionInstructions() {
 
     overlayInstructions.appendChild(iFrame);
 
+    //TODO: do this everywhere and not just for amazon?
     if (isAmazonPrimeVideo) {
         for (const video of mainVideoCollection) {
             video.style.zIndex = '2147483645';
@@ -1269,11 +1270,12 @@ function fullLogoSelectionInitiation(event) {
         }
         insertLocation.insertBefore(advancedLogoSelectionBox, null);
 
-        //note: don't need to remove mousedown listener since that is set to only run once
+        //note: mousedown listener for fullLogoSelectionInitiation removed later in removeBlockersListenersAndPixelSelectionInstructions()
+
         document.addEventListener('mousemove', function (event) {
             fullLogoSelectionBoxResize(event, startX, startY);
         });
-        //TODO: set other one use event listeners like this throughout the extension so I don't have to remove them all
+        //note: this is set to only run once so it does not need removed later
         document.addEventListener('mouseup', function (event) {
             fullLogoSelectionCompletion(event, startX, startY);
         }, { once: true });
@@ -1405,7 +1407,6 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
 function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions) {
     if (logoAnalysisResponse.edgeSum < 10) {
-        //TODO: add more here?
         shutdownAdvancedLogoAnalysis('Logo weak or missing. Please try again. This message will soon disappear.');
         return;
     }
@@ -1430,7 +1431,7 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
         logoBoxText = 'BASELINE LOGO MASK COMPLETE. BRIGHT OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
     } else {
         isColorLogo = true;
-        logoBoxText = 'BASELINE LOGO MASK COMPLETE. LOGO WITH COLOR DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+        logoBoxText = 'BASELINE LOGO MASK COMPLETE. LOGO WITH COLOR OR BLACK DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
         //lower threasholds just a bit since it is harder to compare edges on complicated color logos
         advancedLogoMatchThreshold = 0.6;
         advancedLogoMismatchThreshold = 0.31;
@@ -1440,10 +1441,10 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
     setTimeout(() => {
         if (!isDebugMode) {
             advancedLogoInfoContainer.style.display = 'none';
+        } else {
+            advancedLogoFinalMaskImage.remove();
+            //advancedLogoInsideLogoColorImageDebug.remove(); //debug-high
         }
-
-        //advancedLogoInsideLogoColorImageDebug.remove(); //debug-high
-        if (isDebugMode) advancedLogoFinalMaskImage.remove(); //TODO: set to debug
 
         hasMaskCompleteMessageBeenDismissed = true;
 
@@ -1647,32 +1648,20 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
 function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
     return new Promise(function (resolve, reject) {
         if (isFirefox) {
-            //TODO
+            let rect = { x: coordinates.x, y: coordinates.y, width: dimensions.width, height: dimensions.height };
 
-            //let rect = { x: coordinates.x, y: coordinates.y, width: 1, height: 1 };
-
-            //chrome.runtime.sendMessage({ action: "firefox-capture-screenshot", rect: rect }, function (response) {
-
-            //    let image = new Image();
-            //    image.src = response.imgSrc;
-
-            //    image.addEventListener('load', function () {
-
-            //        let canvas = document.createElement('canvas');
-            //        let context = canvas.getContext('2d');
-
-            //        canvas.width = image.width; //TODO: figure out is this necessary with setting it in draw image?
-            //        canvas.height = image.height;
-            //        context.drawImage(image, 0, 0);
-
-            //        let pixelColor = context.getImageData(0, 0, 1, 1).data;
-            //        pixelColor = { r: pixelColor[0], g: pixelColor[1], b: pixelColor[2] };
-
-            //        resolve(pixelColor); // Resolve the promise with pixelColor value
-
-            //    });
-
-            //});
+            chrome.runtime.sendMessage({
+                action: "firefox-advanced-logo-analysis",
+                rect: rect,
+                request: request,
+                isCommercialState: isCommercialState
+            }, function (response) {
+                if (response.wasSuccessfulCall) {
+                    resolve(response.logoAnalysisResponse);
+                } else {
+                    resolve(false);
+                }
+            });
         } else {
             chrome.runtime.sendMessage({
                 target: "offscreen",
@@ -1748,7 +1737,7 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
         advancedLogoInfoContainer.style.bottom = 'auto';
     } else {
         advancedLogoInfoContainer.style.top = 'auto';
-        advancedLogoInfoContainer.style.bottom = (((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) - 0) + 'px';
+        advancedLogoInfoContainer.style.bottom = ((windowHeight - advancedLogoSelectionTopLeftLocation.y) - advancedLogoSelectionDimensions.height) + 'px';
     }
 
     if (selectedPixelGridLocation.isLeft) {
@@ -2335,7 +2324,7 @@ function resumeAutoMode() {
             cooldownCountRemaining = 8; //give a chance for video UI to go away
             if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
                 isAdvancedLogoMonitorPaused = false;
-                advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
             } else {
                 pixelColorMatchMonitor(originalPixelColor, selectedPixel);
             }
