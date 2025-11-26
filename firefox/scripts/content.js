@@ -1418,6 +1418,7 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
     //advancedLogoInsideLogoColorImageDebug.src = logoAnalysisResponse.averageColorInsideLogoCaptureRegionImage; //debug-high
     if (isDebugMode) advancedLogoFinalMaskImage.src = logoAnalysisResponse.finalMaskImage;
 
+    logoBoxText = 'EDGE MASK CAPTURED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW';
     let insideVersusOutsideHueDifference = Math.abs(logoAnalysisResponse.averageColorOutsideLogo.hsv[0] - logoAnalysisResponse.averageColorInsideLogoHSV[0]);
     let insideVersusOutsideBrightnessDifference = Math.abs(logoAnalysisResponse.averageColorOutsideLogo.hsv[2] - logoAnalysisResponse.averageColorInsideLogoHSV[2]);
     //TODO: have it be like some percentage of pixels that are bright instead of averaging the colors which often ends up being a shade of brown for color logos. or average the s and v's of each pixel?
@@ -1428,10 +1429,12 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
         (logoAnalysisResponse.averageColorInsideLogoHSV[1] < 140 && logoAnalysisResponse.averageColorInsideLogoHSV[2] > 40 && insideVersusOutsideHueDifference < 27 && insideVersusOutsideBrightnessDifference > 15) //lower saturation threashold if hue outside the logo is similar to inside the logo, implying that the logo may be transparent
     ) {
         isColorLogo = false;
-        logoBoxText = 'BASELINE LOGO MASK COMPLETE. BRIGHT OR TRANSPARENT LOGO DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+        logoBoxText += '!'; //indicator for the dev that color logo was detected
+        if (isDebugMode) logoBoxText += ' BRIGHT OR TRANSPARENT LOGO DETECTED.';
     } else {
         isColorLogo = true;
-        logoBoxText = 'BASELINE LOGO MASK COMPLETE. LOGO WITH COLOR OR BLACK DETECTED. IF ISSUE, REFRESH PAGE AND TRY AGAIN. MONITORING STARTING NOW.';
+        logoBoxText += '.'; //indicator for the dev that color logo was not detected
+        if (isDebugMode) logoBoxText += ' LOGO WITH COLOR OR BLACK DETECTED.';
         //lower threasholds just a bit since it is harder to compare edges on complicated color logos
         advancedLogoMatchThreshold = 0.6;
         advancedLogoMismatchThreshold = 0.31;
