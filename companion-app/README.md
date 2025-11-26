@@ -1,4 +1,4 @@
-# Advanced Logo Analyzer Companion App
+# Advanced Logo Analyzer Companion Desktop Tray Application
 
 This is a lightweight Python app that runs in the system tray and provides a local server (on `localhost:64143`) for the browser extension to communicate with.
 
@@ -12,7 +12,7 @@ This is a lightweight Python app that runs in the system tray and provides a loc
 
 ### Option 1: Install from exe
 
-Download the latest Advanced Logo Analyzer release from the [Releases tab](https://github.com/RG-O/YoutubeOverCommercials/releases) and install the application. After installation, run it and it will appear in your system tray.
+Download the latest Advanced Logo Analyzer release from the [Releases tab](https://github.com/RG-O/YoutubeOverCommercials/releases) and run to install the application. After installation, run the application and it will appear in your system tray.
 
 ### Option 2 (Advanced): Run from Python
 
