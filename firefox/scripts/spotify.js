@@ -3,6 +3,7 @@ var playButton;
 var nextButton;
 var nowPlayingWidget;
 var hasFirstSongPlayed = false;
+var isInitialSetupComplete = false;
 
 
 //run initialSetup() as soon as DOM is loaded
@@ -157,20 +158,19 @@ function initialSetup() {
         var banner = document.createElement('div');
         banner.id = 'custom-banner';
 
-        banner.innerText = 'Message from YTOC Extension: Choose a playlist and hit play.';
+        banner.innerText = 'Message from Live Commercial Blocker: Choose a playlist and hit play.';
 
         banner.style.position = 'fixed';
         banner.style.top = '0';
         banner.style.left = '0';
         banner.style.width = '100%';
-        banner.style.backgroundColor = 'black';
-        banner.style.color = 'red';
+        banner.style.backgroundColor = 'rgb(240, 238, 236)';
+        banner.style.color = '#12384d';
         banner.style.textAlign = 'center';
         banner.style.padding = '5px';
         banner.style.zIndex = '1000';
         banner.style.fontSize = '20px';
         banner.style.fontFamily = '"Montserrat", sans-serif';
-        banner.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
 
         document.body.style.marginTop = '35px';
 
@@ -185,7 +185,9 @@ function initialSetup() {
 
                 waitForElement('[aria-label="Pause"][data-testid="control-button-playpause"]:not([disabled])').then(() => {
 
-                    //wait a split sec so things feel smoother
+                    banner.innerText = 'Syncing...';
+
+                    //wait a sec so things feel smoother and to avoid errors
                     setTimeout(() => {
 
                         if (document.querySelector('[data-testid="now-playing-widget"]')) {
@@ -196,7 +198,8 @@ function initialSetup() {
                         }
 
                         chrome.runtime.sendMessage({ action: "glimpse_main_tab" });
-                        banner.innerText = 'Tab opened for use of the YTOC extension. Do not close until you are done using YTOC extension.';
+                        banner.innerText = 'Tab opened for use of the Live Commercial Blocker. Do not close until you are done using Live Commercial Blocker extension.';
+                        isInitialSetupComplete = true;
 
                         setTimeout(() => {
 
@@ -204,12 +207,22 @@ function initialSetup() {
 
                         }, 500);
 
-                    }, 500);
+                    }, 1000);
 
                 });
 
             }, 1000);
 
+        });
+
+        //check if not logged in
+        waitForElement('[data-testid="login-button"]').then(() => {
+            //add additional check to lower chance that this is accidentally triggered if spotify makes an update in the future
+            waitForElement('[data-testid="signup-button"]').then(() => {
+                if (!isInitialSetupComplete) {
+                    banner.innerText = 'Message from Live Commercial Blocker: Error Occured. You must be logged into Spotify before initiating extension. Please login to Spotify, go back to tab with stream, refresh tab, and then re-initiate extension.';
+                }
+            });
         });
 
     }, 500);

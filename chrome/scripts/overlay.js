@@ -35,6 +35,9 @@ chrome.storage.sync.get([
         commercialDetectionMode = 'auto-pixel-normal';
     }
     shouldShuffleYTPlaylist = result.shouldShuffleYTPlaylist ?? false;
+    if (overlayVideoType !== 'yt-playlist') {
+        shouldShuffleYTPlaylist = false;
+    }
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {

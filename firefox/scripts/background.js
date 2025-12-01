@@ -398,7 +398,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
 
-    if (request.action === 'firefox-capture-screenshot') {
+    if (request.action === 'firefox-capture-screenshot' || request.action === 'firefox-advanced-logo-analysis') {
 
         //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
         chrome.tabs.captureVisibleTab(
@@ -409,7 +409,30 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
                 , rect: request.rect
             },
             function (dataUrl) {
-                sendResponse({ imgSrc: dataUrl });
+
+                if (request.action === 'firefox-advanced-logo-analysis') {
+
+                    fetch("http://localhost:64143/advanced-logo-analysis", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            image: dataUrl,
+                            request: request.request,
+                            commercial: request.isCommercialState
+                        })
+                    })
+                        .then(response => response.json())
+                        .then(logoAnalysisResponse => {
+                            sendResponse({ logoAnalysisResponse: logoAnalysisResponse, wasSuccessfulCall: true });
+                        })
+                        .catch(error => {
+                            sendResponse({ wasSuccessfulCall: false });
+                        });
+
+                } else {
+                    sendResponse({ imgSrc: dataUrl });
+                }
+
             }
 
         );
@@ -419,5 +442,4 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     //return true to indicate that the response will be sent asynchronously
     return true;
     
-    }
-);
+});

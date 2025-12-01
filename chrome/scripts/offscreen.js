@@ -17,10 +17,14 @@ chrome.runtime.onMessage.addListener(function (message) {
         if (message.action == 'start-viewing') {
             constraints = message.constraints;
             startViewing(constraints);
+        } else if (message.action == 'start-viewing-logo-advanced') {
+            constraints = message.constraints;
+            startViewing(constraints);
         } else if (message.action == 'start-listening') {
             constraints = message.constraints;
             startListening(constraints);
         } else if (message.action == 'stop-viewing') {
+            //not currently being used, as offscreen is just closed and reopened in order to pause and resume viewing tab
             stopViewing();
         } else if (message.action == 'resume-viewing') {
             //does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
@@ -53,17 +57,20 @@ async function startViewing(constraints) {
         videoElement.muted = true;
         videoElement.play();
 
-        canvas = document.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        //canvas.width = 30; //debug-high
-        //canvas.height = 30; //debug-high
-        ctx = canvas.getContext('2d', { willReadFrequently: true });
-
         viewing = true;
 
     }
 
+}
+
+
+function createCanvas(width, height) {
+    canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    //canvas.width = 30; //debug-high
+    //canvas.height = 30; //debug-high
+    ctx = canvas.getContext('2d', { willReadFrequently: true });
 }
 
 
@@ -100,6 +107,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             if (viewing) {
 
+                if (!canvas) {
+                    createCanvas(1, 1);
+                }
+
                 ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, 1, 1, 0, 0, 1, 1);
                 //ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, 30, 30, 0, 0, 30, 30); //debug-high
                 //let image = canvas.toDataURL('image/png'); //debug-high
@@ -132,6 +143,44 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             sendResponse({ audioLevel: audioLevel });
 
+        }
+    }
+});
+
+
+//separated from above due to async reasons
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.target == 'offscreen') {
+        if (message.action == 'capture-logo-advanced') {
+            if (viewing) {
+                if (!canvas) {
+                    createCanvas(message.dimensions.width, message.dimensions.height);
+                }
+
+                ctx.drawImage(videoElement, message.coordinates.x, message.coordinates.y, message.dimensions.width, message.dimensions.height, 0, 0, message.dimensions.width, message.dimensions.height);
+                const logoScreenshotBase64 = canvas.toDataURL('image/png');
+
+                fetch("http://localhost:64143/advanced-logo-analysis", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        image: logoScreenshotBase64,
+                        request: message.request,
+                        commercial: message.isCommercialState
+                    })
+                })
+                    .then(response => response.json())
+                    .then(logoAnalysisResponse => {
+                        sendResponse({ logoAnalysisResponse: logoAnalysisResponse, wasSuccessfulCall: true });
+                    })
+                    .catch(error => {
+                        sendResponse({ wasSuccessfulCall: false });
+                    });
+            } else {
+                sendResponse({ logoAnalysisResponse: null });
+            }
+
+            return true; //keep message channel open for async response
         }
     }
 });

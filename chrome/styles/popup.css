@@ -73,14 +73,7 @@ button {
 
 .id-field-wrapper {
     display: none;
-    margin-top: 5px;
-    /*margin-right: 5px;*/
-    margin-bottom: 5px;
-    /*margin-left: 36px;*/
     background: rgb(18, 56, 77, 0.1);
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 5px;
 }
 
 .id-field-label {
@@ -132,22 +125,12 @@ button {
 
 .dimensions-fields-wrapper {
     display: block;
-    margin-top: 5px;
-    margin-bottom: 5px;
     background: rgb(18, 56, 77, 0.1);
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 5px;
 }
 
 .pip-fields-wrapper {
     display: none;
-    margin-top: 5px;
-    margin-bottom: 5px;
     background: rgb(18, 56, 77, 0.1);
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 5px;
 }
 
 .firefox-experimental {
@@ -193,12 +176,7 @@ button {
 
 .profile-settings-wrapper {
     display: none;
-    margin-top: 5px;
-    margin-bottom: 5px;
     background: rgb(18, 56, 77, 0.1);
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    padding: 5px;
 }
 
 .save-profile-with-id-wrapper {
@@ -259,6 +237,11 @@ button {
     color: white;
 }
 
+.badge-default {
+    background-color: dimgrey;
+    color: white;
+}
+
 .badge-experimental {
     background-color: darkorange;
     color: white;
@@ -266,11 +249,22 @@ button {
 
 .mode-how-to {
     background: rgb(255, 255, 0, 0.1);
+}
+
+.settings-box {
     border: 1px solid #ccc;
     border-radius: 5px;
     margin-top: 5px;
     margin-bottom: 5px;
     padding: 5px;
+}
+
+.success-box {
+    background: rgb(0, 255, 0, 0.1);
+}
+
+.error-box {
+    background: rgb(255, 0, 0, 0.1);
 }
 
 .button {
@@ -338,6 +332,26 @@ button {
         /*background-color: #ccc;*/
         border-color: #12384d;
     }
+
+.loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #12384d;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Keyframes for spinner animation */
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
 
 /*----- pixel-select-instructions.html specific styling below -----*/
 
