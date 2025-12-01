@@ -185,11 +185,11 @@ function addOverlayFade(insertLocation) {
         } else if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
 
             overlayScreen.className = "ytoc-overlay-screen-with-hole";
-            overlayScreen.style.setProperty("width", `${advancedLogoSelectionDimensions.width}px`, "important");
-            overlayScreen.style.setProperty("height", `${advancedLogoSelectionDimensions.height}px`, "important");
+            overlayScreen.style.setProperty("width", `${(advancedLogoSelectionDimensions.width + 6)}px`, "important");
+            overlayScreen.style.setProperty("height", `${(advancedLogoSelectionDimensions.height + 2)}px`, "important");
             //setting location of hole for the advanced logo detector to look through
-            overlayScreen.style.setProperty("left", `${advancedLogoSelectionTopLeftLocation.x}px`, "important");
-            overlayScreen.style.setProperty("top", `${advancedLogoSelectionTopLeftLocation.y}px`, "important");
+            overlayScreen.style.setProperty("left", `${(advancedLogoSelectionTopLeftLocation.x - 3)}px`, "important");
+            overlayScreen.style.setProperty("top", `${(advancedLogoSelectionTopLeftLocation.y - 1)}px`, "important");
             overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
             insertLocation.insertBefore(overlayScreen, null);
 
@@ -1744,7 +1744,7 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
     }
 
     if (selectedPixelGridLocation.isLeft) {
-        advancedLogoInfoContainer.style.left = (advancedLogoSelectionTopLeftLocation.x + advancedLogoSelectionDimensions.width) + 'px';
+        advancedLogoInfoContainer.style.left = ((advancedLogoSelectionTopLeftLocation.x + advancedLogoSelectionDimensions.width) + 3) + 'px'; //adding 3px for a buffer away from the logo so preview doesn't accidentally cover it
         advancedLogoInfoContainer.style.right = 'auto';
 
         advancedLogoInfoContainer.insertBefore(advancedLogoEdgeImage, null);
@@ -1755,7 +1755,7 @@ function setAdvancedLogoDetectionImagePreviews(advancedLogoSelectionTopLeftLocat
         advancedLogoInfoContainer.insertBefore(logoBox, null);
     } else {
         advancedLogoInfoContainer.style.left = 'auto';
-        advancedLogoInfoContainer.style.right = (windowWidth - advancedLogoSelectionTopLeftLocation.x) + 'px';
+        advancedLogoInfoContainer.style.right = ((windowWidth - advancedLogoSelectionTopLeftLocation.x) + 3) + 'px'; //adding 3px for a buffer away from the logo so preview doesn't accidentally cover it
 
         //insert before images to show on the right
         advancedLogoInfoContainer.insertBefore(logoBox, null);

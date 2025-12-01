@@ -389,7 +389,7 @@ def start_tray() -> None:
     icon_path = os.path.join(base_path, "icon.png")
     image = Image.open(icon_path)
     tray_menu = menu(item("Exit", on_exit))
-    icon = pystray.Icon("Live Commercial Blocker - Advanced Logo Analyzer", image, "Live Commercial Blocker - Advanced Logo Analysis", tray_menu)
+    icon = pystray.Icon("Live Commercial Blocker - Advanced Logo Analyzer", image, "Live Commercial Blocker - Advanced Logo Analyzer", tray_menu)
     icon.run()
 
 
@@ -403,3 +403,5 @@ if __name__ == "__main__":
 
 # for exe creation:
 # py -m PyInstaller --noconsole --icon=icon.ico advanced_logo_analyzer.py
+# and then copy/paste icon.png into generated _internal folder
+# lastly, compile into setup exe with Inno
