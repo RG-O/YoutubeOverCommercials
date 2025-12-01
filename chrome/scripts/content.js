@@ -957,13 +957,6 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
     setTimeout(() => {
         removeClickAndUIBlockers();
     }, removeBlockersDelay);
-
-        if (isAmazonPrimeVideo) {
-            for (const video of mainVideoCollection) {
-                video.style.removeProperty('z-index');
-            }
-        }
-    }, 5000);
 }
 
 
