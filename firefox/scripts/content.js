@@ -925,7 +925,6 @@ function hideVerticleScrollbar() {
 
 
 function removeBlockersListenersAndPixelSelectionInstructions() {
-
     removeNotFullscreenAlerts();
 
     removeElementsByClass('ytoc-overlay-instructions');
@@ -959,6 +958,12 @@ function removeBlockersListenersAndPixelSelectionInstructions() {
         removeClickAndUIBlockers();
     }, removeBlockersDelay);
 
+        if (isAmazonPrimeVideo) {
+            for (const video of mainVideoCollection) {
+                video.style.removeProperty('z-index');
+            }
+        }
+    }, 5000);
 }
 
 
