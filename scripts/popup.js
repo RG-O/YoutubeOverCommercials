@@ -1,5 +1,5 @@
 
-var isFirefox = true; //********************
+var isFirefox = false; //********************
 var profiles = {};
 var gridCells;
 var pipGridCells;

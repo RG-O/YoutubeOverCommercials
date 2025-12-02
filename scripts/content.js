@@ -1,5 +1,5 @@
 
-var isFirefox = true; //******************** remember to also update in background.js and overlay.js
+var isFirefox = false; //******************** remember to also update in background.js and overlay.js
 
 var isCommercialState = false;
 var firstClick = true;
