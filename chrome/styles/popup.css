@@ -232,13 +232,18 @@ button {
     border-radius: 5px;
 }
 
-.badge-recommended {
+.badge-default {
     background-color: #12384d;
     color: white;
 }
 
-.badge-default {
+.badge-grey {
     background-color: dimgrey;
+    color: white;
+}
+
+.badge-advanced {
+    background-color: #f5c900;
     color: white;
 }
 

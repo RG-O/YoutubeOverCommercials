@@ -851,7 +851,7 @@ function displayPingCompanionAppSuccess(version) {
     document.getElementById('companion-app-additional-setup').style.display = 'none';
     document.getElementById('companion-app-ping-error').style.display = 'none';
     //TODO: Add dynamic check to show "(latest)" here
-    document.getElementById('companion-app-ping-success').textContent = `Verified Advanced Logo Analysis companion app version ${version} (latest) is running properly on this machine.`;
+    document.getElementById('companion-app-ping-success').textContent = `Verified Advanced Logo Analyzer companion app version ${version} (latest) is running properly on this machine.`;
     document.getElementById('companion-app-ping-success').style.display = 'block';
     document.getElementById('companion-app-instructions').style.display = 'block';
     document.getElementById('save-button').disabled = false;
