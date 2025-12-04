@@ -9,20 +9,6 @@ This is a lightweight Python app that runs in the system tray and provides a loc
 - Runs entirely offline (no data ever leaves your computer)
 - Designed to be used alongside the Live Commercial Blocker Chrome or Firefox extension
 
-## Screenshots
-
-Displays in system tray (idle while not in use):
-
-![Tray Screenshot](TrayScreenshot.png)
-
-User selects channel logo and then extension with the assistance of the companion application creates an edge mask for baseline:
-
-![Mask Creation](DemoMaskCreation.gif)
-
-Channel logo disapears so companion app tells extension that the current edges no longer match the mask of the logo, indicating commercial, so extension plays plays YouTube over top:
-
-![Edge Mismatch](DemoEdgeMissingCommercialDetection.gif)
-
 ## Setup
 
 ### Option 1: Install from exe (Windows)
@@ -42,3 +28,17 @@ Note: This application has been created and tested with Windows. I'm hoping to b
 3. Install dependencies from requirements.txt
 4. Run advanced_logo_analyzer.py
 5. Open the browser extension settings and set to "Advanced Logo Analysis" commercial detection mode
+
+## Screenshots
+
+Displays in system tray (idle while not in use):
+
+![Tray Screenshot](TrayScreenshot.png)
+
+User selects channel logo and then extension with the assistance of the companion application creates an edge mask for baseline:
+
+![Mask Creation](DemoMaskCreation.gif)
+
+Channel logo disapears so companion app tells extension that the current edges no longer match the mask of the logo, indicating commercial, so extension plays plays YouTube over top:
+
+![Edge Mismatch](DemoEdgeMissingCommercialDetection.gif)
