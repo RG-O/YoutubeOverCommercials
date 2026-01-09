@@ -2,8 +2,11 @@
 var playButton;
 var nextButton;
 var nowPlayingWidget;
+var lyricsBox;
 var hasFirstSongPlayed = false;
 var isInitialSetupComplete = false;
+var shouldDisplayLyrics = true; //TODO: make user set preference
+var currentLyric;
 
 
 //run initialSetup() as soon as DOM is loaded
@@ -57,7 +60,8 @@ function play() {
 
         }
 
-        shipNowPlaying();
+        let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+        shipTextToContent(text);
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
 
@@ -71,7 +75,7 @@ function next() {
         //note: only need to hit next button because as of 10/29/24 spotify automatically starts playing after next button is clicked
         nextButton.click();
 
-        //note: don't need to run shipNowPlaying() because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
+        //note: don't need to run shipTextToContent(text) because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
 
     } else if (playButton != null) {
 
@@ -82,7 +86,8 @@ function next() {
 
         }
 
-        shipNowPlaying();
+        let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+        shipTextToContent(text);
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
 
@@ -122,7 +127,8 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
     const observer = new MutationObserver((mutationsList) => {
         for (let mutation of mutationsList) {
             if (mutation.type === 'attributes' && mutation.attributeName === 'aria-label') {
-                shipNowPlaying();
+                let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+                shipTextToContent(text);
             }
         }
     });
@@ -134,9 +140,56 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
 }
 
 
-function shipNowPlaying() {
+//reads the current lyrics
 
-    let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+
+function matchesComputedStyle(el) {
+    const styles = getComputedStyle(el);
+    return styles['viewTimeline'] === '--scroll-to-viewport-button-anim';
+}
+
+//TODO: make this more efficient
+function checkElementAndChildren(node) {
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    if (matchesComputedStyle(node)) {
+        console.log('Matched element:', node);
+        //TODO: figure out why it finds the same thing multiple times
+        console.log(node.innerText);
+        if (node.innerText && currentLyric !== node.innerText) {
+            currentLyric = node.innerText;
+            console.log(node.innerText);
+            shipTextToContent(currentLyric);
+        }
+        
+    }
+
+    for (const child of node.children) {
+        checkElementAndChildren(child);
+    }
+}
+
+//TODO: make this more efficient
+function lyricsObserver() {
+    const observer = new MutationObserver(mutations => {
+        for (const m of mutations) {
+            if (m.type === 'attributes' || m.type === 'childList') {
+                if (m.target) checkElementAndChildren(m.target);
+                m.addedNodes.forEach(checkElementAndChildren);
+            }
+        }
+    });
+
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+        childList: true,
+        subtree: true,
+    });
+}
+
+
+function shipTextToContent(text) {
 
     chrome.runtime.sendMessage({
         action: "background_update_logo_text",
@@ -194,6 +247,22 @@ function initialSetup() {
 
                             nowPlayingWidget = document.querySelector('[data-testid="now-playing-widget"]');
                             nowPlayingWidgetObserver(nowPlayingWidget);
+
+                        }
+
+                        if (shouldDisplayLyrics && document.querySelector('[data-testid="lyrics-button"]')) {
+
+                            document.querySelector('[data-testid="lyrics-button"]').click();
+
+                            //waitForElement('[data-testid="lyrics-line"]').then((firstLyricLine) => {
+                            //    lyricsBox = firstLyricLine.parentNode;
+                            //});
+
+
+                            //lyricsBox = document.querySelector('[data-testid="now-playing-widget"]');
+                            //TODO: narrow this down just to the lyrics box?
+                            //lyricsObserver(document.documentElement);
+                            lyricsObserver();
 
                         }
 
