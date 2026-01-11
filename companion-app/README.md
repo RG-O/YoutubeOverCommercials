@@ -1,3 +1,5 @@
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RG-O/YoutubeOverCommercials/total?label=Total%20exe%20downloads)
+
 # Advanced Logo Analyzer Companion Desktop Tray Application
 
 This is a lightweight Python app that runs in the system tray and provides a local server (on `localhost:64143`) for the browser extension to communicate with.
@@ -17,7 +19,7 @@ This is a lightweight Python app that runs in the system tray and provides a loc
 2. Run the downloaded exe (note: you may need to click "More info" in the Windows popup to see the run option)
 3. Follow the installation wizard
 4. Run the application and it will appear in your system tray
-5. Open the browser extension settings and set to "Advanced Logo Analysis" commercial detection mode
+5. Open the browser extension settings and set to "Logo Edge Mismatch" commercial detection mode
 
 Note: This application has been created and tested with Windows. I'm hoping to borrow a Mac from a buddy soon to flesh it out on there, but in the meantime, technical users can try Option 2 below. Sorry Mac users! I haven't forgotten about you!
 
@@ -27,7 +29,7 @@ Note: This application has been created and tested with Windows. I'm hoping to b
 2. Clone this repo
 3. Install dependencies from requirements.txt
 4. Run advanced_logo_analyzer.py
-5. Open the browser extension settings and set to "Advanced Logo Analysis" commercial detection mode
+5. Open the browser extension settings and set to "Logo Edge Mismatch" commercial detection mode
 
 ## Screenshots
 

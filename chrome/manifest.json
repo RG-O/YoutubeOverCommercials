@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Live Commercial Blocker - Auto Play YouTube and Spotify Over Commercials",
-  "description": "Great for live sports broadcasts! Automatically block out commercial breaks and play media of your choice in their place.",
+  "description": "Automatically block TV commercials on live sports streams and play media of your choice in their place.",
   "icons": {
     "128": "icon128.png"
   },
-  "version": "4.0",
+  "version": "4.1",
   "permissions": [
     "activeTab",
     "scripting",
