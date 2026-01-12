@@ -74,17 +74,26 @@ var windowHeight;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 //Double clap variables
-//const ALPHA = 0.01, MULT = 3.2, ATT = 0.14;
-const ALPHA = 0.01, MULT = 3.2, ATT = 0.03;
-const HF_MIN = 2000, HF_MAX = 4000;
-//const HF_MIN = 2000, HF_MAX = 6000;
-const MIN = 120, MAX = 420, COOL = 1500;
+////const ALPHA = 0.01, MULT = 3.2, ATT = 0.14;
+//const ALPHA = 0.01, MULT = 3.2, ATT = 0.03;
+//const HF_MIN = 2000, HF_MAX = 4000;
+////const HF_MIN = 2000, HF_MAX = 6000;
+//const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 100, MAX = 450; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 var noise = 0, last = 0, claps = [], lastTrig = 0;
 var firstClapTime;
 var secondClapTime;
 var confirmTimer;
-const GUARD_AFTER = 1100;
+//const GUARD_AFTER = 1100;
+
+//TODO: rename these variables
+//Double clap variables
+var ALPHA;
+var MULT;
+var ATT;
+var HF_MIN;
+var HF_MAX;
 
 //Advanced Logo Analysis Variables
 var advancedLogoSelectionTopLeftLocation;
@@ -2091,7 +2100,7 @@ function initialLogoBoxTextUpdate() {
     } else if (overlayVideoType == 'spotify') {
         logoBoxText = 'PLAYING SPOTIFY';
     } else if (overlayVideoType == 'other-tabs') {
-        logoBoxText = "PLAYING OTHER TAB AUDIO"; //speaker with three sound waves symbol
+        logoBoxText = "PLAYING OTHER TAB AUDIO";
     }
     logoBox.textContent = logoBoxText;
 
@@ -2709,6 +2718,12 @@ async function listenForDoubleClap() {
         audio: { channelCount: 2 }
     });
 
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:10px;left:10px;z-index:999999;background:#000c;color:#0f0;padding:5px;font:10px monospace';
+    //overlay.innerHTML = '<div>RMS:<span id=r></span></div><div>Noise:<span id=n></span></div><div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div id=clapIndicator></div>';
+    overlay.innerHTML = '<div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div id=clapIndicator></div><div>Status:<span id=clapIndicatorStatus></span></div>';
+    document.body.appendChild(overlay);
+
     const ctx = new AudioContext();
     const analyser = ctx.createAnalyser();
     const freq = ctx.createAnalyser();
@@ -2722,6 +2737,24 @@ async function listenForDoubleClap() {
     const fData = new Uint8Array(freq.frequencyBinCount);
 
     function loop() {
+        if (isCommercialState) {
+            //make is easier to detect claps to make it easier to get back to the game
+            //TODO: understand these values more
+            ALPHA = 0.01
+            MULT = 3.2
+            ATT = 0.025;
+            HF_MIN = 1500;
+            HF_MAX = 6000;
+        } else {
+            //make harder to detect claps to avoid false positives while users are watching the game
+            //TODO: these values are final?
+            ALPHA = 0.01
+            MULT = 3.2
+            ATT = 0.03;
+            HF_MIN = 2000
+            HF_MAX = 4000;
+        }
+
         analyser.getFloatTimeDomainData(tData);
         freq.getByteFrequencyData(fData);
 
@@ -2740,9 +2773,16 @@ async function listenForDoubleClap() {
         for (let i = b0; i <= b1; i++) hf += fData[i];
 
         const clap = rms > noise * MULT && attack > ATT && hf > 1000;
-        const now = performance.now();
+
+        //r.textContent = rms.toFixed(4);
+        //n.textContent = noise.toFixed(4);
+        //a.textContent = attack.toFixed(4);
+        //h.textContent = hf.toFixed(0);
+        clapIndicator.textContent = clap ? 'clap' : '';
 
         if (clap) {
+            a.textContent = attack.toFixed(3);
+            h.textContent = hf.toFixed(0);
             onClap(performance.now());
         }
 
@@ -2754,12 +2794,13 @@ async function listenForDoubleClap() {
 
 
 function onClap(now) {
-    console.log(now);
+    console.log('clap');
 
     //TODO: set timer/timeout on this just like the second clap?
     // First clap
     if (!firstClapTime) {
         console.log("first clap");
+        clapIndicatorStatus.textContent = "1";
         firstClapTime = now;
         return;
     }
@@ -2767,15 +2808,18 @@ function onClap(now) {
     // Second clap
     if (!secondClapTime) {
         console.log("second clap?");
+        clapIndicatorStatus.textContent = "2?";
         const delta = now - firstClapTime;
         console.log(delta);
 
         if (delta < MIN) {
-            console.log("Second clap too FAST, now treating it as first clap.");
-            firstClapTime = now;
+            console.log("Second clap too FAST, reseting.");
+            clapIndicatorStatus.textContent = "2FAST; CLEAR";
+            resetClaps();
             return;
         } else if (delta > MAX) {
             console.log("Second clap too SLOW, now treating it as first clap.");
+            clapIndicatorStatus.textContent = "1";
             firstClapTime = now;
             return;
         }
@@ -2783,19 +2827,26 @@ function onClap(now) {
         secondClapTime = now;
 
         console.log("second clap confirmed");
+        clapIndicatorStatus.textContent = "2";
 
+        let guardAfter = 1500;
+        if (isCommercialState) {
+            guardAfter = 800
+        }
         // Wait to see if a third clap happens
         confirmTimer = setTimeout(() => {
             // No third clap -> VALID double clap
             manualCommercialModeToggle();
             console.log("success!");
+            clapIndicatorStatus.textContent = "TRIGGER";
             resetClaps();
-        }, GUARD_AFTER);
+        }, guardAfter);
 
         return;
     }
 
     // Third clap BEFORE confirmation -> invalidate
+    clapIndicatorStatus.textContent = "3; CLEAR";
     invalidateSequence();
 }
 
