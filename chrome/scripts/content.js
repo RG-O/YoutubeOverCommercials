@@ -73,6 +73,19 @@ var windowWidth;
 var windowHeight;
 //TODO: Add user preference for spotify to have audio come in gradually
 
+//Double clap variables
+//const ALPHA = 0.01, MULT = 3.2, ATT = 0.14;
+const ALPHA = 0.01, MULT = 3.2, ATT = 0.03;
+const HF_MIN = 2000, HF_MAX = 4000;
+//const HF_MIN = 2000, HF_MAX = 6000;
+const MIN = 120, MAX = 420, COOL = 1500;
+var isDoubleClapMode = true;
+var noise = 0, last = 0, claps = [], lastTrig = 0;
+var firstClapTime;
+var secondClapTime;
+var confirmTimer;
+const GUARD_AFTER = 1100;
+
 //Advanced Logo Analysis Variables
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -277,6 +290,10 @@ function initialRun() {
     }
 
     if (commercialDetectionMode.indexOf('auto') < 0) {
+
+        if (isDoubleClapMode) {
+            listenForDoubleClap();
+        }
 
         if (overlayVideoType == 'spotify') {
             //Note: this happens elsewhere in auto modes
@@ -681,7 +698,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 }
 
                             } else {
-
+                                //manual mode start
+                                
                                 initialRun();
 
                             }
@@ -704,59 +722,66 @@ chrome.runtime.onMessage.addListener(function (message) {
             abortPixelSelection();
         } else {
 
-            if (isCommercialState) {
-
-                endCommercialMode();
-
-                if (!isDebugMode) {
-                    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
-                        if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
-                            logoBox.style.display = 'none';
-                        } else {
-                            advancedLogoInfoContainer.style.display = 'none';
-                        }
-                    } else if (commercialDetectionMode === 'auto-audio') {
-                        audioLevelIndicatorContainer.style.display = 'none';
-                    } //else don't need to hide for manual mode
-                }
-
-            } else {
-
-                startCommercialMode();
-
-                //hide logo for non audio overlays and not debug mode
-                if (isAudioOnlyOverlay) {
-                    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
-                        if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
-                            logoBox.style.display = 'block';
-                        } else {
-                            advancedLogoInfoContainer.style.display = 'flex';
-                        }
-                    } else if (commercialDetectionMode === 'auto-audio') {
-                        audioLevelIndicatorContainer.style.display = 'flex';
-                    }
-                } else if (!isDebugMode) {
-                    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
-                        if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
-                            logoBox.style.display = 'none';
-                        } else {
-                            advancedLogoInfoContainer.style.display = 'none';
-                        }
-                    } else if (commercialDetectionMode === 'auto-audio') {
-                        audioLevelIndicatorContainer.style.display = 'none';
-                    }
-                }
-
-            }
-
-            //set cooldown period so auto doesn't switch mode for user defined amount of time
-            cooldownCountRemaining = manualOverrideCooldown;
+            manualCommercialModeToggle();
 
         }
 
     }
 
 });
+
+
+function manualCommercialModeToggle() {
+
+    if (isCommercialState) {
+
+        endCommercialMode();
+
+        if (!isDebugMode) {
+            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+                if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+                    logoBox.style.display = 'none';
+                } else {
+                    advancedLogoInfoContainer.style.display = 'none';
+                }
+            } else if (commercialDetectionMode === 'auto-audio') {
+                audioLevelIndicatorContainer.style.display = 'none';
+            } //else don't need to hide for manual mode
+        }
+
+    } else {
+
+        startCommercialMode();
+
+        //hide logo for non audio overlays and not debug mode
+        if (isAudioOnlyOverlay) {
+            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+                if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+                    logoBox.style.display = 'block';
+                } else {
+                    advancedLogoInfoContainer.style.display = 'flex';
+                }
+            } else if (commercialDetectionMode === 'auto-audio') {
+                audioLevelIndicatorContainer.style.display = 'flex';
+            }
+        } else if (!isDebugMode) {
+            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+                if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
+                    logoBox.style.display = 'none';
+                } else {
+                    advancedLogoInfoContainer.style.display = 'none';
+                }
+            } else if (commercialDetectionMode === 'auto-audio') {
+                audioLevelIndicatorContainer.style.display = 'none';
+            }
+        }
+
+    }
+
+    //set cooldown period so auto doesn't switch mode for user defined amount of time
+    cooldownCountRemaining = manualOverrideCooldown;
+
+}
 
 
 //lets the user know that they need to be fullscreen for the extension to work
@@ -1041,6 +1066,13 @@ function captureOriginalPixelColor(selectedPixel) {
         } else if (overlayVideoType == 'other-tabs') {
             //if user has extension set to other-tabs, mute the other tabs now
             chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+        }
+
+        if (isDoubleClapMode) {
+            //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
+            setTimeout(() => {
+                listenForDoubleClap();
+            }, 3000);
         }
 
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
@@ -1465,6 +1497,13 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
             window.addEventListener('beforeunload', closeSpotify);
         }, delay + 2000);
     }
+
+    if (isDoubleClapMode) {
+        //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
+        setTimeout(() => {
+            listenForDoubleClap();
+        }, 3000);
+    }
 }
 
 
@@ -1788,6 +1827,13 @@ function prepForAudioMonitor() {
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
     }
 
+    if (isDoubleClapMode) {
+        //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
+        setTimeout(() => {
+            listenForDoubleClap();
+        }, 3000);
+    }
+
     audioThresholdMonitor();
 
 }
@@ -1848,7 +1894,6 @@ function setAudioLevelIndicator() {
     insertLocation.insertBefore(audioLevelIndicatorContainer, null);
 
 }
-
 
 
 //checks the audio level and compares it to the audio level threshold and initiates commercial or non-commercial mode accordingly
@@ -2655,4 +2700,117 @@ function stopCommercialTimer() {
             lastCommercialTimerDate: today,
         });
     });
+}
+
+
+//TODO: split into 2 prep and listen functions?
+async function listenForDoubleClap() {
+    const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 2 }
+    });
+
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    const freq = ctx.createAnalyser();
+    analyser.fftSize = freq.fftSize = 2048;
+
+    const src = ctx.createMediaStreamSource(stream);
+    src.connect(analyser);
+    src.connect(freq);
+
+    const tData = new Float32Array(analyser.fftSize);
+    const fData = new Uint8Array(freq.frequencyBinCount);
+
+    function loop() {
+        analyser.getFloatTimeDomainData(tData);
+        freq.getByteFrequencyData(fData);
+
+        let sum = 0;
+        for (let v of tData) sum += v * v;
+        const rms = Math.sqrt(sum / tData.length);
+
+        noise = noise ? noise * (1 - ALPHA) + rms * ALPHA : rms;
+        const attack = rms - last;
+        last = rms;
+
+        const ny = ctx.sampleRate / 2;
+        const b0 = Math.floor(HF_MIN / ny * fData.length);
+        const b1 = Math.floor(HF_MAX / ny * fData.length);
+        let hf = 0;
+        for (let i = b0; i <= b1; i++) hf += fData[i];
+
+        const clap = rms > noise * MULT && attack > ATT && hf > 1000;
+        const now = performance.now();
+
+        if (clap) {
+            onClap(performance.now());
+        }
+
+        requestAnimationFrame(loop);
+    }
+
+    loop();
+}
+
+
+function onClap(now) {
+    console.log(now);
+
+    //TODO: set timer/timeout on this just like the second clap?
+    // First clap
+    if (!firstClapTime) {
+        console.log("first clap");
+        firstClapTime = now;
+        return;
+    }
+
+    // Second clap
+    if (!secondClapTime) {
+        console.log("second clap?");
+        const delta = now - firstClapTime;
+        console.log(delta);
+
+        if (delta < MIN) {
+            console.log("Second clap too FAST, now treating it as first clap.");
+            firstClapTime = now;
+            return;
+        } else if (delta > MAX) {
+            console.log("Second clap too SLOW, now treating it as first clap.");
+            firstClapTime = now;
+            return;
+        }
+
+        secondClapTime = now;
+
+        console.log("second clap confirmed");
+
+        // Wait to see if a third clap happens
+        confirmTimer = setTimeout(() => {
+            // No third clap -> VALID double clap
+            manualCommercialModeToggle();
+            console.log("success!");
+            resetClaps();
+        }, GUARD_AFTER);
+
+        return;
+    }
+
+    // Third clap BEFORE confirmation -> invalidate
+    invalidateSequence();
+}
+
+
+function invalidateSequence() {
+    console.log('stopped trigger due to third clap');
+    resetClaps();
+}
+
+
+function resetClaps() {
+    firstClapTime = null;
+    secondClapTime = null;
+    if (confirmTimer) {
+        clearTimeout(confirmTimer);
+        confirmTimer = null;
+    }
 }
