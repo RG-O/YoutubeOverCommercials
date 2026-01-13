@@ -86,6 +86,7 @@ var firstClapTime;
 var secondClapTime;
 var confirmTimer;
 //const GUARD_AFTER = 1100;
+var lastClapDetectedAt = 0;
 
 //TODO: rename these variables
 //Double clap variables
@@ -2721,7 +2722,7 @@ async function listenForDoubleClap() {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;top:10px;left:10px;z-index:999999;background:#000c;color:#0f0;padding:5px;font:10px monospace';
     //overlay.innerHTML = '<div>RMS:<span id=r></span></div><div>Noise:<span id=n></span></div><div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div id=clapIndicator></div>';
-    overlay.innerHTML = '<div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div id=clapIndicator></div><div>Status:<span id=clapIndicatorStatus></span></div>';
+    overlay.innerHTML = '<div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div>Status:<span id=clapIndicatorStatus></span></div><div id=clapIndicator></div>';
     document.body.appendChild(overlay);
 
     const ctx = new AudioContext();
@@ -2778,12 +2779,20 @@ async function listenForDoubleClap() {
         //n.textContent = noise.toFixed(4);
         //a.textContent = attack.toFixed(4);
         //h.textContent = hf.toFixed(0);
-        clapIndicator.textContent = clap ? 'clap' : '';
+        clapIndicator.textContent = clap ? 'clap' : ' ';
+
+        const now = performance.now();
 
         if (clap) {
-            a.textContent = attack.toFixed(3);
-            h.textContent = hf.toFixed(0);
-            onClap(performance.now());
+            //trying not to count the same clap twice //TODO: set to clap boolean?
+            if (now - lastClapDetectedAt > 60) {
+                lastClapDetectedAt = now;
+
+                a.textContent = attack.toFixed(3);
+                h.textContent = hf.toFixed(0);
+
+                onClap(now);
+            }
         }
 
         requestAnimationFrame(loop);
