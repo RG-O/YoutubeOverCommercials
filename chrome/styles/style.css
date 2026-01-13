@@ -158,3 +158,19 @@
     pointer-events: none !important;
     z-index: 2147483647 !important;
 }
+
+.double-clap-indicator {
+    color: rgb(140, 179, 210, 0.9) !important;
+    background-color: rgba(255, 255, 255, 0.8) !important;
+    font-size: 12px !important;
+    line-height: 0 !important;
+    pointer-events: none;
+    z-index: 2147483647 !important;
+    position: absolute !important;
+    font-family: "Montserrat", sans-serif !important;
+    /*display: flex;*/
+    align-items: center !important;
+    /*TODO: Dynamically set*/
+    top: 10px;
+    left: 10px;
+}
