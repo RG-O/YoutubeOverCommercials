@@ -79,7 +79,8 @@ var windowHeight;
 //const HF_MIN = 2000, HF_MAX = 4000;
 ////const HF_MIN = 2000, HF_MAX = 6000;
 //const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 100, MAX = 450; //note: do not change these per commercial state so users can get the pacing down
+//const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 160, MAX = 460; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 var noise = 0, last = 0, claps = [], lastTrig = 0;
 var firstClapTime;
@@ -2716,7 +2717,12 @@ function stopCommercialTimer() {
 //TODO: split into 2 prep and listen functions?
 async function listenForDoubleClap() {
     const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 2 }
+        audio: {
+            channelCount: 2,
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+        }
     });
 
     //const overlay = document.createElement('div');
@@ -2743,23 +2749,71 @@ async function listenForDoubleClap() {
     const tData = new Float32Array(analyser.fftSize);
     const fData = new Uint8Array(freq.frequencyBinCount);
 
+    //************************debug*******************************
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 999999;
+      background: rgba(0,0,0,0.85);
+      padding: 8px;
+      border-radius: 6px;
+      color: #0f0;
+      font: 11px monospace;
+      width: 300px;
+    `;
+    overlay.innerHTML = `
+      <canvas id="wave" width="280" height="80"></canvas>
+      <canvas id="attack" width="280" height="50"></canvas>
+      <div>RMS : <span id="hfVal"></span></div>
+      <div>Attack thresh: <span id="attackThreshDisplay"></span></div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const waveCtx = wave.getContext('2d');
+    const attackCtx = attack.getContext('2d');
+
+    const HISTORY = 120; // frames (~2 seconds at 60fps)
+    const rmsHistory = [];
+    const attackHistory = [];
+
+    //****************************************************************** */
+
+    //TODO: move function and variable declares out of a function
+    //555
+    function clamp(v, min, max) {
+        return Math.max(min, Math.min(max, v));
+    }
+    //555
+    //const QUIET_NOISE_FLOOR = 0.003;
+    const QUIET_NOISE_FLOOR = 0.0035; //volume when attach threshold starts to lower?? 
+    const BASE_ATTACK_THRESHOLD = 0.03;
+    const MIN_ATTACK_THRESHOLD = 0.022;
+    let noiseFloor = 0.003;
+
     function loop() {
         if (isCommercialState) {
             //make is easier to detect claps to make it easier to get back to the game
             //TODO: understand these values more
-            ALPHA = 0.01
-            MULT = 3.2
-            ATT = 0.025;
+            ALPHA = 0.01;
+            MULT = 3.2;
+            ATT = 0.025; //TODO: adjust clamp
             HF_MIN = 1500;
             HF_MAX = 6000;
         } else {
             //make harder to detect claps to avoid false positives while users are watching the game
             //TODO: these values are final?
-            ALPHA = 0.01
-            MULT = 3.2
-            ATT = 0.03;
-            HF_MIN = 2000
-            HF_MAX = 4000;
+            ALPHA = 0.01;
+            MULT = 3.2;
+            //ATT = 0.03;
+            //HF_MIN = 2000;
+            //HF_MAX = 4000;
+            ATT = 0.025; //TODO: adjust clamp
+            HF_MIN = 1500;
+            HF_MAX = 6000;
         }
 
         analyser.getFloatTimeDomainData(tData);
@@ -2773,13 +2827,23 @@ async function listenForDoubleClap() {
         const attack = rms - last;
         last = rms;
 
+        noiseFloor = noiseFloor * 0.99 + rms * 0.01;
+        const noiseRatio = noiseFloor / QUIET_NOISE_FLOOR; //555
+        const attackThreshold = clamp(
+            BASE_ATTACK_THRESHOLD / Math.sqrt(noiseRatio),
+            MIN_ATTACK_THRESHOLD,
+            BASE_ATTACK_THRESHOLD
+        ); //555
+
         const ny = ctx.sampleRate / 2;
         const b0 = Math.floor(HF_MIN / ny * fData.length);
         const b1 = Math.floor(HF_MAX / ny * fData.length);
         let hf = 0;
         for (let i = b0; i <= b1; i++) hf += fData[i];
 
-        const clap = rms > noise * MULT && attack > ATT && hf > 1000;
+        //TODO: lower attack or other threshold just for second clap?
+        //const clap = rms > noise * MULT && attack > ATT && hf > 1000; //og 555
+        const clap = rms > noise * MULT && attack > attackThreshold && hf > 1000; //555
 
         //r.textContent = rms.toFixed(4);
         //n.textContent = noise.toFixed(4);
@@ -2790,8 +2854,12 @@ async function listenForDoubleClap() {
         const now = performance.now();
 
         if (clap) {
+            //console.log('c?');
             //trying not to count the same clap twice //TODO: add check to clap boolean instead?
-            if (now - lastClapDetectedAt > 60) {
+            console.log('time between unconfirmed claps = ' + (now - lastClapDetectedAt));
+            if (now - lastClapDetectedAt > 40) {
+                //console.log('confirmed clap!');
+                //console.log('attack = ' + attack);
                 lastClapDetectedAt = now;
 
                 //a.textContent = attack.toFixed(3);
@@ -2801,6 +2869,63 @@ async function listenForDoubleClap() {
             }
         }
 
+        //****************************debug********************************** */
+
+        // Store history
+        rmsHistory.push(rms);
+        attackHistory.push(attack);
+
+        if (rmsHistory.length > HISTORY) rmsHistory.shift();
+        if (attackHistory.length > HISTORY) attackHistory.shift();
+
+        // Draw RMS waveform
+        waveCtx.clearRect(0, 0, 280, 80);
+        waveCtx.strokeStyle = '#0f0';
+        waveCtx.beginPath();
+
+        rmsHistory.forEach((v, i) => {
+            const x = (i / HISTORY) * 280;
+            const y = 80 - Math.min(v / (noise * MULT), 2) * 40;
+            if (i === 0) waveCtx.moveTo(x, y);
+            else waveCtx.lineTo(x, y);
+        });
+        waveCtx.stroke();
+
+        // Noise floor
+        waveCtx.strokeStyle = '#ff0';
+        const noiseY = 80 - (noise / (noise * MULT)) * 40;
+        waveCtx.beginPath();
+        waveCtx.moveTo(0, noiseY);
+        waveCtx.lineTo(280, noiseY);
+        waveCtx.stroke();
+
+        // Threshold
+        waveCtx.strokeStyle = '#f00';
+        const threshY = 80 - 40;
+        waveCtx.beginPath();
+        waveCtx.moveTo(0, threshY);
+        waveCtx.lineTo(280, threshY);
+        waveCtx.stroke();
+
+        // Attack graph
+        attackCtx.clearRect(0, 0, 280, 50);
+        attackCtx.strokeStyle = '#0ff';
+        attackCtx.beginPath();
+
+        attackHistory.forEach((v, i) => {
+            const x = (i / HISTORY) * 280;
+            const y = 50 - Math.min(v / ATT, 2) * 25;
+            if (i === 0) attackCtx.moveTo(x, y);
+            else attackCtx.lineTo(x, y);
+        });
+        attackCtx.stroke();
+
+        // Text
+        hfVal.textContent = rms.toFixed(4);
+        attackThreshDisplay.textContent = attackThreshold.toFixed(5);
+
+        //************************************************************ */
+
         requestAnimationFrame(loop);
     }
 
@@ -2808,229 +2933,187 @@ async function listenForDoubleClap() {
 }
 
 
-//function onClap(now) {
-//    console.log('clap');
+/* ------------------------------------------------------------------
+ * Indicator helpers (single helper + single timer)
+ * ------------------------------------------------------------------ */
 
-//    //TODO: set timer/timeout on this just like the second clap?
-//    // First clap
-//    if (!firstClapTime) {
-//        console.log("first clap");
-//        clapIndicatorStatus.textContent = "1";
-//        firstClapTime = now;
-//        return;
-//    }
+var indicatorResetTimer = null;
 
-//    // Second clap
-//    if (!secondClapTime) {
-//        console.log("second clap?");
-//        clapIndicatorStatus.textContent = "2?";
-//        const delta = now - firstClapTime;
-//        console.log(delta);
+function setIndicator(text, resetAfterMs = null) {
+    if (indicatorResetTimer) {
+        clearTimeout(indicatorResetTimer);
+        indicatorResetTimer = null;
+    }
 
-//        if (delta < MIN) {
-//            console.log("Second clap too FAST, reseting.");
-//            clapIndicatorStatus.textContent = "2FAST; CLEAR";
-//            resetClaps();
-//            return;
-//        } else if (delta > MAX) {
-//            console.log("Second clap too SLOW, now treating it as first clap.");
-//            clapIndicatorStatus.textContent = "1";
-//            firstClapTime = now;
-//            return;
-//        }
+    doubleClapIndicator.textContent = text;
 
-//        secondClapTime = now;
+    if (resetAfterMs !== null) {
+        indicatorResetTimer = setTimeout(resetClapsIndicator, resetAfterMs);
+    }
+}
 
-//        console.log("second clap confirmed");
-//        clapIndicatorStatus.textContent = "2";
-
-//        let guardAfter = 1500;
-//        if (isCommercialState) {
-//            guardAfter = 800
-//        }
-//        // Wait to see if a third clap happens
-//        confirmTimer = setTimeout(() => {
-//            // No third clap -> VALID double clap
-//            manualCommercialModeToggle();
-//            console.log("success!");
-//            clapIndicatorStatus.textContent = "TRIGGER";
-//            resetClaps();
-//        }, guardAfter);
-
-//        return;
-//    }
-
-//    // Third clap BEFORE confirmation -> invalidate
-//    clapIndicatorStatus.textContent = "3; CLEAR";
-//    invalidateSequence();
-//}
-
-
-function invalidateSequence() {
-    console.log('stopped trigger due to third clap');
-    resetClaps();
+function resetClapsIndicator() {
+    // microphone + clap + clap
+    doubleClapIndicator.textContent =
+        '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
 }
 
 
-function resetClaps() {
+/* ------------------------------------------------------------------
+ * FSM state
+ * ------------------------------------------------------------------ */
+
+const State = {
+    IDLE: 'IDLE',
+    ONE_CLAP: 'ONE_CLAP',
+    ARMED: 'ARMED'
+};
+
+var state = State.IDLE;
+var firstClapTime = null;
+var confirmTimer = null;
+
+
+/* ------------------------------------------------------------------
+ * FSM helpers
+ * ------------------------------------------------------------------ */
+
+function transitionTo(newState) {
+    //console.log(`FSM: ${state} -> ${newState}`);
+    state = newState;
+}
+
+function resetFSM() {
     firstClapTime = null;
-    secondClapTime = null;
 
     if (confirmTimer) {
         clearTimeout(confirmTimer);
         confirmTimer = null;
     }
+
+    transitionTo(State.IDLE);
 }
 
 
-function resetClapsIndicator() {
-    doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F'; // microphone and two clapping hands
-}
-
-
-function clearResetClapIndicatorTimers() {
-    //TODO: can I just have a single time and reuse it?
-    if (clearSingleClapIndicatorTimer) {
-        clearTimeout(clearSingleClapIndicatorTimer);
-        clearSingleClapIndicatorTimer = null;
-    }
-
-    if (clearSecondClapTooEarlyIndicatorTimer) {
-        clearTimeout(clearSecondClapTooEarlyIndicatorTimer);
-        clearSecondClapTooEarlyIndicatorTimer = null;
-    }
-
-    if (clearSecondClapTooLateIndicatorTimer) {
-        clearTimeout(clearSecondClapTooLateIndicatorTimer);
-        clearSecondClapTooLateIndicatorTimer = null;
-    }
-
-    if (clearTwoClapsIndicatorTimer) {
-        clearTimeout(clearTwoClapsIndicatorTimer);
-        clearTwoClapsIndicatorTimer = null;
-    }
-
-    if (clearDoubleClapTriggerSuccessIndicatorTimer) {
-        clearTimeout(clearDoubleClapTriggerSuccessIndicatorTimer);
-        clearDoubleClapTriggerSuccessIndicatorTimer = null;
-    }
-}
-
-
-var doubleClapIndicator;
-var clearSingleClapIndicatorTimer;
-var clearSecondClapTooEarlyIndicatorTimer;
-var clearSecondClapTooLateIndicatorTimer;
-var clearTwoClapsIndicatorTimer;
-var clearDoubleClapTriggerSuccessIndicatorTimer;
-
+/* ------------------------------------------------------------------
+ * Clap handler (FSM-driven)
+ * ------------------------------------------------------------------ */
 
 function onClap(now) {
-    console.log('clap');
+    //console.log(`CLAP @ ${now}, state=${state}`);
 
-    //TODO: set timer/timeout on this just like the second clap?
-    // First clap
-    if (!firstClapTime) {
-        console.log("first clap");
+    switch (state) {
 
-        //clapIndicatorStatus.textContent = "1";
-        firstClapTime = now;
+        /* ---------------- IDLE ---------------- */
 
-        clearResetClapIndicatorTimers();
-        doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F'; // microphone, one green box, and one clapping hands
-        clearSingleClapIndicatorTimer = setTimeout(() => {
-            resetClapsIndicator();
-        }, MAX + 500);
-
-        return;
-    }
-
-    // Second clap
-    if (!secondClapTime) {
-
-        console.log("second clap?");
-        //clapIndicatorStatus.textContent = "2?";
-        const delta = now - firstClapTime;
-        console.log(delta);
-
-        if (delta < MIN) {
-            console.log("Second clap too FAST, reseting.");
-            //clapIndicatorStatus.textContent = "2FAST; CLEAR";
-
-            clearResetClapIndicatorTimers();
-            doubleClapIndicator.textContent = '\uD83C\uDFA4 \u274C \uD83D\uDC4F'; // microphone, one red x, and one clapping hands
-            clearSecondClapTooEarlyIndicatorTimer = setTimeout(() => {
-                resetClapsIndicator();
-            }, 1000);
-
-            resetClaps();
-            return;
-        } else if (delta > MAX && delta < MAX + 250) {
-            //complete reset for late narrow misses
-
-            console.log("Second clap too SLOW, now treating it as first clap.");
-            //clapIndicatorStatus.textContent = "1";
-
-            clearResetClapIndicatorTimers();
-            doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDFE9 \u274C'; // microphone, one green box, and one red x
-            clearSecondClapTooLateIndicatorTimer = setTimeout(() => {
-                resetClapsIndicator();
-            }, 1000);
-
-            resetClaps();
-            return;
-        } else if (delta > MAX + 500) {
-            console.log("Second clap too SLOW, now treating it as first clap.");
-            //clapIndicatorStatus.textContent = "1";
-
-            clearResetClapIndicatorTimers();
-            doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F'; // microphone, one green box, and one clapping hands
-            clearSingleClapIndicatorTimer = setTimeout(() => {
-                resetClapsIndicator();
-            }, MAX + 500);
-
+        case State.IDLE: {
+            // first clap
             firstClapTime = now;
-            return;
+
+            setIndicator(
+                // microphone
+                // green square (first clap registered)
+                // clap
+                '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F',
+                MAX + 500
+            );
+
+            transitionTo(State.ONE_CLAP);
+            break;
         }
 
-        secondClapTime = now;
+        /* ---------------- ONE CLAP ---------------- */
 
-        console.log("second clap confirmed");
-        //clapIndicatorStatus.textContent = "2";
+        case State.ONE_CLAP: {
+            const delta = now - firstClapTime;
+            console.log('time between CONFIRMED claps = ' + delta);
 
-        doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDFE9'; // microphone, two green boxes
+            if (delta < MIN) {
+                // Second clap too fast -> clear claps
+                setIndicator(
+                    // microphone
+                    // green square
+                    // red X
+                    // clap
+                    '\uD83C\uDFA4 \uD83D\uDFE9 \u274C \uD83D\uDC4F',
+                    1000
+                );
+                resetFSM();
+                break;
+            }
 
-        let guardAfter = 1500;
-        if (isCommercialState) {
-            guardAfter = 800
+            if (delta > MAX && delta < MAX + 250) {
+                // Narrow late miss -> clear claps
+                setIndicator(
+                    // microphone
+                    // green square
+                    // clap
+                    // red X
+                    '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F \u274C',
+                    1000
+                );
+                resetFSM();
+                break;
+            }
+
+            if (delta > MAX + 500) {
+                // Way too slow -> treat as first app
+                firstClapTime = now;
+
+                setIndicator(
+                    // microphone
+                    // green square
+                    // clap
+                    '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F',
+                    MAX + 500
+                );
+                break;
+            }
+
+            // Valid second clap -> wait to make sure no third clap
+            setIndicator(
+                // microphone
+                // green square
+                // green square
+                '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDFE9'
+            );
+
+            const guardAfter = isCommercialState ? 800 : 1500;
+
+            confirmTimer = setTimeout(() => {
+                // No third clap -> success
+                manualCommercialModeToggle();
+
+                setIndicator(
+                    // microphone
+                    // green check
+                    // green check
+                    '\uD83C\uDFA4 \u2705 \u2705',
+                    1000
+                );
+
+                resetFSM();
+            }, guardAfter);
+
+            transitionTo(State.ARMED);
+            break;
         }
-        // Wait to see if a third clap happens
-        confirmTimer = setTimeout(() => {
-            // No third clap -> VALID double clap
-            manualCommercialModeToggle();
-            console.log("success!");
 
-            clearResetClapIndicatorTimers();
-            doubleClapIndicator.textContent = '\uD83C\uDFA4 \u2705 \u2705'; // microphone, one green check boxes
-            clearTwoClapsIndicatorTimer = setTimeout(() => {
-                resetClapsIndicator();
-            }, 1000);
+        /* ---------------- ARMED ---------------- */
 
-            //clapIndicatorStatus.textContent = "TRIGGER";
-            resetClaps();
-        }, guardAfter);
+        case State.ARMED: {
+            // Third clap detected -> cancel and clear claps
+            setIndicator(
+                // microphone
+                // red X
+                // red X
+                // red X
+                '\uD83C\uDFA4 \u274C \u274C \u274C',
+                1000
+            );
 
-        return;
+            resetFSM();
+            break;
+        }
     }
-
-    // Third clap BEFORE confirmation -> invalidate
-    //clapIndicatorStatus.textContent = "3; CLEAR";
-
-    clearResetClapIndicatorTimers();
-    doubleClapIndicator.textContent = '\uD83C\uDFA4 \u274C \u274C \u274C'; // microphone, three red Xs
-    clearDoubleClapTriggerSuccessIndicatorTimer = setTimeout(() => {
-        resetClapsIndicator();
-    }, 1000);
-
-    invalidateSequence();
 }
