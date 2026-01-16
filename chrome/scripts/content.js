@@ -2751,8 +2751,17 @@ async function listenForDoubleClap() {
 
     //************************debug*******************************
 
+    var overlay;
+
+    var waveCtx;
+    var attackCtx;
+
+    var HISTORY = 120; // frames (~2 seconds at 60fps)
+    var rmsHistory = [];
+    var attackHistory = [];
+
     if (isDebugMode) {
-        const overlay = document.createElement('div');
+        overlay = document.createElement('div');
         overlay.style.cssText = `
           position: fixed;
           top: 10px;
@@ -2774,12 +2783,8 @@ async function listenForDoubleClap() {
 
         document.body.appendChild(overlay);
 
-        const waveCtx = wave.getContext('2d');
-        const attackCtx = attack.getContext('2d');
-
-        const HISTORY = 120; // frames (~2 seconds at 60fps)
-        const rmsHistory = [];
-        const attackHistory = [];
+        waveCtx = wave.getContext('2d');
+        attackCtx = attack.getContext('2d');
     }
 
     //****************************************************************** */
