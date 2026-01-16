@@ -2751,34 +2751,36 @@ async function listenForDoubleClap() {
 
     //************************debug*******************************
 
-    const overlay = document.createElement('div');
-    overlay.style.cssText = `
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      z-index: 999999;
-      background: rgba(0,0,0,0.85);
-      padding: 8px;
-      border-radius: 6px;
-      color: #0f0;
-      font: 11px monospace;
-      width: 300px;
-    `;
-    overlay.innerHTML = `
-      <canvas id="wave" width="280" height="80"></canvas>
-      <canvas id="attack" width="280" height="50"></canvas>
-      <div>RMS : <span id="hfVal"></span></div>
-      <div>Attack thresh: <span id="attackThreshDisplay"></span></div>
-    `;
+    if (isDebugMode) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+          position: fixed;
+          top: 10px;
+          right: 10px;
+          z-index: 999999;
+          background: rgba(0,0,0,0.85);
+          padding: 8px;
+          border-radius: 6px;
+          color: #0f0;
+          font: 11px monospace;
+          width: 300px;
+        `;
+        overlay.innerHTML = `
+          <canvas id="wave" width="280" height="80"></canvas>
+          <canvas id="attack" width="280" height="50"></canvas>
+          <div>RMS : <span id="hfVal"></span></div>
+          <div>Attack thresh: <span id="attackThreshDisplay"></span></div>
+        `;
 
-    document.body.appendChild(overlay);
+        document.body.appendChild(overlay);
 
-    const waveCtx = wave.getContext('2d');
-    const attackCtx = attack.getContext('2d');
+        const waveCtx = wave.getContext('2d');
+        const attackCtx = attack.getContext('2d');
 
-    const HISTORY = 120; // frames (~2 seconds at 60fps)
-    const rmsHistory = [];
-    const attackHistory = [];
+        const HISTORY = 120; // frames (~2 seconds at 60fps)
+        const rmsHistory = [];
+        const attackHistory = [];
+    }
 
     //****************************************************************** */
 
@@ -2871,58 +2873,60 @@ async function listenForDoubleClap() {
 
         //****************************debug********************************** */
 
-        // Store history
-        rmsHistory.push(rms);
-        attackHistory.push(attack);
+        if (isDebugMode) {
+            // Store history
+            rmsHistory.push(rms);
+            attackHistory.push(attack);
 
-        if (rmsHistory.length > HISTORY) rmsHistory.shift();
-        if (attackHistory.length > HISTORY) attackHistory.shift();
+            if (rmsHistory.length > HISTORY) rmsHistory.shift();
+            if (attackHistory.length > HISTORY) attackHistory.shift();
 
-        // Draw RMS waveform
-        waveCtx.clearRect(0, 0, 280, 80);
-        waveCtx.strokeStyle = '#0f0';
-        waveCtx.beginPath();
+            // Draw RMS waveform
+            waveCtx.clearRect(0, 0, 280, 80);
+            waveCtx.strokeStyle = '#0f0';
+            waveCtx.beginPath();
 
-        rmsHistory.forEach((v, i) => {
-            const x = (i / HISTORY) * 280;
-            const y = 80 - Math.min(v / (noise * MULT), 2) * 40;
-            if (i === 0) waveCtx.moveTo(x, y);
-            else waveCtx.lineTo(x, y);
-        });
-        waveCtx.stroke();
+            rmsHistory.forEach((v, i) => {
+                const x = (i / HISTORY) * 280;
+                const y = 80 - Math.min(v / (noise * MULT), 2) * 40;
+                if (i === 0) waveCtx.moveTo(x, y);
+                else waveCtx.lineTo(x, y);
+            });
+            waveCtx.stroke();
 
-        // Noise floor
-        waveCtx.strokeStyle = '#ff0';
-        const noiseY = 80 - (noise / (noise * MULT)) * 40;
-        waveCtx.beginPath();
-        waveCtx.moveTo(0, noiseY);
-        waveCtx.lineTo(280, noiseY);
-        waveCtx.stroke();
+            // Noise floor
+            waveCtx.strokeStyle = '#ff0';
+            const noiseY = 80 - (noise / (noise * MULT)) * 40;
+            waveCtx.beginPath();
+            waveCtx.moveTo(0, noiseY);
+            waveCtx.lineTo(280, noiseY);
+            waveCtx.stroke();
 
-        // Threshold
-        waveCtx.strokeStyle = '#f00';
-        const threshY = 80 - 40;
-        waveCtx.beginPath();
-        waveCtx.moveTo(0, threshY);
-        waveCtx.lineTo(280, threshY);
-        waveCtx.stroke();
+            // Threshold
+            waveCtx.strokeStyle = '#f00';
+            const threshY = 80 - 40;
+            waveCtx.beginPath();
+            waveCtx.moveTo(0, threshY);
+            waveCtx.lineTo(280, threshY);
+            waveCtx.stroke();
 
-        // Attack graph
-        attackCtx.clearRect(0, 0, 280, 50);
-        attackCtx.strokeStyle = '#0ff';
-        attackCtx.beginPath();
+            // Attack graph
+            attackCtx.clearRect(0, 0, 280, 50);
+            attackCtx.strokeStyle = '#0ff';
+            attackCtx.beginPath();
 
-        attackHistory.forEach((v, i) => {
-            const x = (i / HISTORY) * 280;
-            const y = 50 - Math.min(v / ATT, 2) * 25;
-            if (i === 0) attackCtx.moveTo(x, y);
-            else attackCtx.lineTo(x, y);
-        });
-        attackCtx.stroke();
+            attackHistory.forEach((v, i) => {
+                const x = (i / HISTORY) * 280;
+                const y = 50 - Math.min(v / ATT, 2) * 25;
+                if (i === 0) attackCtx.moveTo(x, y);
+                else attackCtx.lineTo(x, y);
+            });
+            attackCtx.stroke();
 
-        // Text
-        hfVal.textContent = rms.toFixed(4);
-        attackThreshDisplay.textContent = attackThreshold.toFixed(5);
+            // Text
+            hfVal.textContent = rms.toFixed(4);
+            attackThreshDisplay.textContent = attackThreshold.toFixed(5);
+        }
 
         //************************************************************ */
 
