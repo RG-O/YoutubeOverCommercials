@@ -80,7 +80,7 @@ var windowHeight;
 ////const HF_MIN = 2000, HF_MAX = 6000;
 //const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
 //const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 160, MAX = 460; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 190, MAX = 380; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 var noise = 0, last = 0, claps = [], lastTrig = 0;
 var firstClapTime;
@@ -2796,9 +2796,11 @@ async function listenForDoubleClap() {
     }
     //555
     //const QUIET_NOISE_FLOOR = 0.003;
-    const QUIET_NOISE_FLOOR = 0.0035; //volume when attach threshold starts to lower?? 
-    const BASE_ATTACK_THRESHOLD = 0.03;
-    const MIN_ATTACK_THRESHOLD = 0.022;
+    const QUIET_NOISE_FLOOR = 0.0035; //volume when attach threshold starts to lower??
+    //const BASE_ATTACK_THRESHOLD = 0.03;
+    //const MIN_ATTACK_THRESHOLD = 0.022;
+    const BASE_ATTACK_THRESHOLD = 0.035;
+    const MIN_ATTACK_THRESHOLD = 0.028;
     let noiseFloor = 0.003;
 
     function loop() {
