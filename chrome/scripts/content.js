@@ -2697,7 +2697,7 @@ function stopCommercialTimer() {
 ////const HF_MIN = 2000, HF_MAX = 6000;
 //const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
 //const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 190, MAX = 380; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 190, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 //var noise = 0, last = 0, claps = [], lastTrig = 0;
 var noise = 0, last = 0, lastTrig = 0;
@@ -2758,6 +2758,7 @@ async function listenForDoubleClap() {
     const HISTORY = 120;
     const rmsHistory = [];
     const attackHistory = [];
+    const hfHistory = [];
 
     const clapTimeline = [];
     const CLAP_HISTORY_MS = 2000;
@@ -2766,8 +2767,8 @@ async function listenForDoubleClap() {
         overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed;
-            top: 10px;
-            right: 10px;
+            top: 20px;
+            left: 10px;
             z-index: 2147483647;
             background: rgba(0,0,0,0.85);
             padding: 8px;
@@ -2779,7 +2780,7 @@ async function listenForDoubleClap() {
         overlay.innerHTML = `
             <canvas id="wave" width="280" height="80"></canvas>
             <canvas id="attack" width="280" height="50"></canvas>
-            <canvas id="hf" width="280" height="20"></canvas>
+            <canvas id="hf" width="280" height="50"></canvas>
             <canvas id="claps" width="280" height="24"></canvas>
 
             <div>RMS: <span id="rmsVal"></span></div>
@@ -2812,9 +2813,14 @@ async function listenForDoubleClap() {
     const QUIET_NOISE_FLOOR = 0.0035; //volume when attach threshold starts to lower??
     //const BASE_ATTACK_THRESHOLD = 0.03;
     //const MIN_ATTACK_THRESHOLD = 0.022;
-    const BASE_ATTACK_THRESHOLD = 0.035;
-    const MIN_ATTACK_THRESHOLD = 0.028;
-    const HF_THRESHOLD = 1000;
+    //const BASE_ATTACK_THRESHOLD = 0.035;
+    //const MIN_ATTACK_THRESHOLD = 0.028;
+    const BASE_ATTACK_THRESHOLD = 0.032;
+    const MIN_ATTACK_THRESHOLD = 0.026;
+    const HF_THRESHOLD = 1000; //og
+    //const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
+    //const HF_THRESHOLD = 800;
+    //const HF_THRESHOLD = 600;
     let noiseFloor = 0.003;
 
     function loop() {
@@ -2824,8 +2830,10 @@ async function listenForDoubleClap() {
             ALPHA = 0.01;
             MULT = 3.2;
             ATT = 0.025; //TODO: adjust clamp
-            HF_MIN = 2000;
-            HF_MAX = 4000;
+            HF_MIN = 5500;
+            //HF_MIN = 6000;
+            HF_MAX = 10000;
+            //HF_MAX = 8000;
         } else {
             //make harder to detect claps to avoid false positives while users are watching the game
             //TODO: these values are final?
@@ -2835,8 +2843,12 @@ async function listenForDoubleClap() {
             //HF_MIN = 2000;
             //HF_MAX = 4000;
             ATT = 0.025; //TODO: adjust clamp
-            HF_MIN = 2000;
-            HF_MAX = 4000;
+            //HF_MIN = 7000; //1-26-26: this seems pretty good to not capture speech besides 's' noise, but that doesn't trigger attack. has delay issue tho
+            //HF_MIN = 6000;
+            HF_MIN = 5500;
+            //HF_MAX = 8500; //1-26-26: pretty good. has delay issue tho
+            //HF_MAX = 8000;
+            HF_MAX = 10000;
         }
 
         analyser.getFloatTimeDomainData(tData);
@@ -2866,7 +2878,7 @@ async function listenForDoubleClap() {
 
         //TODO: lower attack or other threshold just for second clap?
         //const clap = rms > noise * MULT && attack > ATT && hf > 1000; //og 555
-        const clap = rms > noise * MULT && attack > attackThreshold && hf > 1000; //555
+        const clap = rms > noise * MULT && attack > attackThreshold && hf > HF_THRESHOLD; //555
 
         //r.textContent = rms.toFixed(4);
         //n.textContent = noise.toFixed(4);
@@ -2899,10 +2911,13 @@ async function listenForDoubleClap() {
         //****************************debug********************************** */
 
         if (isDebugMode) {
+            /* ===== HISTORY ===== */
             rmsHistory.push(rms);
             attackHistory.push(attack);
+            hfHistory.push(hf);
             if (rmsHistory.length > HISTORY) rmsHistory.shift();
             if (attackHistory.length > HISTORY) attackHistory.shift();
+            if (hfHistory.length > HISTORY) hfHistory.shift();
 
             /* === RMS GRAPH === */
             waveCtx.clearRect(0, 0, 280, 80);
@@ -2947,23 +2962,28 @@ async function listenForDoubleClap() {
             attackCtx.lineTo(280, 50 - 25);
             attackCtx.stroke();
 
-            /* === HF BAR === */
-            hfCtx.clearRect(0, 0, 280, 20);
+            /* === HF GRAPH === */
+            hfCtx.clearRect(0, 0, 280, 50);
 
-            const hfNorm = Math.min(hf / (HF_THRESHOLD * 2), 1);
-            hfCtx.fillStyle = hf > HF_THRESHOLD ? '#0f0' : '#f00';
-            hfCtx.fillRect(0, 0, hfNorm * 280, 20);
-
-            hfCtx.strokeStyle = '#fff';
-            const hfX = (HF_THRESHOLD / (HF_THRESHOLD * 2)) * 280;
+            hfCtx.strokeStyle = '#0f0';
             hfCtx.beginPath();
-            hfCtx.moveTo(hfX, 0);
-            hfCtx.lineTo(hfX, 20);
+            hfHistory.forEach((v, i) => {
+                const x = (i / HISTORY) * 280;
+                const y = 50 - Math.min(v / HF_THRESHOLD, 2) * 25;
+                i ? hfCtx.lineTo(x, y) : hfCtx.moveTo(x, y);
+            });
+            hfCtx.stroke();
+
+            hfCtx.strokeStyle = '#f00';
+            const hfThreshY = 50 - 25;
+            hfCtx.beginPath();
+            hfCtx.moveTo(0, hfThreshY);
+            hfCtx.lineTo(280, hfThreshY);
             hfCtx.stroke();
 
             /* === CLAP TIMELINE === */
             clapCtx.clearRect(0, 0, 280, 24);
-            clapCtx.font = '16px sans-serif';
+            clapCtx.font = '16px system-ui, Apple Color Emoji, Segoe UI Emoji';
             clapCtx.textBaseline = 'middle';
 
             for (let i = clapTimeline.length - 1; i >= 0; i--) {
