@@ -73,30 +73,6 @@ var windowWidth;
 var windowHeight;
 //TODO: Add user preference for spotify to have audio come in gradually
 
-//Double clap variables
-////const ALPHA = 0.01, MULT = 3.2, ATT = 0.14;
-//const ALPHA = 0.01, MULT = 3.2, ATT = 0.03;
-//const HF_MIN = 2000, HF_MAX = 4000;
-////const HF_MIN = 2000, HF_MAX = 6000;
-//const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
-//const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 190, MAX = 380; //note: do not change these per commercial state so users can get the pacing down
-var isDoubleClapMode = true;
-var noise = 0, last = 0, claps = [], lastTrig = 0;
-var firstClapTime;
-var secondClapTime;
-var confirmTimer;
-//const GUARD_AFTER = 1100;
-var lastClapDetectedAt = 0;
-
-//TODO: rename these variables
-//Double clap variables
-var ALPHA;
-var MULT;
-var ATT;
-var HF_MIN;
-var HF_MAX;
-
 //Advanced Logo Analysis Variables
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -2713,9 +2689,35 @@ function stopCommercialTimer() {
     });
 }
 
+//TODO: move these variables to the top
+//Double clap variables
+////const ALPHA = 0.01, MULT = 3.2, ATT = 0.14;
+//const ALPHA = 0.01, MULT = 3.2, ATT = 0.03;
+//const HF_MIN = 2000, HF_MAX = 4000;
+////const HF_MIN = 2000, HF_MAX = 6000;
+//const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
+//const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 190, MAX = 380; //note: do not change these per commercial state so users can get the pacing down
+var isDoubleClapMode = true;
+//var noise = 0, last = 0, claps = [], lastTrig = 0;
+var noise = 0, last = 0, lastTrig = 0;
+var firstClapTime;
+var secondClapTime;
+var confirmTimer;
+//const GUARD_AFTER = 1100;
+var lastClapDetectedAt = 0;
+
+//TODO: rename these variables
+//Double clap variables
+var ALPHA;
+var MULT;
+var ATT;
+var HF_MIN;
+var HF_MAX;
 
 //TODO: split into 2 prep and listen functions?
 async function listenForDoubleClap() {
+    //TODO make this whole function no longer async and add .then() and .catch(), the catch should show a message to the user.
     const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
             channelCount: 2,
@@ -2751,40 +2753,51 @@ async function listenForDoubleClap() {
 
     //************************debug*******************************
 
-    var overlay;
+    let overlay, waveCtx, attackCtx, hfCtx, clapCtx;
 
-    var waveCtx;
-    var attackCtx;
+    const HISTORY = 120;
+    const rmsHistory = [];
+    const attackHistory = [];
 
-    var HISTORY = 120; // frames (~2 seconds at 60fps)
-    var rmsHistory = [];
-    var attackHistory = [];
+    const clapTimeline = [];
+    const CLAP_HISTORY_MS = 2000;
 
     if (isDebugMode) {
         overlay = document.createElement('div');
         overlay.style.cssText = `
-          position: fixed;
-          top: 10px;
-          right: 10px;
-          z-index: 999999;
-          background: rgba(0,0,0,0.85);
-          padding: 8px;
-          border-radius: 6px;
-          color: #0f0;
-          font: 11px monospace;
-          width: 300px;
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 2147483647;
+            background: rgba(0,0,0,0.85);
+            padding: 8px;
+            border-radius: 6px;
+            color: #0f0;
+            font: 11px monospace;
+            width: 300px;
         `;
         overlay.innerHTML = `
-          <canvas id="wave" width="280" height="80"></canvas>
-          <canvas id="attack" width="280" height="50"></canvas>
-          <div>RMS : <span id="hfVal"></span></div>
-          <div>Attack thresh: <span id="attackThreshDisplay"></span></div>
+            <canvas id="wave" width="280" height="80"></canvas>
+            <canvas id="attack" width="280" height="50"></canvas>
+            <canvas id="hf" width="280" height="20"></canvas>
+            <canvas id="claps" width="280" height="24"></canvas>
+
+            <div>RMS: <span id="rmsVal"></span></div>
+            <div>RMS thresh: <span id="rmsThreshVal"></span></div>
+            <div>Attack: <span id="attackVal"></span></div>
+            <div>Attack thresh: <span id="attackThreshVal"></span></div>
+            <div>HF: <span id="hfVal"></span></div>
+            <div>HF thresh: <span id="hfThreshVal"></span></div>
         `;
 
+        //TODO: combine with doubleClapIndicator
         document.body.appendChild(overlay);
+        //doubleClapIndicator.appendChild(overlay);
 
         waveCtx = wave.getContext('2d');
         attackCtx = attack.getContext('2d');
+        hfCtx = hf.getContext('2d');
+        clapCtx = claps.getContext('2d');
     }
 
     //****************************************************************** */
@@ -2801,6 +2814,7 @@ async function listenForDoubleClap() {
     //const MIN_ATTACK_THRESHOLD = 0.022;
     const BASE_ATTACK_THRESHOLD = 0.035;
     const MIN_ATTACK_THRESHOLD = 0.028;
+    const HF_THRESHOLD = 1000;
     let noiseFloor = 0.003;
 
     function loop() {
@@ -2810,8 +2824,8 @@ async function listenForDoubleClap() {
             ALPHA = 0.01;
             MULT = 3.2;
             ATT = 0.025; //TODO: adjust clamp
-            HF_MIN = 1500;
-            HF_MAX = 6000;
+            HF_MIN = 2000;
+            HF_MAX = 4000;
         } else {
             //make harder to detect claps to avoid false positives while users are watching the game
             //TODO: these values are final?
@@ -2821,8 +2835,8 @@ async function listenForDoubleClap() {
             //HF_MIN = 2000;
             //HF_MAX = 4000;
             ATT = 0.025; //TODO: adjust clamp
-            HF_MIN = 1500;
-            HF_MAX = 6000;
+            HF_MIN = 2000;
+            HF_MAX = 4000;
         }
 
         analyser.getFloatTimeDomainData(tData);
@@ -2875,64 +2889,101 @@ async function listenForDoubleClap() {
                 //h.textContent = hf.toFixed(0);
 
                 onClap(now);
+
+                if (isDebugMode) {
+                    clapTimeline.push({ time: now });
+                }
             }
         }
 
         //****************************debug********************************** */
 
         if (isDebugMode) {
-            // Store history
             rmsHistory.push(rms);
             attackHistory.push(attack);
-
             if (rmsHistory.length > HISTORY) rmsHistory.shift();
             if (attackHistory.length > HISTORY) attackHistory.shift();
 
-            // Draw RMS waveform
+            /* === RMS GRAPH === */
             waveCtx.clearRect(0, 0, 280, 80);
+
             waveCtx.strokeStyle = '#0f0';
             waveCtx.beginPath();
-
             rmsHistory.forEach((v, i) => {
                 const x = (i / HISTORY) * 280;
                 const y = 80 - Math.min(v / (noise * MULT), 2) * 40;
-                if (i === 0) waveCtx.moveTo(x, y);
-                else waveCtx.lineTo(x, y);
+                i ? waveCtx.lineTo(x, y) : waveCtx.moveTo(x, y);
             });
             waveCtx.stroke();
 
-            // Noise floor
             waveCtx.strokeStyle = '#ff0';
-            const noiseY = 80 - (noise / (noise * MULT)) * 40;
+            const noiseY = 80 - Math.min(noise / (noise * MULT), 2) * 40;
             waveCtx.beginPath();
             waveCtx.moveTo(0, noiseY);
             waveCtx.lineTo(280, noiseY);
             waveCtx.stroke();
 
-            // Threshold
             waveCtx.strokeStyle = '#f00';
-            const threshY = 80 - 40;
             waveCtx.beginPath();
-            waveCtx.moveTo(0, threshY);
-            waveCtx.lineTo(280, threshY);
+            waveCtx.moveTo(0, 80 - 40);
+            waveCtx.lineTo(280, 80 - 40);
             waveCtx.stroke();
 
-            // Attack graph
+            /* === ATTACK GRAPH === */
             attackCtx.clearRect(0, 0, 280, 50);
+
             attackCtx.strokeStyle = '#0ff';
             attackCtx.beginPath();
-
             attackHistory.forEach((v, i) => {
                 const x = (i / HISTORY) * 280;
-                const y = 50 - Math.min(v / ATT, 2) * 25;
-                if (i === 0) attackCtx.moveTo(x, y);
-                else attackCtx.lineTo(x, y);
+                const y = 50 - Math.min(v / attackThreshold, 2) * 25;
+                i ? attackCtx.lineTo(x, y) : attackCtx.moveTo(x, y);
             });
             attackCtx.stroke();
 
-            // Text
-            hfVal.textContent = rms.toFixed(4);
-            attackThreshDisplay.textContent = attackThreshold.toFixed(5);
+            attackCtx.strokeStyle = '#f00';
+            attackCtx.beginPath();
+            attackCtx.moveTo(0, 50 - 25);
+            attackCtx.lineTo(280, 50 - 25);
+            attackCtx.stroke();
+
+            /* === HF BAR === */
+            hfCtx.clearRect(0, 0, 280, 20);
+
+            const hfNorm = Math.min(hf / (HF_THRESHOLD * 2), 1);
+            hfCtx.fillStyle = hf > HF_THRESHOLD ? '#0f0' : '#f00';
+            hfCtx.fillRect(0, 0, hfNorm * 280, 20);
+
+            hfCtx.strokeStyle = '#fff';
+            const hfX = (HF_THRESHOLD / (HF_THRESHOLD * 2)) * 280;
+            hfCtx.beginPath();
+            hfCtx.moveTo(hfX, 0);
+            hfCtx.lineTo(hfX, 20);
+            hfCtx.stroke();
+
+            /* === CLAP TIMELINE === */
+            clapCtx.clearRect(0, 0, 280, 24);
+            clapCtx.font = '16px sans-serif';
+            clapCtx.textBaseline = 'middle';
+
+            for (let i = clapTimeline.length - 1; i >= 0; i--) {
+                const age = now - clapTimeline[i].time;
+                if (age > CLAP_HISTORY_MS) {
+                    clapTimeline.splice(i, 1);
+                    continue;
+                }
+
+                const x = 280 - (age / CLAP_HISTORY_MS) * 280;
+                clapCtx.fillText('\uD83D\uDC4F', x - 8, 12);
+            }
+
+            /* === TEXT === */
+            rmsVal.textContent = rms.toFixed(3);
+            rmsThreshVal.textContent = (noise * MULT).toFixed(3);
+            attackVal.textContent = Math.abs(attack).toFixed(3);
+            attackThreshVal.textContent = attackThreshold.toFixed(3);
+            hfVal.textContent = hf.toFixed(0);
+            hfThreshVal.textContent = HF_THRESHOLD;
         }
 
         //************************************************************ */
