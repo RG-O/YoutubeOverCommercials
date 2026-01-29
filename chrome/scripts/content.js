@@ -2697,7 +2697,7 @@ function stopCommercialTimer() {
 ////const HF_MIN = 2000, HF_MAX = 6000;
 //const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
 //const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 190, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 210, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 //var noise = 0, last = 0, claps = [], lastTrig = 0;
 var noise = 0, last = 0, lastTrig = 0;
@@ -2767,11 +2767,11 @@ async function listenForDoubleClap() {
         overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed;
-            top: 20px;
-            left: 10px;
+            bottom: 5px;
+            left: 5px;
             z-index: 2147483647;
-            background: rgba(0,0,0,0.85);
-            padding: 8px;
+            background: rgba(0,0,0,0.4);
+            padding: 2px;
             border-radius: 6px;
             color: #0f0;
             font: 11px monospace;
@@ -2782,14 +2782,14 @@ async function listenForDoubleClap() {
             <canvas id="attack" width="280" height="50"></canvas>
             <canvas id="hf" width="280" height="50"></canvas>
             <canvas id="claps" width="280" height="24"></canvas>
-
-            <div>RMS: <span id="rmsVal"></span></div>
-            <div>RMS thresh: <span id="rmsThreshVal"></span></div>
-            <div>Attack: <span id="attackVal"></span></div>
-            <div>Attack thresh: <span id="attackThreshVal"></span></div>
-            <div>HF: <span id="hfVal"></span></div>
-            <div>HF thresh: <span id="hfThreshVal"></span></div>
         `;
+
+        //<div>RMS: <span id="rmsVal"></span></div>
+        //<div>RMS thresh: <span id="rmsThreshVal"></span></div>
+        //<div>Attack: <span id="attackVal"></span></div>
+        //<div>Attack thresh: <span id="attackThreshVal"></span></div>
+        //<div>HF: <span id="hfVal"></span></div>
+        //<div>HF thresh: <span id="hfThreshVal"></span></div>
 
         //TODO: combine with doubleClapIndicator
         document.body.appendChild(overlay);
@@ -2830,10 +2830,10 @@ async function listenForDoubleClap() {
             ALPHA = 0.01;
             MULT = 3.2;
             ATT = 0.025; //TODO: adjust clamp
-            HF_MIN = 5500;
-            //HF_MIN = 6000;
-            HF_MAX = 10000;
-            //HF_MAX = 8000;
+            //HF_MIN = 5500;
+            HF_MIN = 7000;
+            //HF_MAX = 10000;
+            HF_MAX = 8000;
         } else {
             //make harder to detect claps to avoid false positives while users are watching the game
             //TODO: these values are final?
@@ -2843,12 +2843,12 @@ async function listenForDoubleClap() {
             //HF_MIN = 2000;
             //HF_MAX = 4000;
             ATT = 0.025; //TODO: adjust clamp
-            //HF_MIN = 7000; //1-26-26: this seems pretty good to not capture speech besides 's' noise, but that doesn't trigger attack. has delay issue tho
+            HF_MIN = 7000; //1-26-26: this seems pretty good to not capture speech besides 's' noise, but that doesn't trigger attack. has delay issue tho
             //HF_MIN = 6000;
-            HF_MIN = 5500;
-            //HF_MAX = 8500; //1-26-26: pretty good. has delay issue tho
+            //HF_MIN = 5500;
+            HF_MAX = 8000; //1-26-26: pretty good. has delay issue tho
             //HF_MAX = 8000;
-            HF_MAX = 10000;
+            //HF_MAX = 10000;
         }
 
         analyser.getFloatTimeDomainData(tData);
@@ -2998,12 +2998,12 @@ async function listenForDoubleClap() {
             }
 
             /* === TEXT === */
-            rmsVal.textContent = rms.toFixed(3);
-            rmsThreshVal.textContent = (noise * MULT).toFixed(3);
-            attackVal.textContent = Math.abs(attack).toFixed(3);
-            attackThreshVal.textContent = attackThreshold.toFixed(3);
-            hfVal.textContent = hf.toFixed(0);
-            hfThreshVal.textContent = HF_THRESHOLD;
+            //rmsVal.textContent = rms.toFixed(3);
+            //rmsThreshVal.textContent = (noise * MULT).toFixed(3);
+            //attackVal.textContent = Math.abs(attack).toFixed(3);
+            //attackThreshVal.textContent = attackThreshold.toFixed(3);
+            //hfVal.textContent = hf.toFixed(0);
+            //hfThreshVal.textContent = HF_THRESHOLD;
         }
 
         //************************************************************ */
