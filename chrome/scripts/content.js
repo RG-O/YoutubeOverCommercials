@@ -1660,7 +1660,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
             const delay = Math.max(0, 1000 - elapsed);
             //call no faster than once per second
             setTimeout(() => {
-                advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions)
+                advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
             }, delay);
 
         })
@@ -2697,7 +2697,7 @@ function stopCommercialTimer() {
 ////const HF_MIN = 2000, HF_MAX = 6000;
 //const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
 //const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 190, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 190, MAX = 430; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 //var noise = 0, last = 0, claps = [], lastTrig = 0;
 var noise = 0, last = 0, lastTrig = 0;
@@ -2742,7 +2742,8 @@ async function listenForDoubleClap() {
     const ctx = new AudioContext();
     const analyser = ctx.createAnalyser();
     const freq = ctx.createAnalyser();
-    analyser.fftSize = freq.fftSize = 2048;
+    analyser.fftSize = freq.fftSize = 2048; //best to keep this high to help us discriminate what isn't a clap - delay accounted for with attack hold
+    //analyser.fftSize = freq.fftSize = 1024;
 
     const src = ctx.createMediaStreamSource(stream);
     src.connect(analyser);
@@ -2815,19 +2816,24 @@ async function listenForDoubleClap() {
     //const MIN_ATTACK_THRESHOLD = 0.022;
     //const BASE_ATTACK_THRESHOLD = 0.035;
     //const MIN_ATTACK_THRESHOLD = 0.028;
-    const BASE_ATTACK_THRESHOLD = 0.032;
-    const MIN_ATTACK_THRESHOLD = 0.026;
+    //const BASE_ATTACK_THRESHOLD = 0.032;
+    const BASE_ATTACK_THRESHOLD = 0.031;
+    //const MIN_ATTACK_THRESHOLD = 0.026;
+    const MIN_ATTACK_THRESHOLD = 0.025;
     //const HF_THRESHOLD = 1000; //og
     //const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
-    const HF_THRESHOLD = 2000;
+    //const HF_THRESHOLD = 1750;
+    const HF_THRESHOLD = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
     //const HF_THRESHOLD = 800;
     //const HF_THRESHOLD = 600;
     let noiseFloor = 0.003;
-    const ATTACK_HOLD_FRAMES = 4;
+    const ATTACK_HOLD_FRAMES = 3;
     let attackFramesHeld = 0;
     let attackHit = false;
 
     function loop() {
+        const startTime = Date.now();
+
         if (isCommercialState) {
             //make is easier to detect claps to make it easier to get back to the game
             //TODO: understand these values more
@@ -3029,7 +3035,18 @@ async function listenForDoubleClap() {
 
         //************************************************************ */
 
-        requestAnimationFrame(loop);
+        //requestAnimationFrame(loop);
+
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, 16 - elapsed); //60Hz-ish
+        if (delay < 12) {
+            console.log("slow " + delay);
+        }
+        //console.log(delay);
+        //call no faster than once per second
+        setTimeout(() => {
+            loop();
+        }, delay);
     }
 
     loop();
