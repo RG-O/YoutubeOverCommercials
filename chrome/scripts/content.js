@@ -1853,7 +1853,7 @@ function setAudioLevelIndicator() {
         audioLevelIndicatorContainerLocationVertical = 'bottom';
     }
 
-    setOverlaySizeAndLocation(audioLevelIndicatorContainer, false, false, audioLevelIndicatorContainerLocationHorizontal, audioLevelIndicatorContainerLocationVertical, "0")
+    setOverlaySizeAndLocation(audioLevelIndicatorContainer, false, false, audioLevelIndicatorContainerLocationHorizontal, audioLevelIndicatorContainerLocationVertical, "0");
 
     let audioLevelIndicator = document.createElement('div');
     audioLevelIndicator.className = "ytoc-audio-level-indicator";
@@ -2707,6 +2707,9 @@ var confirmTimer;
 //const GUARD_AFTER = 1100;
 var lastClapDetectedAt = 0;
 
+var doubleClapIndicator;
+var doubleClapIndicatorContainer;
+
 //TODO: rename these variables
 //Double clap variables
 var ALPHA;
@@ -2715,8 +2718,19 @@ var ATT;
 var HF_MIN;
 var HF_MAX;
 
+//debug
+let clapDebugOverlay, waveCtx, attackCtx, hfCtx, clapCtx;
+const HISTORY = 120;
+const rmsHistory = [];
+const attackHistory = [];
+const hfHistory = [];
+const clapTimeline = [];
+const CLAP_HISTORY_MS = 2000;
+
 //TODO: split into 2 prep and listen functions?
 async function listenForDoubleClap() {
+    initiateClapIndicator();
+
     //TODO make this whole function no longer async and add .then() and .catch(), the catch should show a message to the user.
     const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -2726,18 +2740,6 @@ async function listenForDoubleClap() {
             autoGainControl: false,
         }
     });
-
-    //const overlay = document.createElement('div');
-    //overlay.style.cssText = 'position:fixed;top:10px;left:10px;z-index:999999;background:#000c;color:#0f0;padding:5px;font:10px monospace';
-    ////overlay.innerHTML = '<div>RMS:<span id=r></span></div><div>Noise:<span id=n></span></div><div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div id=clapIndicator></div>';
-    //overlay.innerHTML = '<div>Attack:<span id=a></span></div><div>HF:<span id=h></span></div><div>Status:<span id=clapIndicatorStatus></span></div><div id=clapIndicator></div>';
-    //document.body.appendChild(overlay);
-
-    //TODO: move to own function
-    doubleClapIndicator = document.createElement('div');
-    doubleClapIndicator.classList = 'double-clap-indicator';
-    doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F'; // microphone and two clapping hands
-    document.body.appendChild(doubleClapIndicator); //TODO: set real location
 
     const ctx = new AudioContext();
     const analyser = ctx.createAnalyser();
@@ -2752,57 +2754,7 @@ async function listenForDoubleClap() {
     const tData = new Float32Array(analyser.fftSize);
     const fData = new Uint8Array(freq.frequencyBinCount);
 
-    //************************debug*******************************
-
-    let overlay, waveCtx, attackCtx, hfCtx, clapCtx;
-
-    const HISTORY = 120;
-    const rmsHistory = [];
-    const attackHistory = [];
-    const hfHistory = [];
-
-    const clapTimeline = [];
-    const CLAP_HISTORY_MS = 2000;
-
-    if (isDebugMode) {
-        overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed;
-            bottom: 5px;
-            left: 5px;
-            z-index: 2147483647;
-            background: rgba(0,0,0,0.4);
-            padding: 2px;
-            border-radius: 6px;
-            color: #0f0;
-            font: 11px monospace;
-            width: 300px;
-        `;
-        overlay.innerHTML = `
-            <canvas id="wave" width="280" height="80"></canvas>
-            <canvas id="attack" width="280" height="50"></canvas>
-            <canvas id="hf" width="280" height="50"></canvas>
-            <canvas id="claps" width="280" height="24"></canvas>
-        `;
-
-        //<div>RMS: <span id="rmsVal"></span></div>
-        //<div>RMS thresh: <span id="rmsThreshVal"></span></div>
-        //<div>Attack: <span id="attackVal"></span></div>
-        //<div>Attack thresh: <span id="attackThreshVal"></span></div>
-        //<div>HF: <span id="hfVal"></span></div>
-        //<div>HF thresh: <span id="hfThreshVal"></span></div>
-
-        //TODO: combine with doubleClapIndicator
-        document.body.appendChild(overlay);
-        //doubleClapIndicator.appendChild(overlay);
-
-        waveCtx = wave.getContext('2d');
-        attackCtx = attack.getContext('2d');
-        hfCtx = hf.getContext('2d');
-        clapCtx = claps.getContext('2d');
-    }
-
-    //****************************************************************** */
+    
 
     //TODO: move function and variable declares out of a function
     //555
@@ -3236,4 +3188,91 @@ function onClap(now) {
             break;
         }
     }
+}
+
+
+function initiateClapIndicator() {
+    //TODO: add check to make sure user is still in fullscreen mode
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    //TODO: move to own function
+    doubleClapIndicatorContainer = document.createElement('div');
+    doubleClapIndicatorContainer.classList = 'double-clap-indicator-container';
+
+    let otherOverlayLocations = [
+        { horizontal: overlayVideoLocationHorizontal, vertical: overlayVideoLocationVertical },
+    ];
+    if (isPiPMode && isLiveOverlayVideo) {
+        otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
+    }
+    const doubleClapIndicatorContainerLocation = getFreeCorner(otherOverlayLocations);
+
+    setOverlaySizeAndLocation(doubleClapIndicatorContainer, false, false, doubleClapIndicatorContainerLocation.horizontal, doubleClapIndicatorContainerLocation.vertical, "10px");
+
+    doubleClapIndicator = document.createElement('div');
+    doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F'; // microphone and two clapping hands
+    doubleClapIndicatorContainer.appendChild(doubleClapIndicator);
+
+    if (isDebugMode) {
+        clapDebugOverlay = document.createElement('div');
+        clapDebugOverlay.classList = 'double-clap-debug-overlay';
+        
+        waveCtx = createCanvas('wave', 280, 80, clapDebugOverlay);
+        attackCtx = createCanvas('attack', 280, 50, clapDebugOverlay);
+        hfCtx = createCanvas('hf', 280, 50, clapDebugOverlay);
+        clapCtx = createCanvas('claps', 280, 24, clapDebugOverlay);
+
+        //debug-high
+        //<div>RMS: <span id="rmsVal"></span></div>
+        //<div>RMS thresh: <span id="rmsThreshVal"></span></div>
+        //<div>Attack: <span id="attackVal"></span></div>
+        //<div>Attack thresh: <span id="attackThreshVal"></span></div>
+        //<div>HF: <span id="hfVal"></span></div>
+        //<div>HF thresh: <span id="hfThreshVal"></span></div>
+
+        if (doubleClapIndicatorContainerLocation.horizontal === 'right') {
+            doubleClapIndicatorContainer.style.textAlign = 'right';
+        }
+
+        if (doubleClapIndicatorContainerLocation.vertical === 'bottom') {
+            doubleClapIndicatorContainer.insertBefore(clapDebugOverlay, doubleClapIndicator);
+        } else {
+            doubleClapIndicatorContainer.appendChild(clapDebugOverlay);
+        }
+    }
+
+    insertLocation.insertBefore(doubleClapIndicatorContainer, null);
+}
+
+
+function getFreeCorner(elementsLocations) {
+    const cornersInPriorityOrder = [
+        { horizontal: 'left', vertical: 'top' },
+        { horizontal: 'left', vertical: 'bottom' },
+        { horizontal: 'right', vertical: 'top' },
+        { horizontal: 'right', vertical: 'bottom' },
+    ];
+
+    //Filter out corners that overlap with any element
+    const availableCorners = cornersInPriorityOrder.filter(corner => {
+        return !elementsLocations.some(el =>
+            el.horizontal === corner.horizontal && el.vertical === corner.vertical
+        );
+    });
+
+    //Return the first available corner, or fallback to top-left
+    return availableCorners[0] || { horizontal: 'left', vertical: 'top' };
+}
+
+
+function createCanvas(id, width, height, parent) {
+    const canvas = document.createElement('canvas');
+    canvas.id = id;
+    canvas.width = width;
+    canvas.height = height;
+    parent.appendChild(canvas);
+    return canvas.getContext('2d'); // return the context directly
 }
