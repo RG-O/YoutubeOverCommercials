@@ -2817,11 +2817,14 @@ async function listenForDoubleClap() {
     //const MIN_ATTACK_THRESHOLD = 0.028;
     const BASE_ATTACK_THRESHOLD = 0.032;
     const MIN_ATTACK_THRESHOLD = 0.026;
-    const HF_THRESHOLD = 1000; //og
-    //const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
+    //const HF_THRESHOLD = 1000; //og
+    const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
     //const HF_THRESHOLD = 800;
     //const HF_THRESHOLD = 600;
     let noiseFloor = 0.003;
+    const ATTACK_HOLD_FRAMES = 4;
+    let attackFramesHeld = 0;
+    let attackHit = false;
 
     function loop() {
         if (isCommercialState) {
@@ -2870,6 +2873,14 @@ async function listenForDoubleClap() {
             BASE_ATTACK_THRESHOLD
         ); //555
 
+        //increasing window that attack is eligible because it sometimes takes a little for HF to hit
+        if (attack > attackThreshold) {
+            attackFramesHeld = ATTACK_HOLD_FRAMES;
+        } else if (attackFramesHeld > 0) {
+            attackFramesHeld--;
+        }
+        attackHit = attackFramesHeld > 0;
+
         const ny = ctx.sampleRate / 2;
         const b0 = Math.floor(HF_MIN / ny * fData.length);
         const b1 = Math.floor(HF_MAX / ny * fData.length);
@@ -2878,7 +2889,8 @@ async function listenForDoubleClap() {
 
         //TODO: lower attack or other threshold just for second clap?
         //const clap = rms > noise * MULT && attack > ATT && hf > 1000; //og 555
-        const clap = rms > noise * MULT && attack > attackThreshold && hf > HF_THRESHOLD; //555
+        //const clap = rms > noise * MULT && attack > attackThreshold && hf > HF_THRESHOLD; //555
+        const clap = rms > noise * MULT && attackHit && hf > HF_THRESHOLD;
 
         //r.textContent = rms.toFixed(4);
         //n.textContent = noise.toFixed(4);
@@ -2893,10 +2905,12 @@ async function listenForDoubleClap() {
             //trying not to count the same clap twice //TODO: add check to clap boolean instead?
             console.log('time between unconfirmed claps = ' + (now - lastClapDetectedAt));
             if (now - lastClapDetectedAt > 40) {
+                
                 //console.log('confirmed clap!');
                 //console.log('attack = ' + attack);
                 lastClapDetectedAt = now;
 
+                attackFramesHeld = 0;
                 //a.textContent = attack.toFixed(3);
                 //h.textContent = hf.toFixed(0);
 
