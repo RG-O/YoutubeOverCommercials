@@ -2697,7 +2697,7 @@ function stopCommercialTimer() {
 ////const HF_MIN = 2000, HF_MAX = 6000;
 //const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
 //const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 210, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
+const MIN = 190, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
 var isDoubleClapMode = true;
 //var noise = 0, last = 0, claps = [], lastTrig = 0;
 var noise = 0, last = 0, lastTrig = 0;
@@ -2818,7 +2818,8 @@ async function listenForDoubleClap() {
     const BASE_ATTACK_THRESHOLD = 0.032;
     const MIN_ATTACK_THRESHOLD = 0.026;
     //const HF_THRESHOLD = 1000; //og
-    const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
+    //const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
+    const HF_THRESHOLD = 2000;
     //const HF_THRESHOLD = 800;
     //const HF_THRESHOLD = 600;
     let noiseFloor = 0.003;
@@ -2901,6 +2902,11 @@ async function listenForDoubleClap() {
         const now = performance.now();
 
         if (clap) {
+
+            console.log(attackFramesHeld);
+
+            attackFramesHeld = 0;
+
             //console.log('c?');
             //trying not to count the same clap twice //TODO: add check to clap boolean instead?
             console.log('time between unconfirmed claps = ' + (now - lastClapDetectedAt));
@@ -2910,7 +2916,8 @@ async function listenForDoubleClap() {
                 //console.log('attack = ' + attack);
                 lastClapDetectedAt = now;
 
-                attackFramesHeld = 0;
+                console.log(hf);
+                
                 //a.textContent = attack.toFixed(3);
                 //h.textContent = hf.toFixed(0);
 
