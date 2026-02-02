@@ -279,7 +279,7 @@ function initialRun() {
     if (commercialDetectionMode.indexOf('auto') < 0) {
 
         if (isDoubleClapMode) {
-            listenForDoubleClap();
+            prepFoClapMonitor();
         }
 
         if (overlayVideoType == 'spotify') {
@@ -1058,7 +1058,7 @@ function captureOriginalPixelColor(selectedPixel) {
         if (isDoubleClapMode) {
             //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
             setTimeout(() => {
-                listenForDoubleClap();
+                prepFoClapMonitor();
             }, 3000);
         }
 
@@ -1488,7 +1488,7 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
     if (isDoubleClapMode) {
         //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
         setTimeout(() => {
-            listenForDoubleClap();
+            prepFoClapMonitor();
         }, 3000);
     }
 }
@@ -1817,7 +1817,7 @@ function prepForAudioMonitor() {
     if (isDoubleClapMode) {
         //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
         setTimeout(() => {
-            listenForDoubleClap();
+            prepFoClapMonitor();
         }, 3000);
     }
 
@@ -2691,418 +2691,330 @@ function stopCommercialTimer() {
 
 //TODO: move these variables to the top
 //Double clap variables
-////const ALPHA = 0.01, MULT = 3.2, ATT = 0.14;
-//const ALPHA = 0.01, MULT = 3.2, ATT = 0.03;
-//const HF_MIN = 2000, HF_MAX = 4000;
-////const HF_MIN = 2000, HF_MAX = 6000;
-//const MIN = 120, MAX = 420; //note: do not change these per commercial state so users can get the pacing down
-//const MIN = 140, MAX = 440; //note: do not change these per commercial state so users can get the pacing down
-const MIN = 190, MAX = 430; //note: do not change these per commercial state so users can get the pacing down
-var isDoubleClapMode = true;
-//var noise = 0, last = 0, claps = [], lastTrig = 0;
-var noise = 0, last = 0, lastTrig = 0;
+var isDoubleClapMode = true; //TODO: make user preference
+var microphoneContext;
+var microphoneAnalyser;
+var microphoneAnalyserFrequency;
+var microphoneMediaStreamSource;
+var tData;
+var fData;
+var micRMS;
+var micNoise = 0;
+var lastRMS = 0;
+var rmsThreshold;
+var micAttack;
+var attackThreshold;
+const SECOND_CLAP_TIME_WINDOW_MIN = 190;
+const SECOND_CLAP_TIME_WINDOW_MAX = 430;
 var firstClapTime;
 var secondClapTime;
-var confirmTimer;
-//const GUARD_AFTER = 1100;
 var lastClapDetectedAt = 0;
-
 var doubleClapIndicator;
 var doubleClapIndicatorContainer;
-
-//TODO: rename these variables
-//Double clap variables
-var ALPHA;
-var MULT;
-var ATT;
-var HF_MIN;
-var HF_MAX;
-
-//debug
-let clapDebugOverlay, waveCtx, attackCtx, hfCtx, clapCtx;
+const QUIET_NOISE_FLOOR = 0.0035; //volume when attack threshold starts to lower??
+const BASE_ATTACK_THRESHOLD = 0.031;
+const MIN_ATTACK_THRESHOLD = 0.025;
+const HF_THRESHOLD = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
+var micNoiseFloor = 0.003;
+const ATTACK_HOLD_FRAMES = 3;
+var attackFramesHeld = 0;
+const ALPHA = 0.01;
+const NOISE_MULTIPLIER = 3.2;
+const HF_MIN = 7000;
+const HF_MAX = 8000;
+var hf;
+var isClap;
+var now;
+var clapDebugOverlay;
+var waveCtx;
+var attackCtx;
+var hfCtx;
+var clapCtx;
 const HISTORY = 120;
 const rmsHistory = [];
 const attackHistory = [];
 const hfHistory = [];
 const clapTimeline = [];
 const CLAP_HISTORY_MS = 2000;
+var clapIndicatorResetTimer = null;
+const ClapState = {
+    IDLE: 'IDLE',
+    ONE_CLAP: 'ONE_CLAP',
+    ARMED: 'ARMED'
+};
+var clapState = ClapState.IDLE;
+var firstClapTime = null;
+var confirmDoubleClapSuccessTimer = null;
 
-//TODO: split into 2 prep and listen functions?
-async function listenForDoubleClap() {
+
+function prepFoClapMonitor() {
     initiateClapIndicator();
 
-    //TODO make this whole function no longer async and add .then() and .catch(), the catch should show a message to the user.
-    const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-            channelCount: 2,
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-        }
-    });
-
-    const ctx = new AudioContext();
-    const analyser = ctx.createAnalyser();
-    const freq = ctx.createAnalyser();
-    analyser.fftSize = freq.fftSize = 2048; //best to keep this high to help us discriminate what isn't a clap - delay accounted for with attack hold
-    //analyser.fftSize = freq.fftSize = 1024;
-
-    const src = ctx.createMediaStreamSource(stream);
-    src.connect(analyser);
-    src.connect(freq);
-
-    const tData = new Float32Array(analyser.fftSize);
-    const fData = new Uint8Array(freq.frequencyBinCount);
-
-    
-
-    //TODO: move function and variable declares out of a function
-    //555
-    function clamp(v, min, max) {
-        return Math.max(min, Math.min(max, v));
-    }
-    //555
-    //const QUIET_NOISE_FLOOR = 0.003;
-    const QUIET_NOISE_FLOOR = 0.0035; //volume when attach threshold starts to lower??
-    //const BASE_ATTACK_THRESHOLD = 0.03;
-    //const MIN_ATTACK_THRESHOLD = 0.022;
-    //const BASE_ATTACK_THRESHOLD = 0.035;
-    //const MIN_ATTACK_THRESHOLD = 0.028;
-    //const BASE_ATTACK_THRESHOLD = 0.032;
-    const BASE_ATTACK_THRESHOLD = 0.031;
-    //const MIN_ATTACK_THRESHOLD = 0.026;
-    const MIN_ATTACK_THRESHOLD = 0.025;
-    //const HF_THRESHOLD = 1000; //og
-    //const HF_THRESHOLD = 1250; //maybe this is a bad idea since it doesn't end up lining up with the attack spike
-    //const HF_THRESHOLD = 1750;
-    const HF_THRESHOLD = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
-    //const HF_THRESHOLD = 800;
-    //const HF_THRESHOLD = 600;
-    let noiseFloor = 0.003;
-    const ATTACK_HOLD_FRAMES = 3;
-    let attackFramesHeld = 0;
-    let attackHit = false;
-
-    function loop() {
-        const startTime = Date.now();
-
-        if (isCommercialState) {
-            //make is easier to detect claps to make it easier to get back to the game
-            //TODO: understand these values more
-            ALPHA = 0.01;
-            MULT = 3.2;
-            ATT = 0.025; //TODO: adjust clamp
-            //HF_MIN = 5500;
-            HF_MIN = 7000;
-            //HF_MAX = 10000;
-            HF_MAX = 8000;
-        } else {
-            //make harder to detect claps to avoid false positives while users are watching the game
-            //TODO: these values are final?
-            ALPHA = 0.01;
-            MULT = 3.2;
-            //ATT = 0.03;
-            //HF_MIN = 2000;
-            //HF_MAX = 4000;
-            ATT = 0.025; //TODO: adjust clamp
-            HF_MIN = 7000; //1-26-26: this seems pretty good to not capture speech besides 's' noise, but that doesn't trigger attack. has delay issue tho
-            //HF_MIN = 6000;
-            //HF_MIN = 5500;
-            HF_MAX = 8000; //1-26-26: pretty good. has delay issue tho
-            //HF_MAX = 8000;
-            //HF_MAX = 10000;
-        }
-
-        analyser.getFloatTimeDomainData(tData);
-        freq.getByteFrequencyData(fData);
-
-        let sum = 0;
-        for (let v of tData) sum += v * v;
-        const rms = Math.sqrt(sum / tData.length);
-
-        noise = noise ? noise * (1 - ALPHA) + rms * ALPHA : rms;
-        const attack = rms - last;
-        last = rms;
-
-        noiseFloor = noiseFloor * 0.99 + rms * 0.01;
-        const noiseRatio = noiseFloor / QUIET_NOISE_FLOOR; //555
-        const attackThreshold = clamp(
-            BASE_ATTACK_THRESHOLD / Math.sqrt(noiseRatio),
-            MIN_ATTACK_THRESHOLD,
-            BASE_ATTACK_THRESHOLD
-        ); //555
-
-        //increasing window that attack is eligible because it sometimes takes a little for HF to hit
-        if (attack > attackThreshold) {
-            attackFramesHeld = ATTACK_HOLD_FRAMES;
-        } else if (attackFramesHeld > 0) {
-            attackFramesHeld--;
-        }
-        attackHit = attackFramesHeld > 0;
-
-        const ny = ctx.sampleRate / 2;
-        const b0 = Math.floor(HF_MIN / ny * fData.length);
-        const b1 = Math.floor(HF_MAX / ny * fData.length);
-        let hf = 0;
-        for (let i = b0; i <= b1; i++) hf += fData[i];
-
-        //TODO: lower attack or other threshold just for second clap?
-        //const clap = rms > noise * MULT && attack > ATT && hf > 1000; //og 555
-        //const clap = rms > noise * MULT && attack > attackThreshold && hf > HF_THRESHOLD; //555
-        const clap = rms > noise * MULT && attackHit && hf > HF_THRESHOLD;
-
-        //r.textContent = rms.toFixed(4);
-        //n.textContent = noise.toFixed(4);
-        //a.textContent = attack.toFixed(4);
-        //h.textContent = hf.toFixed(0);
-        //clapIndicator.textContent = clap ? 'clap' : ' ';
-
-        const now = performance.now();
-
-        if (clap) {
-
-            console.log(attackFramesHeld);
-
-            attackFramesHeld = 0;
-
-            //console.log('c?');
-            //trying not to count the same clap twice //TODO: add check to clap boolean instead?
-            console.log('time between unconfirmed claps = ' + (now - lastClapDetectedAt));
-            if (now - lastClapDetectedAt > 40) {
-                
-                //console.log('confirmed clap!');
-                //console.log('attack = ' + attack);
-                lastClapDetectedAt = now;
-
-                console.log(hf);
-                
-                //a.textContent = attack.toFixed(3);
-                //h.textContent = hf.toFixed(0);
-
-                onClap(now);
-
-                if (isDebugMode) {
-                    clapTimeline.push({ time: now });
-                }
+    //TODO: set to isFirfox
+    if (true === true) {
+        navigator.mediaDevices.getUserMedia({
+            audio: {
+                channelCount: 2,
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
             }
-        }
+        })
+            .then((stream) => {
+                //microphone permission granted
 
-        //****************************debug********************************** */
+                microphoneContext = new AudioContext();
+                microphoneAnalyser = microphoneContext.createAnalyser();
+                microphoneAnalyserFrequency = microphoneContext.createAnalyser();
+                microphoneAnalyser.fftSize = microphoneAnalyserFrequency.fftSize = 2048; //best to keep this high to help us discriminate what isn't a clap - delay accounted for with attack hold
+                //microphoneAnalyser.fftSize = microphoneAnalyserFrequency.fftSize = 1024;
 
-        if (isDebugMode) {
-            /* ===== HISTORY ===== */
-            rmsHistory.push(rms);
-            attackHistory.push(attack);
-            hfHistory.push(hf);
-            if (rmsHistory.length > HISTORY) rmsHistory.shift();
-            if (attackHistory.length > HISTORY) attackHistory.shift();
-            if (hfHistory.length > HISTORY) hfHistory.shift();
+                microphoneMediaStreamSource = microphoneContext.createMediaStreamSource(stream);
+                microphoneMediaStreamSource.connect(microphoneAnalyser);
+                microphoneMediaStreamSource.connect(microphoneAnalyserFrequency);
 
-            /* === RMS GRAPH === */
-            waveCtx.clearRect(0, 0, 280, 80);
+                tData = new Float32Array(microphoneAnalyser.fftSize);
+                fData = new Uint8Array(microphoneAnalyserFrequency.frequencyBinCount);
 
-            waveCtx.strokeStyle = '#0f0';
-            waveCtx.beginPath();
-            rmsHistory.forEach((v, i) => {
-                const x = (i / HISTORY) * 280;
-                const y = 80 - Math.min(v / (noise * MULT), 2) * 40;
-                i ? waveCtx.lineTo(x, y) : waveCtx.moveTo(x, y);
-            });
-            waveCtx.stroke();
-
-            waveCtx.strokeStyle = '#ff0';
-            const noiseY = 80 - Math.min(noise / (noise * MULT), 2) * 40;
-            waveCtx.beginPath();
-            waveCtx.moveTo(0, noiseY);
-            waveCtx.lineTo(280, noiseY);
-            waveCtx.stroke();
-
-            waveCtx.strokeStyle = '#f00';
-            waveCtx.beginPath();
-            waveCtx.moveTo(0, 80 - 40);
-            waveCtx.lineTo(280, 80 - 40);
-            waveCtx.stroke();
-
-            /* === ATTACK GRAPH === */
-            attackCtx.clearRect(0, 0, 280, 50);
-
-            attackCtx.strokeStyle = '#0ff';
-            attackCtx.beginPath();
-            attackHistory.forEach((v, i) => {
-                const x = (i / HISTORY) * 280;
-                const y = 50 - Math.min(v / attackThreshold, 2) * 25;
-                i ? attackCtx.lineTo(x, y) : attackCtx.moveTo(x, y);
-            });
-            attackCtx.stroke();
-
-            attackCtx.strokeStyle = '#f00';
-            attackCtx.beginPath();
-            attackCtx.moveTo(0, 50 - 25);
-            attackCtx.lineTo(280, 50 - 25);
-            attackCtx.stroke();
-
-            /* === HF GRAPH === */
-            hfCtx.clearRect(0, 0, 280, 50);
-
-            hfCtx.strokeStyle = '#0f0';
-            hfCtx.beginPath();
-            hfHistory.forEach((v, i) => {
-                const x = (i / HISTORY) * 280;
-                const y = 50 - Math.min(v / HF_THRESHOLD, 2) * 25;
-                i ? hfCtx.lineTo(x, y) : hfCtx.moveTo(x, y);
-            });
-            hfCtx.stroke();
-
-            hfCtx.strokeStyle = '#f00';
-            const hfThreshY = 50 - 25;
-            hfCtx.beginPath();
-            hfCtx.moveTo(0, hfThreshY);
-            hfCtx.lineTo(280, hfThreshY);
-            hfCtx.stroke();
-
-            /* === CLAP TIMELINE === */
-            clapCtx.clearRect(0, 0, 280, 24);
-            clapCtx.font = '16px system-ui, Apple Color Emoji, Segoe UI Emoji';
-            clapCtx.textBaseline = 'middle';
-
-            for (let i = clapTimeline.length - 1; i >= 0; i--) {
-                const age = now - clapTimeline[i].time;
-                if (age > CLAP_HISTORY_MS) {
-                    clapTimeline.splice(i, 1);
-                    continue;
+                clapMonitor();
+            })
+            .catch((error) => {
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    //microphone permission denied
+                    doubleClapIndicator.textContent = '\uD83C\uDFA4 \u26A0 \u26A0'; // microphone and two warning triangles
+                    alert('Message from Live Commercial Blocker Extension: You must grant access to the microphone in order to use double clap detection. Close and reopen tab to try again.');
+                } else {
+                    console.error(error);
                 }
-
-                const x = 280 - (age / CLAP_HISTORY_MS) * 280;
-                clapCtx.fillText('\uD83D\uDC4F', x - 8, 12);
-            }
-
-            /* === TEXT === */
-            //rmsVal.textContent = rms.toFixed(3);
-            //rmsThreshVal.textContent = (noise * MULT).toFixed(3);
-            //attackVal.textContent = Math.abs(attack).toFixed(3);
-            //attackThreshVal.textContent = attackThreshold.toFixed(3);
-            //hfVal.textContent = hf.toFixed(0);
-            //hfThreshVal.textContent = HF_THRESHOLD;
-        }
-
-        //************************************************************ */
-
-        //requestAnimationFrame(loop);
-
-        const elapsed = Date.now() - startTime;
-        const delay = Math.max(0, 16 - elapsed); //60Hz-ish
-        if (delay < 12) {
-            console.log("slow " + delay);
-        }
-        //console.log(delay);
-        //call no faster than once per second
-        setTimeout(() => {
-            loop();
-        }, delay);
+            });
     }
-
-    loop();
 }
 
 
-/* ------------------------------------------------------------------
- * Indicator helpers (single helper + single timer)
- * ------------------------------------------------------------------ */
+function clapMonitor() {
+    const startTime = Date.now();
 
-var indicatorResetTimer = null;
+    microphoneAnalyser.getFloatTimeDomainData(tData);
+    microphoneAnalyserFrequency.getByteFrequencyData(fData);
 
-function setIndicator(text, resetAfterMs = null) {
-    if (indicatorResetTimer) {
-        clearTimeout(indicatorResetTimer);
-        indicatorResetTimer = null;
+    let sum = 0;
+    for (let v of tData) sum += v * v;
+    micRMS = Math.sqrt(sum / tData.length);
+
+    micNoise = micNoise ? micNoise * (1 - ALPHA) + micRMS * ALPHA : micRMS;
+    micAttack = micRMS - lastRMS;
+    lastRMS = micRMS;
+    rmsThreshold = micNoise * NOISE_MULTIPLIER;
+    let rmsHit = micRMS > rmsThreshold;
+
+    micNoiseFloor = micNoiseFloor * 0.99 + micRMS * 0.01;
+    const micNoiseRatio = micNoiseFloor / QUIET_NOISE_FLOOR;
+    attackThreshold = clamp(
+        BASE_ATTACK_THRESHOLD / Math.sqrt(micNoiseRatio),
+        MIN_ATTACK_THRESHOLD,
+        BASE_ATTACK_THRESHOLD
+    );
+
+    //increasing window that attack is eligible because it sometimes takes a little for HF to hit after clap
+    if (micAttack > attackThreshold) {
+        attackFramesHeld = ATTACK_HOLD_FRAMES;
+    } else if (attackFramesHeld > 0) {
+        attackFramesHeld--;
+    }
+    let attackHit = attackFramesHeld > 0;
+
+    const ny = microphoneContext.sampleRate / 2;
+    const b0 = Math.floor(HF_MIN / ny * fData.length);
+    const b1 = Math.floor(HF_MAX / ny * fData.length);
+    hf = 0;
+    for (let i = b0; i <= b1; i++) hf += fData[i];
+    let hfHit = hf > HF_THRESHOLD;
+
+    isClap = rmsHit && attackHit && hfHit;
+    now = performance.now();
+
+    if (isClap) {
+        if (isDebugMode) {
+            console.log("attackFramesHeld: " + attackFramesHeld.toFixed(3));
+            console.log("micRMS: " + micRMS.toFixed(3));
+            console.log("rmsThreshold: " + rmsThreshold.toFixed(3));
+            console.log("micAttack: " + micAttack.toFixed(3));
+            console.log("attackThreshold: " + attackThreshold.toFixed(3));
+            console.log("hf: " + hf);
+            console.log("HF_THRESHOLD: " + HF_THRESHOLD);
+        }
+
+        attackFramesHeld = 0;
+
+        if (now - lastClapDetectedAt > 40) {
+            lastClapDetectedAt = now;
+            onClap(now);
+            if (isDebugMode) clapTimeline.push({ time: now });
+        }
+    }
+
+    if (isDebugMode) updateClapDebugOverlay();
+
+    const elapsed = Date.now() - startTime;
+    const delay = Math.max(0, 16 - elapsed); //60Hz-ish
+    setTimeout(() => {
+        clapMonitor();
+    }, delay);
+}
+
+
+function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+}
+
+
+function updateClapDebugOverlay() {
+    rmsHistory.push(micRMS);
+    attackHistory.push(micAttack);
+    hfHistory.push(hf);
+    if (rmsHistory.length > HISTORY) rmsHistory.shift();
+    if (attackHistory.length > HISTORY) attackHistory.shift();
+    if (hfHistory.length > HISTORY) hfHistory.shift();
+
+    //rms graph
+    waveCtx.clearRect(0, 0, 280, 80);
+    waveCtx.strokeStyle = '#0f0';
+    waveCtx.beginPath();
+    rmsHistory.forEach((v, i) => {
+        const x = (i / HISTORY) * 280;
+        const y = 80 - Math.min(v / (rmsThreshold), 2) * 40;
+        i ? waveCtx.lineTo(x, y) : waveCtx.moveTo(x, y);
+    });
+    waveCtx.stroke();
+    waveCtx.strokeStyle = '#ff0';
+    const noiseY = 80 - Math.min(micNoise / rmsThreshold, 2) * 40;
+    waveCtx.beginPath();
+    waveCtx.moveTo(0, noiseY);
+    waveCtx.lineTo(280, noiseY);
+    waveCtx.stroke();
+    waveCtx.strokeStyle = '#f00';
+    waveCtx.beginPath();
+    waveCtx.moveTo(0, 80 - 40);
+    waveCtx.lineTo(280, 80 - 40);
+    waveCtx.stroke();
+
+    //attack graph
+    attackCtx.clearRect(0, 0, 280, 50);
+    attackCtx.strokeStyle = '#0ff';
+    attackCtx.beginPath();
+    attackHistory.forEach((v, i) => {
+        const x = (i / HISTORY) * 280;
+        const y = 50 - Math.min(v / attackThreshold, 2) * 25;
+        i ? attackCtx.lineTo(x, y) : attackCtx.moveTo(x, y);
+    });
+    attackCtx.stroke();
+    attackCtx.strokeStyle = '#f00';
+    attackCtx.beginPath();
+    attackCtx.moveTo(0, 50 - 25);
+    attackCtx.lineTo(280, 50 - 25);
+    attackCtx.stroke();
+
+    //HF graph
+    hfCtx.clearRect(0, 0, 280, 50);
+    hfCtx.strokeStyle = '#0f0';
+    hfCtx.beginPath();
+    hfHistory.forEach((v, i) => {
+        const x = (i / HISTORY) * 280;
+        const y = 50 - Math.min(v / HF_THRESHOLD, 2) * 25;
+        i ? hfCtx.lineTo(x, y) : hfCtx.moveTo(x, y);
+    });
+    hfCtx.stroke();
+    hfCtx.strokeStyle = '#f00';
+    const hfThreshY = 50 - 25;
+    hfCtx.beginPath();
+    hfCtx.moveTo(0, hfThreshY);
+    hfCtx.lineTo(280, hfThreshY);
+    hfCtx.stroke();
+
+    //clap timeline
+    clapCtx.clearRect(0, 0, 280, 24);
+    clapCtx.font = '16px system-ui, Apple Color Emoji, Segoe UI Emoji';
+    clapCtx.textBaseline = 'middle';
+    for (let i = clapTimeline.length - 1; i >= 0; i--) {
+        const age = now - clapTimeline[i].time;
+        if (age > CLAP_HISTORY_MS) {
+            clapTimeline.splice(i, 1);
+            continue;
+        }
+
+        const x = 280 - (age / CLAP_HISTORY_MS) * 280;
+        clapCtx.fillText('\uD83D\uDC4F', x - 8, 12);
+    }
+
+    //debug-high
+    //rmsVal.textContent = micRMS.toFixed(3);
+    //rmsThreshVal.textContent = (rmsThreshold).toFixed(3);
+    //attackVal.textContent = Math.abs(attack).toFixed(3);
+    //attackThreshVal.textContent = attackThreshold.toFixed(3);
+    //hfVal.textContent = hf.toFixed(0);
+    //hfThreshVal.textContent = HF_THRESHOLD;
+}
+
+
+function setClapIndicator(text, resetAfterMs = null) {
+    if (clapIndicatorResetTimer) {
+        clearTimeout(clapIndicatorResetTimer);
+        clapIndicatorResetTimer = null;
     }
 
     doubleClapIndicator.textContent = text;
 
     if (resetAfterMs !== null) {
-        indicatorResetTimer = setTimeout(resetClapsIndicator, resetAfterMs);
+        clapIndicatorResetTimer = setTimeout(resetClapsIndicator, resetAfterMs);
     }
 }
+
 
 function resetClapsIndicator() {
-    // microphone + clap + clap
-    doubleClapIndicator.textContent =
-        '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
+    //microphone
+    //clap
+    //clap
+    doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
 }
 
 
-/* ------------------------------------------------------------------
- * FSM state
- * ------------------------------------------------------------------ */
-
-const State = {
-    IDLE: 'IDLE',
-    ONE_CLAP: 'ONE_CLAP',
-    ARMED: 'ARMED'
-};
-
-var state = State.IDLE;
-var firstClapTime = null;
-var confirmTimer = null;
-
-
-/* ------------------------------------------------------------------
- * FSM helpers
- * ------------------------------------------------------------------ */
-
-function transitionTo(newState) {
-    //console.log(`FSM: ${state} -> ${newState}`);
-    state = newState;
-}
-
-function resetFSM() {
+function resetClaps() {
     firstClapTime = null;
 
-    if (confirmTimer) {
-        clearTimeout(confirmTimer);
-        confirmTimer = null;
+    if (confirmDoubleClapSuccessTimer) {
+        clearTimeout(confirmDoubleClapSuccessTimer);
+        confirmDoubleClapSuccessTimer = null;
     }
 
-    transitionTo(State.IDLE);
+    clapState = ClapState.IDLE;
 }
 
 
-/* ------------------------------------------------------------------
- * Clap handler (FSM-driven)
- * ------------------------------------------------------------------ */
-
 function onClap(now) {
-    //console.log(`CLAP @ ${now}, state=${state}`);
-
-    switch (state) {
-
-        /* ---------------- IDLE ---------------- */
-
-        case State.IDLE: {
+    switch (clapState) {
+        case ClapState.IDLE: {
             // first clap
             firstClapTime = now;
 
-            setIndicator(
+            setClapIndicator(
                 // microphone
                 // green square (first clap registered)
                 // clap
                 '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F',
-                MAX + 500
+                SECOND_CLAP_TIME_WINDOW_MAX + 500
             );
 
-            transitionTo(State.ONE_CLAP);
+            clapState = ClapState.ONE_CLAP;
             break;
         }
 
-        /* ---------------- ONE CLAP ---------------- */
+        case ClapState.ONE_CLAP: {
+            const clapGap = now - firstClapTime;
+            if (isDebugMode) console.log('Time between confirmed claps = ' + clapGap);
 
-        case State.ONE_CLAP: {
-            const delta = now - firstClapTime;
-            console.log('time between CONFIRMED claps = ' + delta);
-
-            if (delta < MIN) {
+            if (clapGap < SECOND_CLAP_TIME_WINDOW_MIN) {
                 // Second clap too fast -> clear claps
-                setIndicator(
+                setClapIndicator(
                     // microphone
                     // green square
                     // red X
@@ -3110,13 +3022,13 @@ function onClap(now) {
                     '\uD83C\uDFA4 \uD83D\uDFE9 \u274C \uD83D\uDC4F',
                     1000
                 );
-                resetFSM();
+                resetClaps();
                 break;
             }
 
-            if (delta > MAX && delta < MAX + 250) {
+            if (clapGap > SECOND_CLAP_TIME_WINDOW_MAX && clapGap < SECOND_CLAP_TIME_WINDOW_MAX + 250) {
                 // Narrow late miss -> clear claps
-                setIndicator(
+                setClapIndicator(
                     // microphone
                     // green square
                     // clap
@@ -3124,39 +3036,40 @@ function onClap(now) {
                     '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F \u274C',
                     1000
                 );
-                resetFSM();
+                resetClaps();
                 break;
             }
 
-            if (delta > MAX + 500) {
+            if (clapGap > SECOND_CLAP_TIME_WINDOW_MAX + 500) {
                 // Way too slow -> treat as first app
                 firstClapTime = now;
 
-                setIndicator(
+                setClapIndicator(
                     // microphone
                     // green square
                     // clap
                     '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F',
-                    MAX + 500
+                    SECOND_CLAP_TIME_WINDOW_MAX + 500
                 );
                 break;
             }
 
             // Valid second clap -> wait to make sure no third clap
-            setIndicator(
+            setClapIndicator(
                 // microphone
                 // green square
                 // green square
                 '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDFE9'
             );
 
+            //wait longer when it isn't commercial to avoid accidentally cutting away from the game and shorter during commercials to get back to the game sooner
             const guardAfter = isCommercialState ? 800 : 1500;
 
-            confirmTimer = setTimeout(() => {
+            confirmDoubleClapSuccessTimer = setTimeout(() => {
                 // No third clap -> success
                 manualCommercialModeToggle();
 
-                setIndicator(
+                setClapIndicator(
                     // microphone
                     // green check
                     // green check
@@ -3164,18 +3077,16 @@ function onClap(now) {
                     1000
                 );
 
-                resetFSM();
+                resetClaps();
             }, guardAfter);
 
-            transitionTo(State.ARMED);
+            clapState = ClapState.ARMED;
             break;
         }
 
-        /* ---------------- ARMED ---------------- */
-
-        case State.ARMED: {
+        case ClapState.ARMED: {
             // Third clap detected -> cancel and clear claps
-            setIndicator(
+            setClapIndicator(
                 // microphone
                 // red X
                 // red X
@@ -3184,7 +3095,7 @@ function onClap(now) {
                 1000
             );
 
-            resetFSM();
+            resetClaps();
             break;
         }
     }
