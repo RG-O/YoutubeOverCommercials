@@ -2705,7 +2705,7 @@ var rmsThreshold;
 var micAttack;
 var attackThreshold;
 const SECOND_CLAP_TIME_WINDOW_MIN = 190;
-const SECOND_CLAP_TIME_WINDOW_MAX = 430;
+const SECOND_CLAP_TIME_WINDOW_MAX = 440;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
@@ -2716,7 +2716,7 @@ const BASE_ATTACK_THRESHOLD = 0.031;
 const MIN_ATTACK_THRESHOLD = 0.025;
 const HF_THRESHOLD = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
 var micNoiseFloor = 0.003;
-const ATTACK_HOLD_FRAMES = 3;
+const ATTACK_HOLD_FRAMES = 2;
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
 const NOISE_MULTIPLIER = 3.2;
@@ -2900,7 +2900,12 @@ function updateClapDebugOverlay() {
 
     //attack graph
     attackCtx.clearRect(0, 0, 280, 50);
-    attackCtx.strokeStyle = '#0ff';
+    if (attackThreshold < BASE_ATTACK_THRESHOLD) {
+        attackCtx.strokeStyle = 'orange';
+        //todo: figure out why always here
+    } else {
+        attackCtx.strokeStyle = '#0ff';
+    }
     attackCtx.beginPath();
     attackHistory.forEach((v, i) => {
         const x = (i / HISTORY) * 280;
@@ -2947,12 +2952,12 @@ function updateClapDebugOverlay() {
     }
 
     //debug-high
-    //rmsVal.textContent = micRMS.toFixed(3);
-    //rmsThreshVal.textContent = (rmsThreshold).toFixed(3);
-    //attackVal.textContent = Math.abs(attack).toFixed(3);
-    //attackThreshVal.textContent = attackThreshold.toFixed(3);
-    //hfVal.textContent = hf.toFixed(0);
-    //hfThreshVal.textContent = HF_THRESHOLD;
+    rmsVal.textContent = micRMS.toFixed(3);
+    rmsThreshVal.textContent = (rmsThreshold).toFixed(3);
+    attackVal.textContent = Math.abs(attack).toFixed(3);
+    attackThreshVal.textContent = attackThreshold.toFixed(3);
+    hfVal.textContent = hf.toFixed(0);
+    hfThreshVal.textContent = HF_THRESHOLD;
 }
 
 
@@ -3136,13 +3141,8 @@ function initiateClapIndicator() {
         hfCtx = createCanvas('hf', 280, 50, clapDebugOverlay);
         clapCtx = createCanvas('claps', 280, 24, clapDebugOverlay);
 
-        //debug-high
-        //<div>RMS: <span id="rmsVal"></span></div>
-        //<div>RMS thresh: <span id="rmsThreshVal"></span></div>
-        //<div>Attack: <span id="attackVal"></span></div>
-        //<div>Attack thresh: <span id="attackThreshVal"></span></div>
-        //<div>HF: <span id="hfVal"></span></div>
-        //<div>HF thresh: <span id="hfThreshVal"></span></div>
+        
+        
 
         if (doubleClapIndicatorContainerLocation.horizontal === 'right') {
             doubleClapIndicatorContainer.style.textAlign = 'right';
@@ -3153,6 +3153,16 @@ function initiateClapIndicator() {
         } else {
             doubleClapIndicatorContainer.appendChild(clapDebugOverlay);
         }
+
+        //debug-high
+        doubleClapIndicatorContainer.innerHTML += `
+            <div style="line-height: 50px;">RMS: <span id="rmsVal"></span></div>
+            <div style="line-height: 50px;">RMS thresh: <span id="rmsThreshVal"></span></div>
+            <div style="line-height: 50px;">Attack: <span id="attackVal"></span></div>
+            <div style="line-height: 50px;">Attack thresh: <span id="attackThreshVal"></span></div>
+            <div style="line-height: 50px;">HF: <span id="hfVal"></span></div>
+            <div style="line-height: 50px;">HF thresh: <span id="hfThreshVal"></span></div>
+        `;
     }
 
     insertLocation.insertBefore(doubleClapIndicatorContainer, null);
