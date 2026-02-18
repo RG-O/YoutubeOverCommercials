@@ -2716,7 +2716,7 @@ const BASE_ATTACK_THRESHOLD = 0.031;
 const MIN_ATTACK_THRESHOLD = 0.025;
 const HF_THRESHOLD = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
 var micNoiseFloor = 0.003;
-const ATTACK_HOLD_FRAMES = 2;
+const ATTACK_HOLD_FRAMES = 3;
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
 const NOISE_MULTIPLIER = 3.2;
@@ -2730,7 +2730,7 @@ var waveCtx;
 var attackCtx;
 var hfCtx;
 var clapCtx;
-const HISTORY = 120;
+const CLAP_DEBUG_GRAPH_HISTORY = 120;
 const rmsHistory = [];
 const attackHistory = [];
 const hfHistory = [];
@@ -2782,7 +2782,7 @@ function prepFoClapMonitor() {
                 if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                     //microphone permission denied
                     doubleClapIndicator.textContent = '\uD83C\uDFA4 \u26A0 \u26A0'; // microphone and two warning triangles
-                    alert('Message from Live Commercial Blocker Extension: You must grant access to the microphone in order to use double clap detection. Close and reopen tab to try again.');
+                    alert('Message from Live Commercial Blocker Extension: You must grant access to the microphone in order to use double clap detection. Go into site settings, grant access to microphone, refresh page, and then initiate extension again.');
                 } else {
                     console.error(error);
                 }
@@ -2805,7 +2805,7 @@ function clapMonitor() {
     micAttack = micRMS - lastRMS;
     lastRMS = micRMS;
     rmsThreshold = micNoise * NOISE_MULTIPLIER;
-    let rmsHit = micRMS > rmsThreshold;
+    let isRMSHit = micRMS > rmsThreshold;
 
     micNoiseFloor = micNoiseFloor * 0.99 + micRMS * 0.01;
     const micNoiseRatio = micNoiseFloor / QUIET_NOISE_FLOOR;
@@ -2821,16 +2821,16 @@ function clapMonitor() {
     } else if (attackFramesHeld > 0) {
         attackFramesHeld--;
     }
-    let attackHit = attackFramesHeld > 0;
+    let isAttackHit = attackFramesHeld > 0;
 
     const ny = microphoneContext.sampleRate / 2;
     const b0 = Math.floor(HF_MIN / ny * fData.length);
     const b1 = Math.floor(HF_MAX / ny * fData.length);
     hf = 0;
     for (let i = b0; i <= b1; i++) hf += fData[i];
-    let hfHit = hf > HF_THRESHOLD;
+    let isHFHit = hf > HF_THRESHOLD;
 
-    isClap = rmsHit && attackHit && hfHit;
+    isClap = isRMSHit && isAttackHit && isHFHit;
     now = performance.now();
 
     if (isClap) {
@@ -2872,16 +2872,16 @@ function updateClapDebugOverlay() {
     rmsHistory.push(micRMS);
     attackHistory.push(micAttack);
     hfHistory.push(hf);
-    if (rmsHistory.length > HISTORY) rmsHistory.shift();
-    if (attackHistory.length > HISTORY) attackHistory.shift();
-    if (hfHistory.length > HISTORY) hfHistory.shift();
+    if (rmsHistory.length > CLAP_DEBUG_GRAPH_HISTORY) rmsHistory.shift();
+    if (attackHistory.length > CLAP_DEBUG_GRAPH_HISTORY) attackHistory.shift();
+    if (hfHistory.length > CLAP_DEBUG_GRAPH_HISTORY) hfHistory.shift();
 
     //rms graph
     waveCtx.clearRect(0, 0, 280, 80);
     waveCtx.strokeStyle = '#0f0';
     waveCtx.beginPath();
     rmsHistory.forEach((v, i) => {
-        const x = (i / HISTORY) * 280;
+        const x = (i / CLAP_DEBUG_GRAPH_HISTORY) * 280;
         const y = 80 - Math.min(v / (rmsThreshold), 2) * 40;
         i ? waveCtx.lineTo(x, y) : waveCtx.moveTo(x, y);
     });
@@ -2899,21 +2899,26 @@ function updateClapDebugOverlay() {
     waveCtx.stroke();
 
     //attack graph
+    //current attack line
     attackCtx.clearRect(0, 0, 280, 50);
-    if (attackThreshold < BASE_ATTACK_THRESHOLD) {
-        attackCtx.strokeStyle = 'orange';
-        //todo: figure out why always here
-    } else {
-        attackCtx.strokeStyle = '#0ff';
-    }
+    attackCtx.strokeStyle = '#0ff';
     attackCtx.beginPath();
     attackHistory.forEach((v, i) => {
-        const x = (i / HISTORY) * 280;
+        const x = (i / CLAP_DEBUG_GRAPH_HISTORY) * 280;
         const y = 50 - Math.min(v / attackThreshold, 2) * 25;
         i ? attackCtx.lineTo(x, y) : attackCtx.moveTo(x, y);
     });
     attackCtx.stroke();
-    attackCtx.strokeStyle = '#f00';
+    //attack threshold line
+    //attackCtx.strokeStyle = '#f00';
+    if (attackThreshold === BASE_ATTACK_THRESHOLD) {
+        attackCtx.strokeStyle = '#ff0000';
+        //todo: figure out why newer laptop always here
+    } else if (attackThreshold === MIN_ATTACK_THRESHOLD) {
+        attackCtx.strokeStyle = '#4c0000';
+    } else {
+        attackCtx.strokeStyle = '#990000';
+    }
     attackCtx.beginPath();
     attackCtx.moveTo(0, 50 - 25);
     attackCtx.lineTo(280, 50 - 25);
@@ -2924,7 +2929,7 @@ function updateClapDebugOverlay() {
     hfCtx.strokeStyle = '#0f0';
     hfCtx.beginPath();
     hfHistory.forEach((v, i) => {
-        const x = (i / HISTORY) * 280;
+        const x = (i / CLAP_DEBUG_GRAPH_HISTORY) * 280;
         const y = 50 - Math.min(v / HF_THRESHOLD, 2) * 25;
         i ? hfCtx.lineTo(x, y) : hfCtx.moveTo(x, y);
     });
@@ -2954,7 +2959,7 @@ function updateClapDebugOverlay() {
     //debug-high
     rmsVal.textContent = micRMS.toFixed(3);
     rmsThreshVal.textContent = (rmsThreshold).toFixed(3);
-    attackVal.textContent = Math.abs(attack).toFixed(3);
+    attackVal.textContent = Math.abs(micAttack).toFixed(3);
     attackThreshVal.textContent = attackThreshold.toFixed(3);
     hfVal.textContent = hf.toFixed(0);
     hfThreshVal.textContent = HF_THRESHOLD;
@@ -3141,9 +3146,6 @@ function initiateClapIndicator() {
         hfCtx = createCanvas('hf', 280, 50, clapDebugOverlay);
         clapCtx = createCanvas('claps', 280, 24, clapDebugOverlay);
 
-        
-        
-
         if (doubleClapIndicatorContainerLocation.horizontal === 'right') {
             doubleClapIndicatorContainer.style.textAlign = 'right';
         }
@@ -3155,14 +3157,30 @@ function initiateClapIndicator() {
         }
 
         //debug-high
-        doubleClapIndicatorContainer.innerHTML += `
-            <div style="line-height: 50px;">RMS: <span id="rmsVal"></span></div>
-            <div style="line-height: 50px;">RMS thresh: <span id="rmsThreshVal"></span></div>
-            <div style="line-height: 50px;">Attack: <span id="attackVal"></span></div>
-            <div style="line-height: 50px;">Attack thresh: <span id="attackThreshVal"></span></div>
-            <div style="line-height: 50px;">HF: <span id="hfVal"></span></div>
-            <div style="line-height: 50px;">HF thresh: <span id="hfThreshVal"></span></div>
-        `;
+        //doubleClapIndicatorContainer.innerHTML += `
+        //    <div style="line-height: 20px;">RMS: <span id="rmsVal"></span></div>
+        //    <div style="line-height: 20px;">RMS thresh: <span id="rmsThreshVal"></span></div>
+        //    <div style="line-height: 20px;">Attack: <span id="attackVal"></span></div>
+        //    <div style="line-height: 20px;">Attack thresh: <span id="attackThreshVal"></span></div>
+        //    <div style="line-height: 20px;">HF: <span id="hfVal"></span></div>
+        //    <div style="line-height: 20px;">HF thresh: <span id="hfThreshVal"></span></div>
+        //`;
+        function addIndicatorRow(labelText, spanId) {
+            const row = document.createElement('div');
+            row.style.lineHeight = '20px';
+            const label = document.createTextNode(labelText + ': ');
+            const valueSpan = document.createElement('span');
+            valueSpan.id = spanId;
+            row.appendChild(label);
+            row.appendChild(valueSpan);
+            return row;
+        }
+        doubleClapIndicatorContainer.appendChild(addIndicatorRow('RMS', 'rmsVal'));
+        doubleClapIndicatorContainer.appendChild(addIndicatorRow('RMS thresh', 'rmsThreshVal'));
+        doubleClapIndicatorContainer.appendChild(addIndicatorRow('Attack', 'attackVal'));
+        doubleClapIndicatorContainer.appendChild(addIndicatorRow('Attack thresh', 'attackThreshVal'));
+        doubleClapIndicatorContainer.appendChild(addIndicatorRow('HF', 'hfVal'));
+        doubleClapIndicatorContainer.appendChild(addIndicatorRow('HF thresh', 'hfThreshVal'));
     }
 
     insertLocation.insertBefore(doubleClapIndicatorContainer, null);
