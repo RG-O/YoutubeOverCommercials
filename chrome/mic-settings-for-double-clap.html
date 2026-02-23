@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="styles/popup.css">
+    <style>
+        body {
+            width: auto !important;
+            margin: 20px;
+            line-height: 1.5;
+        }
+
+        /*h1 {
+            font-size: 22px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 20px;
+        }*/
+
+        p, ol, ul {
+            font-size: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="all-content">
+        <img class="logo-image" style="width: 340px;" src="LiveCommercialBlockerLogoLargeLandscape.png" />
+        <h1>Configure Your Microphone</h1>
+        <p>
+            You will have to grant the extension access to your microphone in order to use the double clap detection mode. Make sure to <b>select "Allow while visiting the site"</b> to avoid interuptions later.
+        </p>
+        <button class="button" id="get-started-button">Get Started</button>
+        <h2>Mic Selecting Tips</h2>
+        <p>
+            While this extension's double clap detection mode has built in ways to exclude noise from loud TVs, it is recommended that if you are pluging your laptop into your TV and choose to use your laptop micophone, try to place your laptop as far away from the TV as you can or use an external microphone placed a decent distance from the TV. This can help with your experience, although not completely necessary.
+        </p>
+
+        <div>
+            TODO: Have this page pop up after user sets double clap mode for the first time, add button for mic permission prompt and next to the button tell them they need to allow all the time or their experience will be disrupted, after they select permission (I could close tab, open new one and request permission again as a check?) I then show the line graph and explain how noise reduction/confrence/AI all need turned off on the mic as well as give them a scroll bar to chose their clap sensitivity. Once they save I'll let them know I am closing the tab.
+
+            In the event that somebody did not set to always give permission, I guess I open this tab when they initiate the extension on their screen?
+
+            For firefox, can I inject an iframe on the page with the stream and get claps from there instead of offscreen?
+
+            TODO: add option to choose new microphone (opt out of preference and then back in? or do it the fancy way?)
+        </div>
+
+
+    </div>
+
+    <script src="scripts/mic-settings-for-double-clap.js"></script>
+
+</body>
+</html>

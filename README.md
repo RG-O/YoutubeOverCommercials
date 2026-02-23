@@ -20,7 +20,7 @@ Firefox: https://addons.mozilla.org/en-US/firefox/addon/youtube-over-commercials
 
 ### Companion Desktop Application (optional)
 
-Follow installation instructions [here](https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup).
+Follow installation instructions for the optional companion app [here](https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup).
 
 ## Support Me
 

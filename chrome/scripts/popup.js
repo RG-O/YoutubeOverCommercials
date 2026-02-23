@@ -329,8 +329,14 @@ document.getElementById("save-button").onclick = function () {
 
             //TODO: only show this message if one of these values have been updated and extension has already been initiated
             alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
-            //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
-            window.close();
+
+            //TODO: set to if user opts into one of the mic settings
+            if (true === true) {
+                checkIfExitToMicConfigure();
+            } else {
+                //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
+                window.close();
+            }
 
         });
 
@@ -338,6 +344,18 @@ document.getElementById("save-button").onclick = function () {
         alert('Field missing. Please input all fields.');
     }
 
+}
+
+
+function checkIfExitToMicConfigure() {
+    navigator.permissions.query({ name: "microphone" }).then((result) => {
+        if (result.state === "granted") {
+            window.close();
+        } else {
+            let url = chrome.runtime.getURL('mic-settings-for-double-clap.html');
+            window.open(url, '_blank');
+        }
+    });
 }
 
 
