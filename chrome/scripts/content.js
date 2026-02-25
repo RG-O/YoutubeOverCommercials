@@ -2722,11 +2722,11 @@ function addDoubleClapDetectorIFrame() {
     let insertLocation = document.getElementsByTagName('body')[0];
 
     doubleClapDetectorIFrameContainer = document.createElement('div');
-    doubleClapDetectorIFrameContainer.style.visibility = "hidden";
+    doubleClapDetectorIFrameContainer.style.display = "none";
     insertLocation.appendChild(doubleClapDetectorIFrameContainer);
 
     let iFrame = document.createElement('iframe');
-    iFrame.style.visibility = "hidden";
+    iFrame.style.display = "none";
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap');
     if (isDebugMode) {
         iFrameSource += '&debug=true';
@@ -2741,7 +2741,6 @@ function addDoubleClapDetectorIFrame() {
 function closeDoubleClapDetectorIFrame() {
     //TODO: better way to do this than removing it?
     doubleClapDetectorIFrameContainer.remove();
-
 }
 
 
@@ -2749,20 +2748,25 @@ function launchClapPort() {
     //give time for iframe and script to load
     setTimeout(() => {
         //TODO: can I estiblish the port from the other file since I always know that comes second?
-        clapPort = chrome.runtime.connect({ name: "audio-metrics" });
+        clapPort = chrome.runtime.connect({ name: "clap-detector" });
+
+        clapPort.postMessage({ action: "connected" });
+
         clapPort.onMessage.addListener(message => {
             if (message.action === "update-clap-indicator") {
-                setClapIndicator(message.text, message.resetAfterMs);
+                setClapIndicator(message.text, message.debugText, message.resetAfterMs);
             } else if (message.action === "manual-commercial-mode-toggle") {
                 manualCommercialModeToggle();
             } else if (message.action === "update-clap-debug-metrics") {
                 updateClapDebugOverlay(message.clapDebugOverlayData);
+            } else if (message.action === "mic-permission-success") {
+                if (isDebugMode) console.log('Mic Permission Succes. Using Mic: ' + message.inUseMicName);
             } else if (message.action === "mic-permission-error") {
-                setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
+                //TODO: update message here
+                setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.', ' '); // microphone and two warning triangles
                 closeDoubleClapDetectorIFrame();
-                //note: opening config mic page from the extension iframe
+                //note: opening config mic page from the double-clap-detector.js
             }
-            //TODO: add metrics
         });
     }, 500);
 }
@@ -2810,7 +2814,6 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
     });
     attackCtx.stroke();
     //attack threshold line
-    //attackCtx.strokeStyle = '#f00';
     if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.BASE_ATTACK_THRESHOLD) {
         attackCtx.strokeStyle = '#ff0000';
         //todo: figure out why newer laptop always here
@@ -2855,25 +2858,22 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
         const x = 280 - (age / CLAP_HISTORY_MS) * 280;
         clapCtx.fillText('\uD83D\uDC4F', x - 8, 12);
     }
-
-    //debug-high
-    rmsVal.textContent = clapDebugOverlayData.micRMS.toFixed(3);
-    rmsThreshVal.textContent = (clapDebugOverlayData.rmsThreshold).toFixed(3);
-    attackVal.textContent = Math.abs(clapDebugOverlayData.micAttack).toFixed(3);
-    attackThreshVal.textContent = clapDebugOverlayData.attackThreshold.toFixed(3);
-    hfVal.textContent = clapDebugOverlayData.hf.toFixed(0);
-    hfThreshVal.textContent = clapDebugOverlayData.HF_THRESHOLD;
 }
 
 
-function setClapIndicator(text, resetAfterMs = null) {
+function setClapIndicator(text, debugText, resetAfterMs = null) {
     if (clapIndicatorResetTimer) {
         clearTimeout(clapIndicatorResetTimer);
         clapIndicatorResetTimer = null;
     }
 
     if (doubleClapIndicator) {
-        doubleClapIndicator.textContent = text;
+        let newIndicatorText = text;
+        if (isDebugMode) {
+            newIndicatorText += ' ' + debugText;
+        }
+
+        doubleClapIndicator.textContent = newIndicatorText;
     }
 
     if (resetAfterMs !== null) {
@@ -2883,10 +2883,17 @@ function setClapIndicator(text, resetAfterMs = null) {
 
 
 function resetClapsIndicator() {
-    //microphone
-    //clap
-    //clap
-    doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
+    if (doubleClapIndicator) {
+        //microphone
+        //clap
+        //clap
+        let newIndicatorText = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
+        if (isDebugMode) {
+            newIndicatorText += ' waiting for claps...';
+        }
+
+        doubleClapIndicator.textContent = newIndicatorText;
+    }
 }
 
 
@@ -2912,7 +2919,7 @@ function initiateClapIndicator() {
     setOverlaySizeAndLocation(doubleClapIndicatorContainer, false, false, doubleClapIndicatorContainerLocation.horizontal, doubleClapIndicatorContainerLocation.vertical, "10px");
 
     doubleClapIndicator = document.createElement('div');
-    doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F'; // microphone and two clapping hands
+    resetClapsIndicator();
     doubleClapIndicatorContainer.appendChild(doubleClapIndicator);
 
     if (isDebugMode) {
@@ -2933,24 +2940,6 @@ function initiateClapIndicator() {
         } else {
             doubleClapIndicatorContainer.appendChild(clapDebugOverlay);
         }
-
-        //debug-high
-        function addIndicatorRow(labelText, spanId) {
-            const row = document.createElement('div');
-            row.style.lineHeight = '20px';
-            const label = document.createTextNode(labelText + ': ');
-            const valueSpan = document.createElement('span');
-            valueSpan.id = spanId;
-            row.appendChild(label);
-            row.appendChild(valueSpan);
-            return row;
-        }
-        doubleClapIndicatorContainer.appendChild(addIndicatorRow('RMS', 'rmsVal'));
-        doubleClapIndicatorContainer.appendChild(addIndicatorRow('RMS thresh', 'rmsThreshVal'));
-        doubleClapIndicatorContainer.appendChild(addIndicatorRow('Attack', 'attackVal'));
-        doubleClapIndicatorContainer.appendChild(addIndicatorRow('Attack thresh', 'attackThreshVal'));
-        doubleClapIndicatorContainer.appendChild(addIndicatorRow('HF', 'hfVal'));
-        doubleClapIndicatorContainer.appendChild(addIndicatorRow('HF thresh', 'hfThreshVal'));
     }
 
     insertLocation.insertBefore(doubleClapIndicatorContainer, null);

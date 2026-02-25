@@ -55,22 +55,28 @@ const isDebugMode = urlParams.get('debug');
 
 var clapPort = null;
 chrome.runtime.onConnect.addListener(p => {
-    if (p.name === "audio-metrics") {
+    if (p.name === "clap-detector") {
         clapPort = p;
         clapPort.onDisconnect.addListener(() => {
             clapPort = null;
+        });
+
+        clapPort.onMessage.addListener(message => {
+            if (message.action === "connected") {
+                prepFoClapMonitor();
+            }
         });
     }
 });
 
 
 function sendToContent(data) {
-    if (clapPort) clapPort.postMessage(data);
+    if (clapPort) {
+        clapPort.postMessage(data);
+    } else {
+        if (isDebugMode) console.log('clapPort not connected');
+    }
 }
-
-
-//start right away
-prepFoClapMonitor();
 
 
 function prepFoClapMonitor() {
@@ -84,6 +90,12 @@ function prepFoClapMonitor() {
     })
         .then((stream) => {
             //microphone permission granted
+
+            let inUseMicName = stream.getAudioTracks()[0].label;
+            sendToContent({
+                action: "mic-permission-success",
+                inUseMicName: inUseMicName
+            });
 
             microphoneContext = new AudioContext();
             microphoneAnalyser = microphoneContext.createAnalyser();
@@ -205,6 +217,7 @@ function onClap(now) {
                 // green square (first clap registered)
                 // clap
                 '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F',
+                'first clap detected, waiting for second clap...',
                 SECOND_CLAP_TIME_WINDOW_MAX + 500
             );
 
@@ -224,6 +237,7 @@ function onClap(now) {
                     // red X
                     // clap
                     '\uD83C\uDFA4 \uD83D\uDFE9 \u274C \uD83D\uDC4F',
+                    'second clap too fast, resetting...',
                     1000
                 );
                 resetClaps();
@@ -238,6 +252,7 @@ function onClap(now) {
                     // clap
                     // red X
                     '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F \u274C',
+                    'second clap too slow, resetting...',
                     1000
                 );
                 resetClaps();
@@ -253,6 +268,7 @@ function onClap(now) {
                     // green square
                     // clap
                     '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDC4F',
+                    'first clap detected, waiting for second clap...',
                     SECOND_CLAP_TIME_WINDOW_MAX + 500
                 );
                 break;
@@ -263,7 +279,8 @@ function onClap(now) {
                 // microphone
                 // green square
                 // green square
-                '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDFE9'
+                '\uD83C\uDFA4 \uD83D\uDFE9 \uD83D\uDFE9',
+                'second clap detected, waiting for no more claps...'
             );
 
             //TODO: get isCommercialState from content.js
@@ -281,6 +298,7 @@ function onClap(now) {
                     // green check
                     // green check
                     '\uD83C\uDFA4 \u2705 \u2705',
+                    'successful double clap!',
                     1000
                 );
 
@@ -299,6 +317,7 @@ function onClap(now) {
                 // red X
                 // red X
                 '\uD83C\uDFA4 \u274C \u274C \u274C',
+                'third clap detected, resetting...',
                 1000
             );
 
@@ -314,11 +333,12 @@ function clamp(v, min, max) {
 }
 
 
-function sendClapIndicator(text, resetAfterMs = null) {
+function sendClapIndicator(text, debugText, resetAfterMs = null) {
     //TODO: had helper function to see if port is open?
     sendToContent({
         action: "update-clap-indicator",
         text: text,
+        debugText: debugText,
         resetAfterMs: resetAfterMs
     });
 }
