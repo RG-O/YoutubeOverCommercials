@@ -35,38 +35,42 @@
             You will have to grant the extension access to your microphone in order to use the double clap detection mode. Make sure to <b>select "Allow while visiting the site"</b> to avoid interuptions later.
         </p>
 
-        <div id="mic-access-error" class="error" style="display: none;">Error accessing microphone. Please grant access to use this feature.</div>
+        <div id="mic-access-error" class="error" style="display: none;">Error accessing microphone. Please grant access to use this feature. Chrome Instructions: 1) Right click the Live Commercial Blocker extension icon in your list of extensions. 2) Select "Manage Extension". 3) Click "Site Settings". 4)  Set Microphone to "Allow". 5) Come back to this page and click "Get Started" button again.</div>
         <div id="loading-spinner" class="loading-spinner" style="display: none; margin-bottom: 10px"></div>
         <button class="button" id="get-started-button">Get Started</button>
 
         <div id="show-on-mic-connected" style="display: none;">
-            <div id="microphone-selected-container" class="general-field">
-                <label>Microphone Selected: </label>
-                <div class="microphone-name-and-button-container" style="display: flex; align-items: center; gap: 5px; margin: 5px;">
-                    <div id="microphone-selected" class="badge badge-default"></div>
-                    <button id="change-microphone">Change</button>
+            <form id="form">
+                <div id="microphone-selected-container" class="general-field">
+                    <label>Microphone Selected: </label>
+                    <div class="microphone-name-and-button-container" style="display: flex; align-items: center; gap: 5px; margin: 5px;">
+                        <div id="microphone-selected" class="badge badge-default"></div>
+                        <!--<button id="change-microphone">Change</button>-->
+                    </div>
                 </div>
-            </div>
-            <div id="background-noise-warning" class="warning"><b>Warning! Make sure all background noise reduction, AI noise reduction, conference mode, etc. are turned off</b> on your microphone on your computer. Claps are essentially background noise, so if your computer is using software to filter that out, this mode for the extension will not perform well.</div>
+                <div id="background-noise-warning" class="warning"><b>Warning! Make sure all background noise reduction, AI noise reduction, conference mode, etc. are turned off</b> on your microphone on your computer. Claps are essentially background noise, so if your computer is using software to filter that out, this mode for the extension will not perform well.</div>
 
-            <div class="clap-sensitivity-container general-field">
-                <label for="positionSlider" class="slider-label">Clap Sensitivity:</label>
-                <input type="range" id="positionSlider" min="0" max="4" step="1" list="tickmarks">
-                <datalist id="tickmarks">
-                    <option value="0" label="Min"></option>
-                    <option value="1" label=""></option>
-                    <option value="2" label="Med"></option>
-                    <option value="3" label=""></option>
-                    <option value="4" label="Max"></option>
-                </datalist>
-            </div>
+                <div class="clap-sensitivity-wrapper settings-box">
+                    <div class="general-field">
+                        <label for="positionSlider">&#128079; Clap Sensitivity:</label>
+                        <input type="range" id="clapSensitivity" name="clapSensitivity" min="0" max="4" step="1" list="tickmarks">
+                        <datalist id="tickmarks">
+                            <option value="0" label="Min"></option>
+                            <option value="1" label=""></option>
+                            <option value="2" label="Med"></option>
+                            <option value="3" label=""></option>
+                            <option value="4" label="Max"></option>
+                        </datalist>
+                    </div>
+                </div>
+            </form>
             <button class="button" id="save-button">Save & Apply</button>
 
             <h2>Try it Out Now!</h2>
             <p>Double clap to play/pause the sample video to test out the double clap functionality of this extension. Slide the bar above to the lowest sensitivity that still detects claps from the area in the room where you plan to watch your TV. After you are satisfied, click the save button.</p>
             <div id="double-clap-indicator" style="margin: 10px"></div>
             <div id="demo-vido-container">
-                <video id="demo-vido" src="https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm" controls style="max-width: 300px"></video>
+                <video id="demo-vido" src="https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm" controls style="max-width: 500px"></video>
                 <div style="font-size: 10px;">
                     <i><a rel="nofollow" class="external text" href="https://peach.blender.org/about/" target="_blank">© copyright 2008, Blender Foundation</a>&nbsp;/&nbsp;<a rel="nofollow" class="external text" href="http://www.bigbuckbunny.org" target="_blank">www.bigbuckbunny.org</a></i>
                 </div>
@@ -77,7 +81,7 @@
                 <div id="clap-debug-graph" class="double-clap-debug-overlay" style="margin-top: 0px !important;"></div>
                 <div id="clap-debug-values" class="clap-debug-values-table"></div>
             </div>
-            
+
         </div>
         <h2>Microphone Selecting Tips</h2>
         <p>

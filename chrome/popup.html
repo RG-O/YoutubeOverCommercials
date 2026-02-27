@@ -82,12 +82,27 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
-        </div>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual - Keyboard &#9000;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
+</div>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
                 <b>HOW TO USE:</b><br />
                 Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when commercials begin and again when commercials end.
+            </div>
+        </div>
+
+        <div>
+            <input type="radio" id="commercialDetectionMode-manual-clap" name="commercialDetectionMode" value="manual-clap">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual-clap">Manual - Double Clap &#128079;&#128079;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials by double clapping (like the old Clap-On Clap-Off commercials).</span></span>
+        </div>
+        <div id="manual-clap" class="commercial-detection-mode-instructions-wrapper">
+            <div id="double-clap-mode-starter-instructions" class="mode-how-to settings-box">
+                <b>HOW IT WORKS:</b><br />
+                Double clap to play/pause the overlay set below over top of commercials. To get started, click "Save & Apply" to be taken to the microphone configuration settings page.
+            </div>
+            <div id="double-clap-mode-returner-instructions" class="mode-how-to settings-box" style="display: none;">
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate extension. From that point forward, double clap every time a commercial begins and ends.
             </div>
         </div>
 
@@ -360,9 +375,38 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays pixel indicator on screen all the time and adds additional logging to the background.</span></span>
+                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays various diagnostic information on screen all the time and adds additional logging to the background.</span></span>
                 <input type="checkbox" name="isDebugMode" id="isDebugMode">
             </div>
+
+
+            <h3>MANUAL OPERATIONS</h3>
+
+            <div class="general-field">
+                <label class="checkbox-label">Always Allow Keyboard Shortcut</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter what mode of commercial detection being used, this extension always allows hitting the extension keyboard shortcut to manually switch back and forth from overlays being played over commercials at any point. This cannot be disabled.</span></span>
+                <input type="checkbox" checked disabled>
+            </div>
+
+            <div class="general-field">
+                <label class="checkbox-label" for="isDoubleClapMode">Always Allow Double Clap &#128079;&#128079;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter what mode of commercial detection being used, always allow a double clap to manually switch back and forth from overlays being played over commercials at any point.</span></span>
+                <input type="checkbox" name="isDoubleClapMode" id="isDoubleClapMode">
+            </div>
+
+            <div class="clap-sensitivity-wrapper settings-box">
+                <div class="general-field">
+                    <label for="positionSlider">&#128079; Clap Sensitivity:</label>
+                    <input type="range" id="clapSensitivity" name="clapSensitivity" min="0" max="4" step="1" list="tickmarks">
+                    <datalist id="tickmarks">
+                        <option value="0" label="Min"></option>
+                        <option value="1" label=""></option>
+                        <option value="2" label="Med"></option>
+                        <option value="3" label=""></option>
+                        <option value="4" label="Max"></option>
+                    </datalist>
+                </div>
+                <div class="general-field note">Navigate to <a href="/mic-settings-for-double-clap.html" target="_blank">Configuration Page</a> to change microphone or experiment with clap sensitivity options.</div>
+            </div>
+
 
             <h3>SETTING PROFILES</h3>
 

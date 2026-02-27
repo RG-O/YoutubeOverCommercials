@@ -383,8 +383,9 @@ button {
     border-radius: .25rem;
 }
 
-.clap-sensitivity-container {
+.clap-sensitivity-wrapper {
     max-width: 500px;
+    background: rgb(18, 56, 77, 0.1);
 }
 
 input[type="range"] {

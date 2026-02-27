@@ -18,25 +18,15 @@ const SECOND_CLAP_TIME_WINDOW_MAX = 440;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
-var doubleClapIndicator;
-var doubleClapIndicatorContainer;
 const QUIET_NOISE_FLOOR = 0.0035; //volume when attack threshold starts to lower??
-const BASE_ATTACK_THRESHOLD = 0.031;
-const MIN_ATTACK_THRESHOLD = 0.025;
-const HF_THRESHOLD = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
-var micNoiseFloor = 0.003;
-const ATTACK_HOLD_FRAMES = 3;
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
 const NOISE_MULTIPLIER = 3.2;
-const HF_MIN = 7000;
-const HF_MAX = 8000;
+var micNoiseFloor = 0.003;
 var hf;
 var isClap;
 var now;
-
 const clapTimeline = [];
-
 const ClapState = {
     IDLE: 'IDLE',
     ONE_CLAP: 'ONE_CLAP',
@@ -46,16 +36,26 @@ var clapState = ClapState.IDLE;
 var firstClapTime = null;
 var confirmDoubleClapSuccessTimer = null;
 
-//TODO: get user preferences
-
 const queryString = window.location.search;
 const urlParams = new URLSearchParams(queryString);
 const scriptPurpose = urlParams.get('purpose');
 const isDebugMode = urlParams.get('debug');
+var clapSensitivity = urlParams.get('sensitivity');
+
+//user set preferences:
+var baseAttackThreshold = 0.031;
+var minAttackThreshold = 0.025;
+var hfThreshold = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
+var attackHoldFrames = 3;
+var hfMin = 7000;
+var hfMax = 8000;
+
+if (isDebugMode) console.log('double-clap-detector.js running');
 
 var clapPort = null;
 chrome.runtime.onConnect.addListener(p => {
     if (p.name === "clap-detector") {
+        if (isDebugMode) console.log('clap-detector connected');
         clapPort = p;
         clapPort.onDisconnect.addListener(() => {
             clapPort = null;
@@ -64,10 +64,64 @@ chrome.runtime.onConnect.addListener(p => {
         clapPort.onMessage.addListener(message => {
             if (message.action === "connected") {
                 prepFoClapMonitor();
+            } else if (message.action === "update-sensitivity") {
+                clapSensitivity = message.clapSensitivity;
+                setClapSensitivity(clapSensitivity);
             }
         });
     }
 });
+
+
+setClapSensitivity(clapSensitivity);
+
+
+function setClapSensitivity(clapSensitivity) {
+    switch (clapSensitivity) {
+        //lowest sensitity (more ideal)
+        case '0':
+            baseAttackThreshold = 0.035;
+            minAttackThreshold = 0.028;
+            hfThreshold = 2000; //would be nice to have this higher but then it won't work as well with lower quality mics
+            attackHoldFrames = 3;
+            hfMin = 8000;
+            hfMax = 9000;
+            break;
+        case '1':
+            baseAttackThreshold = 0.034;
+            minAttackThreshold = 0.027;
+            hfThreshold = 1750; //would be nice to have this higher but then it won't work as well with lower quality mics
+            attackHoldFrames = 3;
+            hfMin = 7500;
+            hfMax = 8500;
+            break;
+        case '2':
+            baseAttackThreshold = 0.032;
+            minAttackThreshold = 0.025;
+            hfThreshold = 1500; //would be nice to have this higher but then it won't work as well with lower quality mics
+            attackHoldFrames = 3;
+            hfMin = 7000;
+            hfMax = 8000;
+            break;
+        case '3':
+            baseAttackThreshold = 0.031;
+            minAttackThreshold = 0.025;
+            hfThreshold = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
+            attackHoldFrames = 2;
+            hfMin = 7000;
+            hfMax = 8000;
+            break;
+        //highest sensivity (less ideal - more false positives)
+        case '4':
+            baseAttackThreshold = 0.025;
+            minAttackThreshold = 0.021;
+            hfThreshold = 1000; //would be nice to have this higher but then it won't work as well with lower quality mics
+            attackHoldFrames = 2;
+            hfMin = 6500;
+            hfMax = 7500;
+            break;
+    }
+}
 
 
 function sendToContent(data) {
@@ -91,6 +145,8 @@ function prepFoClapMonitor() {
         .then((stream) => {
             //microphone permission granted
 
+            if (isDebugMode) console.log('microphone connected');
+
             let inUseMicName = stream.getAudioTracks()[0].label;
             sendToContent({
                 action: "mic-permission-success",
@@ -113,19 +169,14 @@ function prepFoClapMonitor() {
         })
         .catch((error) => {
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                
+                //don't want to open this tab if it is already open
+                if (scriptPurpose !== 'listen-double-clap-configure') {
+                    //have to open this from here instead of content due to permissions
+                    let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?message=permission-error');
+                    window.open(url, '_blank');
+                }
 
-                //wait for port to connect //TODO: do this better so I don't have to wait on arbitrary timeout
-                setTimeout(() => {
-                    sendToContent({ action: "mic-permission-error" });
-
-                    //don't want to open this tab if it is already open
-                    if (scriptPurpose !== 'listen-double-clap-configure') {
-                        //have to open this from here instead of content due to permissions
-                        let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?message=permission-error');
-                        window.open(url, '_blank');
-                    }
-                }, 1000);
+                sendToContent({ action: "mic-permission-error" }); //this will initiate closing this iframe
             } else {
                 console.error(error);
             }
@@ -152,25 +203,25 @@ function clapMonitor() {
     micNoiseFloor = micNoiseFloor * 0.99 + micRMS * 0.01;
     const micNoiseRatio = micNoiseFloor / QUIET_NOISE_FLOOR;
     attackThreshold = clamp(
-        BASE_ATTACK_THRESHOLD / Math.sqrt(micNoiseRatio),
-        MIN_ATTACK_THRESHOLD,
-        BASE_ATTACK_THRESHOLD
+        baseAttackThreshold / Math.sqrt(micNoiseRatio),
+        minAttackThreshold,
+        baseAttackThreshold
     );
 
     //increasing window that attack is eligible because it sometimes takes a little for HF to hit after clap
     if (micAttack > attackThreshold) {
-        attackFramesHeld = ATTACK_HOLD_FRAMES;
+        attackFramesHeld = attackHoldFrames;
     } else if (attackFramesHeld > 0) {
         attackFramesHeld--;
     }
     let isAttackHit = attackFramesHeld > 0;
 
     const ny = microphoneContext.sampleRate / 2;
-    const b0 = Math.floor(HF_MIN / ny * fData.length);
-    const b1 = Math.floor(HF_MAX / ny * fData.length);
+    const b0 = Math.floor(hfMin / ny * fData.length);
+    const b1 = Math.floor(hfMax / ny * fData.length);
     hf = 0;
     for (let i = b0; i <= b1; i++) hf += fData[i];
-    let isHFHit = hf > HF_THRESHOLD;
+    let isHFHit = hf > hfThreshold;
 
     isClap = isRMSHit && isAttackHit && isHFHit;
     now = performance.now();
@@ -183,7 +234,7 @@ function clapMonitor() {
             console.log("micAttack: " + micAttack.toFixed(3));
             console.log("attackThreshold: " + attackThreshold.toFixed(3));
             console.log("hf: " + hf);
-            console.log("HF_THRESHOLD: " + HF_THRESHOLD);
+            console.log("hfThreshold: " + hfThreshold);
         }
 
         attackFramesHeld = 0;
@@ -196,7 +247,7 @@ function clapMonitor() {
         }
     }
 
-    if (isDebugMode) updateClapDebugOverlay();
+    if (isDebugMode) sendClapDebugOverlay();
 
     const elapsed = Date.now() - startTime;
     const delay = Math.max(0, 16 - elapsed); //60Hz-ish
@@ -356,7 +407,7 @@ function resetClaps() {
 }
 
 
-function updateClapDebugOverlay() {
+function sendClapDebugOverlay() {
     const clapDebugOverlayData = {
         clapTimeline,
         micRMS,
@@ -366,9 +417,9 @@ function updateClapDebugOverlay() {
         now,
         rmsThreshold,
         attackThreshold,
-        BASE_ATTACK_THRESHOLD,
-        MIN_ATTACK_THRESHOLD,
-        HF_THRESHOLD,
+        baseAttackThreshold,
+        minAttackThreshold,
+        hfThreshold,
     }
 
     sendToContent({

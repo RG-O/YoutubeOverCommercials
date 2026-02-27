@@ -1,6 +1,7 @@
 
 var isFirefox = false; //******************** remember to also update in background.js and overlay.js
 
+//utility variables
 var isCommercialState = false;
 var firstClick = true;
 var mainVideoCollection;
@@ -26,54 +27,20 @@ var isAmazonPrimeVideo;
 var pixelSelectionEventType = 'click';
 var commercialTimerStartTime;
 var commercialTimerEndTime;
-
-var overlayVideoType;
-var ytPlaylistID;
-var ytVideoID;
-var ytLiveID;
-var otherVideoURL;
-var otherLiveURL;
-var overlayHostName;
-var isOtherSiteTroubleshootMode;
-var mainVideoFade;
-var videoOverlayWidth;
-var videoOverlayHeight;
-var overlayVideoLocationHorizontal;
-var overlayVideoLocationVertical;
-var mainVideoVolumeDuringCommercials;
-var mainVideoVolumeDuringNonCommercials;
 var clickBlocker1;
 var clickBlocker2;
 var nativeInlinePointerEvents;
 var htmlElement;
 var overlayInstructions;
 var logoBox;
-var commercialDetectionMode;
-var mismatchCountThreshold;
-var matchCountThreshold;
-var colorDifferenceMatchingThreshold;
-var manualOverrideCooldown;
-var isDebugMode;
-var haveLogoCountdown;
+var haveLogoCountdown; //TODO: delete?
 var logoCountdownMismatchesRemaining;
-var isAudioOnlyOverlay;
-var isLiveOverlayVideo;
-var isPiPMode;
-var pipLocationHorizontal;
-var pipLocationVertical;
-var pipHeight;
-var pipWidth;
-var audioLevelThreshold;
 var audioLevelIndicatorContainer;
 var audioLevelBar;
 var audioLevelThresholdLine;
-var shouldOverlayVideoSizeAndLocationAutoSet;
-var shouldShuffleYTPlaylist;
 var windowWidth;
 var windowHeight;
-//TODO: Add user preference for spotify to have audio come in gradually
-
-//Advanced Logo Analysis Variables
+//Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
 var advancedLogoSelectionDimensions;
@@ -90,7 +57,6 @@ var hasMaskCompleteMessageBeenDismissed = false;
 var consecutiveAdvancedLogoAnalysisCallFailures = 0;
 var isAdvancedLogoMonitorPaused = false;
 var isColorLogo = false;
-
 //variables for Firefox auto audio commercial detection mode:
 var stream;
 var audioContext;
@@ -98,6 +64,56 @@ var audioSource;
 var audioAnalyzer;
 var audioDataArray;
 var isAudioConnected = false;
+//Double clap variables:
+var clapDebugOverlay;
+var waveCtx;
+var attackCtx;
+var hfCtx;
+var clapCtx;
+const CLAP_DEBUG_GRAPH_HISTORY = 120;
+const rmsHistory = [];
+const attackHistory = [];
+const hfHistory = [];
+const CLAP_HISTORY_MS = 2000;
+var clapIndicatorResetTimer = null;
+var doubleClapDetectorIFrameContainer;
+var clapPort;
+
+//user set preferences (either directly or indirectly)
+var overlayVideoType;
+var ytPlaylistID;
+var ytVideoID;
+var ytLiveID;
+var otherVideoURL;
+var otherLiveURL;
+var overlayHostName;
+var isOtherSiteTroubleshootMode;
+var mainVideoFade;
+var videoOverlayWidth;
+var videoOverlayHeight;
+var overlayVideoLocationHorizontal;
+var overlayVideoLocationVertical;
+var mainVideoVolumeDuringCommercials;
+var mainVideoVolumeDuringNonCommercials;
+var commercialDetectionMode;
+var mismatchCountThreshold;
+var matchCountThreshold;
+var colorDifferenceMatchingThreshold;
+var manualOverrideCooldown;
+var isDebugMode;
+var isAudioOnlyOverlay;
+var isLiveOverlayVideo;
+var isPiPMode;
+var pipLocationHorizontal;
+var pipLocationVertical;
+var pipHeight;
+var pipWidth;
+var audioLevelThreshold;
+var shouldOverlayVideoSizeAndLocationAutoSet;
+var shouldShuffleYTPlaylist;
+var isDoubleClapMode;
+var clapSensitivity;
+//TODO: Add user preference for spotify to have audio come in gradually
 
 
 //function that is responsible for loading the video iframe over top of the main/background video
@@ -276,22 +292,9 @@ function initialRun() {
         setOverlayVideo();
     }
 
-    if (commercialDetectionMode.indexOf('auto') < 0) {
-
-        if (isDoubleClapMode) {
-            prepFoClapMonitor();
-        }
-
-        if (overlayVideoType == 'spotify') {
-            //Note: this happens elsewhere in auto modes
-            chrome.runtime.sendMessage({ action: "open_spotify" });
-            window.addEventListener('beforeunload', closeSpotify);
-        }
-
-        //TODO: should this be moved above opening spotify?
-        //Note: this happens in pixelSelection() in auto mode
-        document.addEventListener('fullscreenchange', fullscreenChanged);
-
+    if (commercialDetectionMode.indexOf('auto') < 0 && commercialDetectionMode !== 'manual-clap') {
+        //note: this is called earlier for manual-clap
+        potentiallyIntrusiveSetup();
     }
 
     muteMainVideo();
@@ -325,6 +328,25 @@ function initialRun() {
 
     }
 
+}
+
+
+//things that should be done very shortly after initiating the extension as to not bother the user later. the auto modes each have their own way of kicking off the things in here. //TODO: could the auto modes all use this function?
+function potentiallyIntrusiveSetup() {
+    if (isDoubleClapMode) {
+        //Note: this happens elsewhere in manual clap and auto modes
+        prepFoClapMonitor();
+    }
+
+    if (overlayVideoType == 'spotify') {
+        //Note: this happens elsewhere in auto modes
+        chrome.runtime.sendMessage({ action: "open_spotify" });
+        window.addEventListener('beforeunload', closeSpotify);
+    }
+
+    //TODO: should this be moved above opening spotify?
+    //Note: this happens in pixelSelection() in auto mode
+    document.addEventListener('fullscreenchange', fullscreenChanged);
 }
 
 
@@ -461,7 +483,7 @@ function endCommercialMode() {
 //switches to commercial state which means showing the overlay video and muting the main/background video
 function startCommercialMode() {
 
-    if (commercialDetectionMode.indexOf('auto') >= 0 && isAutoModeFirstCommercial) {
+    if ((commercialDetectionMode.indexOf('auto') >= 0 || commercialDetectionMode === 'manual-clap') && isAutoModeFirstCommercial) {
 
         //check again if in full screen in case user exited
         if (document.fullscreenElement) {
@@ -513,7 +535,8 @@ function startCommercialMode() {
 chrome.runtime.onMessage.addListener(function (message) {
 
     if (message.action === "execute_manual_switch_function") {
-
+        
+        //TODO: figure out isFirstRun, isAutoModeInitiated, and isAutoModeFirstCommercial and how they compare and contrast. can they be renamed or cleaned up? how do they relate to manual-clap mode
         //special actions for the very first time this is initiated on a page
         if (isFirstRun && !isAutoModeInitiated) {
 
@@ -562,7 +585,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pipWidth',
                             'audioLevelThreshold',
                             'shouldOverlayVideoSizeAndLocationAutoSet',
-                            'shouldShuffleYTPlaylist'
+                            'shouldShuffleYTPlaylist',
+                            'isDoubleClapMode',
+                            'clapSensitivity',
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -593,7 +618,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
                             }
                             commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
-                            //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings)
+                            //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings) //TODO: has it been long enough to be safe to delete?
                             if (commercialDetectionMode === 'auto') {
                                 commercialDetectionMode = 'auto-pixel-normal';
                             }
@@ -626,6 +651,11 @@ chrome.runtime.onMessage.addListener(function (message) {
                             pipWidth = result.pipWidth ?? 20;
                             audioLevelThreshold = result.audioLevelThreshold ?? 5;
                             shouldShuffleYTPlaylist = result.shouldShuffleYTPlaylist ?? false;
+                            isDoubleClapMode = result.isDoubleClapMode ?? false;
+                            if (commercialDetectionMode === 'manual-clap') {
+                                isDoubleClapMode = true;
+                            }
+                            clapSensitivity = result.clapSensitivity ?? 1;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -677,12 +707,15 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                     startListeningToTab();
 
-                                    //give a split sec for recording to start before asking user to pick a pixel
                                     setTimeout(() => {
                                         prepForAudioMonitor();
                                     }, 500);
 
                                 }
+
+                            } else if (commercialDetectionMode == 'manual-clap') {
+
+                                potentiallyIntrusiveSetup();
 
                             } else {
                                 //manual mode start
@@ -2480,7 +2513,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'pipLocationVertical',
                 'pipHeight',
                 'pipWidth',
-                'audioLevelThreshold'
+                'audioLevelThreshold',
+                'clapSensitivity',
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -2493,9 +2527,16 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 pipHeight = result.pipHeight ?? 20;
                 pipWidth = result.pipWidth ?? 20;
                 audioLevelThreshold = result.audioLevelThreshold ?? 5;
+                clapSensitivity = result.clapSensitivity ?? 1;
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
+                }
+
+                //TODO: get this to work even when isFirstRun is false?
+                if (isDoubleClapMode) {
+                    //TODO: add utility for checking if clap port is connected
+                    if (clapPort) clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: clapSensitivity });
                 }
 
                 //verify user is not switching from or to audio only overlays //TODO: get that to work
@@ -2690,25 +2731,6 @@ function stopCommercialTimer() {
     });
 }
 
-//TODO: move these variables to the top
-//Double clap variables
-var isDoubleClapMode = true; //TODO: make user preference
-var clapDebugOverlay;
-var waveCtx;
-var attackCtx;
-var hfCtx;
-var clapCtx;
-const CLAP_DEBUG_GRAPH_HISTORY = 120;
-const rmsHistory = [];
-const attackHistory = [];
-const hfHistory = [];
-const CLAP_HISTORY_MS = 2000;
-var clapIndicatorResetTimer = null;
-
-var doubleClapDetectorIFrameContainer;
-
-var clapPort;
-
 
 function prepFoClapMonitor() {
     //TODO: should initiateClapIndicator be moved below the others?
@@ -2727,7 +2749,7 @@ function addDoubleClapDetectorIFrame() {
 
     let iFrame = document.createElement('iframe');
     iFrame.style.display = "none";
-    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap');
+    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap&sensitivity=') + clapSensitivity;
     if (isDebugMode) {
         iFrameSource += '&debug=true';
     }
@@ -2747,27 +2769,57 @@ function closeDoubleClapDetectorIFrame() {
 function launchClapPort() {
     //give time for iframe and script to load
     setTimeout(() => {
-        //TODO: can I estiblish the port from the other file since I always know that comes second?
+        //TODO: can I estiblish the port from the other file since I always know that comes second? If not, is there a cleaner way to do below?
         clapPort = chrome.runtime.connect({ name: "clap-detector" });
-
-        clapPort.postMessage({ action: "connected" });
-
-        clapPort.onMessage.addListener(message => {
-            if (message.action === "update-clap-indicator") {
-                setClapIndicator(message.text, message.debugText, message.resetAfterMs);
-            } else if (message.action === "manual-commercial-mode-toggle") {
-                manualCommercialModeToggle();
-            } else if (message.action === "update-clap-debug-metrics") {
-                updateClapDebugOverlay(message.clapDebugOverlayData);
-            } else if (message.action === "mic-permission-success") {
-                if (isDebugMode) console.log('Mic Permission Succes. Using Mic: ' + message.inUseMicName);
-            } else if (message.action === "mic-permission-error") {
-                //TODO: update message here
-                setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.', ' '); // microphone and two warning triangles
-                closeDoubleClapDetectorIFrame();
-                //note: opening config mic page from the double-clap-detector.js
+        
+        setTimeout(() => {
+            try {
+                clapPort.postMessage({ action: "connected" });
+                clapPortConnectionSuccess();
+            } catch {
+                if (isDebugMode) console.log('clapPort not ready, trying again.');
+                launchClapPort();
             }
-        });
+        }, 50);
+    }, 1000);
+}
+
+
+function clapPortConnectionSuccess() {
+    shortPausePlayMainVideo();
+
+    clapPort.onMessage.addListener(message => {
+        if (message.action === "update-clap-indicator") {
+            setClapIndicator(message.text, message.debugText, message.resetAfterMs);
+        } else if (message.action === "manual-commercial-mode-toggle") {
+            manualCommercialModeToggle();
+        } else if (message.action === "update-clap-debug-metrics") {
+            updateClapDebugOverlay(message.clapDebugOverlayData);
+        } else if (message.action === "mic-permission-success") {
+            if (isDebugMode) console.log('Mic Permission Succes. Using Mic: ' + message.inUseMicName);
+        } else if (message.action === "mic-permission-error") {
+            //TODO: update message here
+            setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.', ' '); // microphone and two warning triangles
+            closeDoubleClapDetectorIFrame();
+            //note: opening config mic page from the double-clap-detector.js
+        }
+    });
+}
+
+
+function shortPausePlayMainVideo() {
+    //pausing and then replaying main video in a sec because if I don't, sites like yttv will slow down double-clap-detector.js //TODO: is there a better way to prevent this?
+    let playingVideo;
+    for (let i = 0; i < mainVideoCollection.length; i++) {
+        if (!mainVideoCollection[i].paused && mainVideoCollection[i].readyState >= 2) {
+            mainVideoCollection[i].pause();
+            playingVideo = mainVideoCollection[i];
+            break;
+        }
+    }
+
+    setTimeout(() => {
+        if (playingVideo) playingVideo.play();
     }, 500);
 }
 
@@ -2814,10 +2866,10 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
     });
     attackCtx.stroke();
     //attack threshold line
-    if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.BASE_ATTACK_THRESHOLD) {
+    if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.baseAttackThreshold) {
         attackCtx.strokeStyle = '#ff0000';
         //todo: figure out why newer laptop always here
-    } else if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.MIN_ATTACK_THRESHOLD) {
+    } else if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.minAttackThreshold) {
         attackCtx.strokeStyle = '#4c0000';
     } else {
         attackCtx.strokeStyle = '#990000';
@@ -2833,7 +2885,7 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
     hfCtx.beginPath();
     hfHistory.forEach((v, i) => {
         const x = (i / CLAP_DEBUG_GRAPH_HISTORY) * 280;
-        const y = 50 - Math.min(v / clapDebugOverlayData.HF_THRESHOLD, 2) * 25;
+        const y = 50 - Math.min(v / clapDebugOverlayData.hfThreshold, 2) * 25;
         i ? hfCtx.lineTo(x, y) : hfCtx.moveTo(x, y);
     });
     hfCtx.stroke();
@@ -2921,6 +2973,15 @@ function initiateClapIndicator() {
     doubleClapIndicator = document.createElement('div');
     resetClapsIndicator();
     doubleClapIndicatorContainer.appendChild(doubleClapIndicator);
+
+    //TODO: get logoBox next to clap indicator so it can be used for showing songs for spotify mode
+    //logoBox = document.createElement('div');
+    //logoBox.textContent = logoBoxText;
+    //if (doubleClapIndicatorContainerLocation.horizontal === 'right') {
+    //    doubleClapIndicatorContainer.insertBefore(logoBox, doubleClapIndicator);
+    //} else {
+    //    doubleClapIndicatorContainer.appendChild(logoBox);
+    //}
 
     if (isDebugMode) {
         clapDebugOverlay = document.createElement('div');

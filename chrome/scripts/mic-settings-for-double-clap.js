@@ -3,7 +3,6 @@
 var isDebugMode = true;
 var getStartedButton;
 var demoVideo;
-
 var doubleClapIndicator;
 var waveCtx;
 var attackCtx;
@@ -15,9 +14,7 @@ const attackHistory = [];
 const hfHistory = [];
 const CLAP_HISTORY_MS = 2000;
 var clapIndicatorResetTimer = null;
-
 var doubleClapDetectorIFrameContainer;
-
 var clapPort;
 
 
@@ -53,14 +50,19 @@ function checkMicAccess() {
 
 //TODO: most of this code is duplicated from content.js, can these use shared code?
 function prepFoClapMonitor() {
-    getStartedButton.disabled = true;
-    document.getElementById('loading-spinner').style.display = 'block';
-    addDoubleClapDetectorIFrame();
-    launchClapPort();
+    chrome.storage.sync.get(['clapSensitivity'], (result) => {
+        getStartedButton.disabled = true;
+        document.getElementById('loading-spinner').style.display = 'block';
+
+        let clapSensitivity = result.clapSensitivity ?? 1;
+        form.clapSensitivity.value = clapSensitivity;
+        addDoubleClapDetectorIFrame(clapSensitivity);
+        launchClapPort();
+    });
 }
 
 
-function addDoubleClapDetectorIFrame() {
+function addDoubleClapDetectorIFrame(clapSensitivity) {
     let insertLocation = document.getElementsByTagName('body')[0];
 
     doubleClapDetectorIFrameContainer = document.createElement('div');
@@ -70,7 +72,7 @@ function addDoubleClapDetectorIFrame() {
     let iFrame = document.createElement('iframe');
     //iFrame.style.visibility = "hidden";
     iFrame.style.display = "none";
-    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap-configure&debug=true');
+    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap-configure&debug=true&sensitivity=') + clapSensitivity;
     iFrame.src = iFrameSource;
     iFrame.allow = "microphone;";
 
@@ -84,6 +86,7 @@ function closeDoubleClapDetectorIFrame() {
 }
 
 
+//TODO: make connecting more like it is in content.js
 function launchClapPort() {
     //give time for iframe and script to load
     setTimeout(() => {
@@ -107,7 +110,7 @@ function launchClapPort() {
                 micPermissionErrorPageReconfiguration();
             }
         });
-    }, 500);
+    }, 1000);
 }
 
 
@@ -129,6 +132,21 @@ function micPermissionErrorPageReconfiguration() {
 
     getStartedButton.disabled = false;
     document.getElementById('mic-access-error').style.display = 'block';
+}
+
+
+form.clapSensitivity.addEventListener('change', (event) => {
+    clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: form.clapSensitivity.value });
+});
+
+
+document.getElementById("save-button").onclick = function () {
+    chrome.storage.sync.set({ clapSensitivity: form.clapSensitivity.value }, function () {
+
+        //TODO: present next instructions
+        console.log('i need to present instructions instead of logging this message');
+
+    });
 }
 
 
@@ -175,10 +193,10 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
     attackCtx.stroke();
     //attack threshold line
     //attackCtx.strokeStyle = '#f00';
-    if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.BASE_ATTACK_THRESHOLD) {
+    if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.baseAttackThreshold) {
         attackCtx.strokeStyle = '#ff0000';
         //todo: figure out why newer laptop always here
-    } else if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.MIN_ATTACK_THRESHOLD) {
+    } else if (clapDebugOverlayData.attackThreshold === clapDebugOverlayData.minAttackThreshold) {
         attackCtx.strokeStyle = '#4c0000';
     } else {
         attackCtx.strokeStyle = '#990000';
@@ -194,7 +212,7 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
     hfCtx.beginPath();
     hfHistory.forEach((v, i) => {
         const x = (i / CLAP_DEBUG_GRAPH_HISTORY) * 280;
-        const y = 50 - Math.min(v / clapDebugOverlayData.HF_THRESHOLD, 2) * 25;
+        const y = 50 - Math.min(v / clapDebugOverlayData.hfThreshold, 2) * 25;
         i ? hfCtx.lineTo(x, y) : hfCtx.moveTo(x, y);
     });
     hfCtx.stroke();
@@ -226,7 +244,7 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
     attackVal.textContent = Math.abs(clapDebugOverlayData.micAttack).toFixed(3);
     attackThreshVal.textContent = clapDebugOverlayData.attackThreshold.toFixed(3);
     hfVal.textContent = clapDebugOverlayData.hf.toFixed(0);
-    hfThreshVal.textContent = clapDebugOverlayData.HF_THRESHOLD;
+    hfThreshVal.textContent = clapDebugOverlayData.hfThreshold;
 }
 
 
