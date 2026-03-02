@@ -338,6 +338,7 @@ function potentiallyIntrusiveSetup() {
         prepFoClapMonitor();
     }
 
+
     if (overlayVideoType == 'spotify') {
         //Note: this happens elsewhere in auto modes
         chrome.runtime.sendMessage({ action: "open_spotify" });
@@ -1848,10 +1849,9 @@ function prepForAudioMonitor() {
     }
 
     if (isDoubleClapMode) {
-        //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
         setTimeout(() => {
             prepFoClapMonitor();
-        }, 3000);
+        }, 1000);
     }
 
     audioThresholdMonitor();
@@ -2965,6 +2965,9 @@ function initiateClapIndicator() {
     ];
     if (isPiPMode && isLiveOverlayVideo) {
         otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
+    }
+    if (false === true && commercialDetectionMode === 'auto-audio') {
+        otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
     }
     const doubleClapIndicatorContainerLocation = getFreeCorner(otherOverlayLocations);
 

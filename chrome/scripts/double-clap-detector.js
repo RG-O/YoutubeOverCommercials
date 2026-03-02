@@ -18,7 +18,8 @@ const SECOND_CLAP_TIME_WINDOW_MAX = 440;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
-const QUIET_NOISE_FLOOR = 0.0035; //volume when attack threshold starts to lower??
+//const QUIET_NOISE_FLOOR = 0.0195; //volume when attack threshold starts to lower?? or volume when it gets to the lowest?
+const QUIET_NOISE_FLOOR = 0.035; //volume when attack threshold starts to lower?? or volume when it gets to the lowest?
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
 const NOISE_MULTIPLIER = 3.2;
@@ -113,10 +114,10 @@ function setClapSensitivity(clapSensitivity) {
             break;
         //highest sensivity (less ideal - more false positives)
         case '4':
-            baseAttackThreshold = 0.025;
-            minAttackThreshold = 0.021;
-            hfThreshold = 1000; //would be nice to have this higher but then it won't work as well with lower quality mics
-            attackHoldFrames = 2;
+            baseAttackThreshold = 0.013;
+            minAttackThreshold = 0.013;
+            hfThreshold = 700; //would be nice to have this higher but then it won't work as well with lower quality mics
+            attackHoldFrames = 3;
             hfMin = 6500;
             hfMax = 7500;
             break;
