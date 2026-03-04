@@ -1,6 +1,5 @@
 
 
-//TODO: which of these don't need to be in offscreen?
 var microphoneContext;
 var microphoneAnalyser;
 var microphoneAnalyserFrequency;
@@ -18,8 +17,6 @@ const SECOND_CLAP_TIME_WINDOW_MAX = 440;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
-//const QUIET_NOISE_FLOOR = 0.0195; //volume when attack threshold starts to lower?? or volume when it gets to the lowest?
-const QUIET_NOISE_FLOOR = 0.035; //volume when attack threshold starts to lower?? or volume when it gets to the lowest?
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
 const NOISE_MULTIPLIER = 3.2;
@@ -36,20 +33,40 @@ const ClapState = {
 var clapState = ClapState.IDLE;
 var firstClapTime = null;
 var confirmDoubleClapSuccessTimer = null;
+var clapMonitorLastRanTime;
+var consecutiveClapMonitorRunDelays = 0;
+var wasLastClapMonitorRunSlowErrorConfirmed = false;
+var attackHoldFrames = 3;
 
 const queryString = window.location.search;
 const urlParams = new URLSearchParams(queryString);
-const scriptPurpose = urlParams.get('purpose');
+const scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap';
 const isDebugMode = urlParams.get('debug');
-var clapSensitivity = urlParams.get('sensitivity');
+var clapSensitivity = urlParams.get('sensitivity') ?? 30;
 
 //user set preferences:
-var baseAttackThreshold = 0.031;
-var minAttackThreshold = 0.025;
-var hfThreshold = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
-var attackHoldFrames = 3;
-var hfMin = 7000;
-var hfMax = 8000;
+var quietNoiseFloor;
+var baseAttackThreshold;
+var minAttackThreshold;
+var hfThreshold;
+var hfMin;
+var hfMax;
+const minSensitivityValues = {
+    quietNoiseFloor: 0.06,
+    baseAttackThreshold: 0.05,
+    minAttackThreshold: 0.04,
+    hfThreshold: 2300,
+    hfMin: 8200,
+    hfMax: 9200
+};
+const maxSensitivityValues = {
+    quietNoiseFloor: 0.005,
+    baseAttackThreshold: 0.008,
+    minAttackThreshold: 0.007,
+    hfThreshold: 500,
+    hfMin: 6500,
+    hfMax: 7500
+};
 
 if (isDebugMode) console.log('double-clap-detector.js running');
 
@@ -78,50 +95,15 @@ setClapSensitivity(clapSensitivity);
 
 
 function setClapSensitivity(clapSensitivity) {
-    switch (clapSensitivity) {
-        //lowest sensitity (more ideal)
-        case '0':
-            baseAttackThreshold = 0.035;
-            minAttackThreshold = 0.028;
-            hfThreshold = 2000; //would be nice to have this higher but then it won't work as well with lower quality mics
-            attackHoldFrames = 3;
-            hfMin = 8000;
-            hfMax = 9000;
-            break;
-        case '1':
-            baseAttackThreshold = 0.034;
-            minAttackThreshold = 0.027;
-            hfThreshold = 1750; //would be nice to have this higher but then it won't work as well with lower quality mics
-            attackHoldFrames = 3;
-            hfMin = 7500;
-            hfMax = 8500;
-            break;
-        case '2':
-            baseAttackThreshold = 0.032;
-            minAttackThreshold = 0.025;
-            hfThreshold = 1500; //would be nice to have this higher but then it won't work as well with lower quality mics
-            attackHoldFrames = 3;
-            hfMin = 7000;
-            hfMax = 8000;
-            break;
-        case '3':
-            baseAttackThreshold = 0.031;
-            minAttackThreshold = 0.025;
-            hfThreshold = 1250; //would be nice to have this higher but then it won't work as well with lower quality mics
-            attackHoldFrames = 2;
-            hfMin = 7000;
-            hfMax = 8000;
-            break;
-        //highest sensivity (less ideal - more false positives)
-        case '4':
-            baseAttackThreshold = 0.013;
-            minAttackThreshold = 0.013;
-            hfThreshold = 700; //would be nice to have this higher but then it won't work as well with lower quality mics
-            attackHoldFrames = 3;
-            hfMin = 6500;
-            hfMax = 7500;
-            break;
-    }
+    const percent = clamp(clapSensitivity, 0, 100);
+    const t = percent / 100;
+
+    quietNoiseFloor = lerp(minSensitivityValues.quietNoiseFloor, maxSensitivityValues.quietNoiseFloor, t);
+    baseAttackThreshold = lerp(minSensitivityValues.baseAttackThreshold, maxSensitivityValues.baseAttackThreshold, t);
+    minAttackThreshold = lerp(minSensitivityValues.minAttackThreshold, maxSensitivityValues.minAttackThreshold, t);
+    hfThreshold = lerp(minSensitivityValues.hfThreshold, maxSensitivityValues.hfThreshold, t);
+    hfMin = lerp(minSensitivityValues.hfMin, maxSensitivityValues.hfMin, t);
+    hfMax = lerp(minSensitivityValues.hfMax, maxSensitivityValues.hfMax, t);
 }
 
 
@@ -166,6 +148,7 @@ function prepFoClapMonitor() {
             tData = new Float32Array(microphoneAnalyser.fftSize);
             fData = new Uint8Array(microphoneAnalyserFrequency.frequencyBinCount);
 
+            clapMonitorLastRanTime = Date.now();
             clapMonitor();
         })
         .catch((error) => {
@@ -188,6 +171,8 @@ function prepFoClapMonitor() {
 function clapMonitor() {
     const startTime = Date.now();
 
+    performanceCheck(startTime);
+
     microphoneAnalyser.getFloatTimeDomainData(tData);
     microphoneAnalyserFrequency.getByteFrequencyData(fData);
 
@@ -202,7 +187,7 @@ function clapMonitor() {
     let isRMSHit = micRMS > rmsThreshold;
 
     micNoiseFloor = micNoiseFloor * 0.99 + micRMS * 0.01;
-    const micNoiseRatio = micNoiseFloor / QUIET_NOISE_FLOOR;
+    const micNoiseRatio = micNoiseFloor / quietNoiseFloor;
     attackThreshold = clamp(
         baseAttackThreshold / Math.sqrt(micNoiseRatio),
         minAttackThreshold,
@@ -252,6 +237,7 @@ function clapMonitor() {
 
     const elapsed = Date.now() - startTime;
     const delay = Math.max(0, 16 - elapsed); //60Hz-ish
+    //TODO: somehow prevent certain websites from drastically slowing this loop down
     setTimeout(() => {
         clapMonitor();
     }, delay);
@@ -279,7 +265,7 @@ function onClap(now) {
 
         case ClapState.ONE_CLAP: {
             const clapGap = now - firstClapTime;
-            if (isDebugMode) console.log('Time between confirmed claps = ' + clapGap);
+            if (isDebugMode) console.log('Time between confirmed claps = ' + clapGap.toFixed(0));
 
             if (clapGap < SECOND_CLAP_TIME_WINDOW_MIN) {
                 // Second clap too fast -> clear claps
@@ -385,6 +371,11 @@ function clamp(v, min, max) {
 }
 
 
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+
 function sendClapIndicator(text, debugText, resetAfterMs = null) {
     //TODO: had helper function to see if port is open?
     sendToContent({
@@ -427,4 +418,31 @@ function sendClapDebugOverlay() {
         action: "update-clap-debug-metrics",
         clapDebugOverlayData: clapDebugOverlayData,
     });
+}
+
+
+//checks for slowdowns in clap monitoring and let user know //TODO: avoid these slowdowns completely
+function performanceCheck(timeNow) {
+    let timeBetweenClapMonitorRuns = timeNow - clapMonitorLastRanTime;
+    if (timeBetweenClapMonitorRuns > 500) {
+        consecutiveClapMonitorRunDelays++;
+        if (consecutiveClapMonitorRunDelays > 10) {
+            sendToContent({ action: "slow-clap-monitor-issue" });
+            wasLastClapMonitorRunSlowErrorConfirmed = true;
+        }
+    } else {
+        consecutiveClapMonitorRunDelays = 0;
+        if (wasLastClapMonitorRunSlowErrorConfirmed) {
+            sendClapIndicator(
+                // microphone
+                // clap
+                // clap
+                '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F',
+                'waiting for claps...'
+            );
+
+            wasLastClapMonitorRunSlowErrorConfirmed = false;
+        }
+    }
+    clapMonitorLastRanTime = timeNow;
 }

@@ -656,7 +656,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             if (commercialDetectionMode === 'manual-clap') {
                                 isDoubleClapMode = true;
                             }
-                            clapSensitivity = result.clapSensitivity ?? 1;
+                            clapSensitivity = result.clapSensitivity ?? 30;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -758,8 +758,9 @@ function manualCommercialModeToggle() {
 
         endCommercialMode();
 
+        //TODO: move to own function and reuse elsewhere?
         if (!isDebugMode) {
-            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+            if (commercialDetectionMode.indexOf('auto-pixel') >= 0 || commercialDetectionMode === 'manual-clap') {
                 if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
                     logoBox.style.display = 'none';
                 } else {
@@ -774,9 +775,10 @@ function manualCommercialModeToggle() {
 
         startCommercialMode();
 
+        //TODO: move to own function and reuse elsewhere?
         //hide logo for non audio overlays and not debug mode
         if (isAudioOnlyOverlay) {
-            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+            if (commercialDetectionMode.indexOf('auto-pixel') >= 0 || commercialDetectionMode === 'manual-clap') {
                 if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
                     logoBox.style.display = 'block';
                 } else {
@@ -786,7 +788,7 @@ function manualCommercialModeToggle() {
                 audioLevelIndicatorContainer.style.display = 'flex';
             }
         } else if (!isDebugMode) {
-            if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+            if (commercialDetectionMode.indexOf('auto-pixel') >= 0 || commercialDetectionMode === 'manual-clap') {
                 if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
                     logoBox.style.display = 'none';
                 } else {
@@ -2131,7 +2133,7 @@ function spotifyLogoBoxUpdate(text) {
     if (isCommercialState) {
 
         //TODO: is this even necessary anymore?
-        if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+        if (commercialDetectionMode.indexOf('auto-pixel') >= 0 || commercialDetectionMode === 'manual-clap') {
             if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
                 logoBox.style.display = 'block';
             }
@@ -2469,7 +2471,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             return;
         }
 
-        if (commercialDetectionMode.indexOf('auto') >= 0) {
+        if (commercialDetectionMode.indexOf('auto') >= 0 || commercialDetectionMode === 'manual-clap') {
 
             spotifyLogoBoxUpdate(message.text);
 
@@ -2527,7 +2529,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 pipHeight = result.pipHeight ?? 20;
                 pipWidth = result.pipWidth ?? 20;
                 audioLevelThreshold = result.audioLevelThreshold ?? 5;
-                clapSensitivity = result.clapSensitivity ?? 1;
+                clapSensitivity = result.clapSensitivity ?? 30;
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
@@ -2790,7 +2792,8 @@ function clapPortConnectionSuccess() {
 
     clapPort.onMessage.addListener(message => {
         if (message.action === "update-clap-indicator") {
-            setClapIndicator(message.text, message.debugText, message.resetAfterMs);
+            setClapIndicator(message.text, message.resetAfterMs);
+            if (isDebugMode) console.log(message.debugText);
         } else if (message.action === "manual-commercial-mode-toggle") {
             manualCommercialModeToggle();
         } else if (message.action === "update-clap-debug-metrics") {
@@ -2799,9 +2802,12 @@ function clapPortConnectionSuccess() {
             if (isDebugMode) console.log('Mic Permission Succes. Using Mic: ' + message.inUseMicName);
         } else if (message.action === "mic-permission-error") {
             //TODO: update message here
-            setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.', ' '); // microphone and two warning triangles
+            setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
             closeDoubleClapDetectorIFrame();
             //note: opening config mic page from the double-clap-detector.js
+        } else if (message.action === "slow-clap-monitor-issue") {
+            //TODO: update message here
+            setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Currently experiencing issues listening for claps. Please try manually pausing and replaying main video or refreshing page and initiating extension again.'); // microphone and two warning triangles
         }
     });
 }
@@ -2913,19 +2919,14 @@ function updateClapDebugOverlay(clapDebugOverlayData) {
 }
 
 
-function setClapIndicator(text, debugText, resetAfterMs = null) {
+function setClapIndicator(text, resetAfterMs = null) {
     if (clapIndicatorResetTimer) {
         clearTimeout(clapIndicatorResetTimer);
         clapIndicatorResetTimer = null;
     }
 
     if (doubleClapIndicator) {
-        let newIndicatorText = text;
-        if (isDebugMode) {
-            newIndicatorText += ' ' + debugText;
-        }
-
-        doubleClapIndicator.textContent = newIndicatorText;
+        doubleClapIndicator.textContent = text;
     }
 
     if (resetAfterMs !== null) {
@@ -2939,12 +2940,7 @@ function resetClapsIndicator() {
         //microphone
         //clap
         //clap
-        let newIndicatorText = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
-        if (isDebugMode) {
-            newIndicatorText += ' waiting for claps...';
-        }
-
-        doubleClapIndicator.textContent = newIndicatorText;
+        doubleClapIndicator.textContent = '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F';
     }
 }
 
@@ -2966,8 +2962,10 @@ function initiateClapIndicator() {
     if (isPiPMode && isLiveOverlayVideo) {
         otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
     }
-    if (false === true && commercialDetectionMode === 'auto-audio') {
-        otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
+    if (commercialDetectionMode === 'auto-audio') {
+        //TODO: figure out timing on this so I can use real values here
+        //otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
+        otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
     }
     const doubleClapIndicatorContainerLocation = getFreeCorner(otherOverlayLocations);
 
@@ -2975,16 +2973,26 @@ function initiateClapIndicator() {
 
     doubleClapIndicator = document.createElement('div');
     resetClapsIndicator();
-    doubleClapIndicatorContainer.appendChild(doubleClapIndicator);
+    
+    if (commercialDetectionMode === 'manual-clap') {
+        let additionalWrapper = document.createElement('div');
+        additionalWrapper.style.display = 'flex';
+        additionalWrapper.style.gap = '5px';
+        doubleClapIndicatorContainer.appendChild(additionalWrapper);
 
-    //TODO: get logoBox next to clap indicator so it can be used for showing songs for spotify mode
-    //logoBox = document.createElement('div');
-    //logoBox.textContent = logoBoxText;
-    //if (doubleClapIndicatorContainerLocation.horizontal === 'right') {
-    //    doubleClapIndicatorContainer.insertBefore(logoBox, doubleClapIndicator);
-    //} else {
-    //    doubleClapIndicatorContainer.appendChild(logoBox);
-    //}
+        additionalWrapper.appendChild(doubleClapIndicator);
+
+        logoBox = document.createElement('div');
+        logoBox.style.display = 'none';
+        if (doubleClapIndicatorContainerLocation.horizontal === 'right') {
+            additionalWrapper.insertBefore(logoBox, doubleClapIndicator);
+        } else {
+            additionalWrapper.appendChild(logoBox);
+        }
+        initialLogoBoxTextUpdate();
+    } else {
+        doubleClapIndicatorContainer.appendChild(doubleClapIndicator);
+    }
 
     if (isDebugMode) {
         clapDebugOverlay = document.createElement('div');

@@ -342,13 +342,15 @@ document.getElementById("save-button").onclick = function () {
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
 
-            //TODO: only show this message if one of these values have been updated and extension has already been initiated
-            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
-
             //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
             if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
+                alert("You will now be taken to a special extension page to configure your microphone settings");
+
                 let url = chrome.runtime.getURL('mic-settings-for-double-clap.html');
                 window.open(url, '_blank');
+            } else {
+                //TODO: only show this message if one of these values have been updated and extension has already been initiated
+                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
             }
 
             //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed

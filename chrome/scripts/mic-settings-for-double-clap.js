@@ -1,4 +1,5 @@
 
+var isFirefox = false; //********************
 
 var isDebugMode = true;
 var getStartedButton;
@@ -24,10 +25,22 @@ document.addEventListener('DOMContentLoaded', function () {
         prepFoClapMonitor();
     }
 
+    setKeyboardShortcutText();
+
     demoVideo = document.getElementById("demo-vido");
 
     checkMicAccess();
 }, false);
+
+
+function setKeyboardShortcutText() {
+    if (isFirefox) {
+        let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
+        for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
+            keyboardShortcuts[i].innerHTML = `<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>`;
+        }
+    }
+}
 
 
 function demoVideoPlayPause() {
@@ -54,7 +67,7 @@ function prepFoClapMonitor() {
         getStartedButton.disabled = true;
         document.getElementById('loading-spinner').style.display = 'block';
 
-        let clapSensitivity = result.clapSensitivity ?? 1;
+        let clapSensitivity = result.clapSensitivity ?? 30;
         form.clapSensitivity.value = clapSensitivity;
         addDoubleClapDetectorIFrame(clapSensitivity);
         launchClapPort();
@@ -137,15 +150,28 @@ function micPermissionErrorPageReconfiguration() {
 
 form.clapSensitivity.addEventListener('change', (event) => {
     clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: form.clapSensitivity.value });
+    if (form.clapSensitivity.value > 50 && form.clapSensitivity.value < 100) {
+        document.getElementById('sensitivity-warning').style.display = 'block';
+        document.getElementById('background-noise-warning-extreme').style.display = 'none';
+    } else if (form.clapSensitivity.value == 100) {
+        document.getElementById('sensitivity-warning').style.display = 'none';
+        document.getElementById('background-noise-warning-extreme').style.display = 'block';
+    } else {
+        document.getElementById('sensitivity-warning').style.display = 'none';
+        document.getElementById('background-noise-warning-extreme').style.display = 'none';
+    }
 });
 
 
 document.getElementById("save-button").onclick = function () {
     chrome.storage.sync.set({ clapSensitivity: form.clapSensitivity.value }, function () {
+        document.getElementById('show-on-mic-connected').style.display = 'none';
+        if (!demoVideo.paused) {
+            demoVideo.pause();
+        }
+        closeDoubleClapDetectorIFrame();
 
-        //TODO: present next instructions
-        console.log('i need to present instructions instead of logging this message');
-
+        document.getElementById('show-on-save').style.display = 'block';
     });
 }
 
@@ -312,8 +338,8 @@ function initiateClapIndicator() {
         clapDebugOverlayHigh.appendChild(addIndicatorRow('RMS', 'rmsVal'));
         clapDebugOverlayHigh.appendChild(addIndicatorRow('Attack Threshold', 'attackThreshVal'));
         clapDebugOverlayHigh.appendChild(addIndicatorRow('Attack', 'attackVal'));
-        clapDebugOverlayHigh.appendChild(addIndicatorRow('Power in Target Frequency Threshold', 'hfThreshVal'));
-        clapDebugOverlayHigh.appendChild(addIndicatorRow('Power in Target Frequency', 'hfVal'));
+        clapDebugOverlayHigh.appendChild(addIndicatorRow('Power in Target Frequency Range Threshold', 'hfThreshVal'));
+        clapDebugOverlayHigh.appendChild(addIndicatorRow('Power in Target Frequency Range', 'hfVal'));
     }
 }
 

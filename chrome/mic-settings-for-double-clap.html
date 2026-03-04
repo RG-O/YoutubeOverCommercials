@@ -29,44 +29,63 @@
         <img class="logo-image" style="width: 340px;" src="LiveCommercialBlockerLogoLargeLandscape.png" />
 
         <h1>Double Clap Microphone Configuration</h1>
+
         <h2>Microphone & Clap Sensitivity Settings</h2>
 
         <p id="grant-access-message">
             You will have to grant the extension access to your microphone in order to use the double clap detection mode. Make sure to <b>select "Allow while visiting the site"</b> to avoid interuptions later.
         </p>
 
-        <div id="mic-access-error" class="error" style="display: none;">Error accessing microphone. Please grant access to use this feature. Chrome Instructions: 1) Right click the Live Commercial Blocker extension icon in your list of extensions. 2) Select "Manage Extension". 3) Click "Site Settings". 4)  Set Microphone to "Allow". 5) Come back to this page and click "Get Started" button again.</div>
+        <div id="mic-access-error" class="error" style="display: none;">
+            Error accessing microphone. Please grant access to use this feature. Chrome Instructions: 1) Right click the Live Commercial Blocker extension icon in your list of extensions. 2) Select "Manage Extension". 3) Click "Site Settings". 4)  Set Microphone to "Allow". 5) Come back to this page and click "Get Started" button again.
+        </div>
         <div id="loading-spinner" class="loading-spinner" style="display: none; margin-bottom: 10px"></div>
         <button class="button" id="get-started-button">Get Started</button>
 
         <div id="show-on-mic-connected" style="display: none;">
-            <form id="form">
+            <form id="form" style="max-width: 650px;">
                 <div id="microphone-selected-container" class="general-field">
                     <label>Microphone Selected: </label>
-                    <div class="microphone-name-and-button-container" style="display: flex; align-items: center; gap: 5px; margin: 5px;">
-                        <div id="microphone-selected" class="badge badge-default"></div>
+                    <div class="microphone-name-and-button-container" style="align-items: center; margin-top: 5px;">
+                        <div id="microphone-selected" class="badge badge-default" style="margin-left: 0px;"></div>
+                        <!--TODO: Add way to change microphone-->
                         <!--<button id="change-microphone">Change</button>-->
                     </div>
                 </div>
-                <div id="background-noise-warning" class="warning"><b>Warning! Make sure all background noise reduction, AI noise reduction, conference mode, etc. are turned off</b> on your microphone on your computer. Claps are essentially background noise, so if your computer is using software to filter that out, this mode for the extension will not perform well.</div>
+                <div id="background-noise-warning" class="warning">
+                    <b>Warning! Make sure all background noise reduction, AI noise reduction, conference mode, etc. are turned off</b> on your microphone on your computer. Claps are essentially background noise, so if your computer is using software to filter that out, this mode for the extension will not perform well.
+                </div>
 
-                <div class="clap-sensitivity-wrapper settings-box">
+                <label for="clapSensitivity">&#128079; Clap Sensitivity:</label>
+                <div class="clap-sensitivity-wrapper settings-box" style="margin-bottom: 7px;">
                     <div class="general-field">
-                        <label for="positionSlider">&#128079; Clap Sensitivity:</label>
-                        <input type="range" id="clapSensitivity" name="clapSensitivity" min="0" max="4" step="1" list="tickmarks">
+                        <input type="range" id="clapSensitivity" name="clapSensitivity" min="0" max="100" step="10" list="tickmarks">
                         <datalist id="tickmarks">
-                            <option value="0" label="Min"></option>
-                            <option value="1" label=""></option>
-                            <option value="2" label="Med"></option>
-                            <option value="3" label=""></option>
-                            <option value="4" label="Max"></option>
+                            <option value="0" label="Low"></option>
+                            <option value="10" label=""></option>
+                            <option value="20" label=""></option>
+                            <option value="30" label=""></option>
+                            <option value="40" label=""></option>
+                            <option value="50" label="Medium"></option>
+                            <option value="60" label=""></option>
+                            <option value="70" label=""></option>
+                            <option value="80" label=""></option>
+                            <option value="90" label=""></option>
+                            <option value="100" label="High"></option>
                         </datalist>
                     </div>
                 </div>
+                <div id="sensitivity-warning" class="warning" style="display: none;">
+                    Note: The lower you can get this, while still detecting claps, the better. This will help with reducing false positives.
+                </div>
+                <div id="background-noise-warning-extreme" class="warning" style="display: none;">
+                    <b>Warning!</b> If you still aren't detecting claps at this level, it may be due to background noise reduction software running on your computer, as mentioned in the warning above. Search your computer for programs like "Dolby Audio", "Realtek Audio Console", "Acer Purified Voice Console", "HP Audio Control", "Dell Optimizer", or any program that sounds similar. Open the program and disable whatever background noise reduction or AI noise reduction that might be running. Or go into your microphone settings in your system settings and look for any audio enhancement, voice isolation, or noise reduction settings and disable them.
+                </div>
             </form>
-            <button class="button" id="save-button">Save & Apply</button>
+            <button class="button" id="save-button">Save</button>
 
             <h2>Try it Out Now!</h2>
+
             <p>Double clap to play/pause the sample video to test out the double clap functionality of this extension. Slide the bar above to the lowest sensitivity that still detects claps from the area in the room where you plan to watch your TV. After you are satisfied, click the save button.</p>
             <div id="double-clap-indicator" style="margin: 10px"></div>
             <div id="demo-vido-container">
@@ -83,9 +102,21 @@
             </div>
 
         </div>
-        <h2>Microphone Selecting Tips</h2>
+
+        <div id="show-on-save" style="display: none;">
+            <h3 style="color: green;">Saved Successfully!</h3>
+            <p>
+                You are now ready to use the double clap mode for this extension. Close this window and then navigate to wherever you stream the game from, set the stream to fullscreen, and then hit the extension shortcut: <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span>. From that point foward, you should be able to double clap to mute the commercials and play your overlay over top and then double clap again when the commercial ends to resume the action.
+            </p>
+            <p>
+                Refresh this page if you would like to tinker some more with the clap sensitivity settings.
+            </p>
+        </div>
+
+        <h2>Microphone Tips</h2>
+
         <p>
-            While this extension's double clap detection mode has built in ways to exclude noise from loud TVs, it is recommended that if you are pluging your laptop into your TV and choose to use your laptop micophone, try to place your laptop as far away from the TV as you can or use an external microphone placed a decent distance from the TV. This can help with your experience, although not completely necessary. If your external mic has a fuzzy cover over it, take it off.
+            While this extension's double clap detection mode has built in ways to exclude noise from loud TVs, it is recommended that if you are pluging your laptop into your TV and choose to use your laptop micophone, try to place your laptop as far away from the TV as you can or use an external microphone placed a decent distance from the TV. This can help with your experience, although not completely necessary. Also, if your external mic has a fuzzy cover over it, it is best to take it off if you can.
         </p>
     </div>
 
