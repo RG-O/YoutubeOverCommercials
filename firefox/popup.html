@@ -13,6 +13,7 @@
     <img class="logo-image" style="width: 380px;" src="LiveCommercialBlockerLogoLargeLandscape.png" />
     <form id="optionsForm">
         <div id="commercial-time-blocked-stats" class="note" style="font-style: italic; white-space: pre-wrap;"></div>
+        <div class="note">Join the official <a href="https://discord.gg/ccGtN2gker" target="_blank">discord</a> for this extension!</div>
 
         <h2>SETTINGS</h2>
         <h3>MODE OF COMMERCIAL DETECTION</h3>
@@ -41,7 +42,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-advanced-logo" name="commercialDetectionMode" value="auto-pixel-advanced-logo">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Advanced Logo Analysis</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">This mode works by the user (you) selecting the full channel logo on the on the broadcast. It then sends images of this logo to the Advanced Logo Analyzer app on your desktop which uses computer vision to detect the edges of the logo. It first builds a mask of this logo's edges and then compares future images of this area to see if the edges match up to the original mask. If the edges don't match up, that means the logo went away, so it is most likely a commercial.</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Logo Edge Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">This mode works by the user (you) selecting the full channel logo on the on the broadcast. It then sends images of this logo to the Advanced Logo Analyzer app on your desktop which uses computer vision to detect the edges of the logo. It first builds a mask of this logo's edges and then compares future images of this area to see if the edges match up to the original mask. If the edges don't match up, that means the logo went away, so it is most likely a commercial.</span></span><span class="badge badge-advanced">Enhanced</span>
         </div>
         <div id="auto-pixel-advanced-logo" class="commercial-detection-mode-instructions-wrapper">
             <div id="companion-app-loading" class="loading-spinner"></div>
@@ -82,12 +83,27 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
-        </div>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual - Keyboard &#9000;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
+</div>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
                 <b>HOW TO USE:</b><br />
                 Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when commercials begin and again when commercials end.
+            </div>
+        </div>
+
+        <div>
+            <input type="radio" id="commercialDetectionMode-manual-clap" name="commercialDetectionMode" value="manual-clap">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual-clap">Manual - Double Clap &#128079;&#128079;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials by double clapping (like the old Clap-On Clap-Off commercials).</span></span>
+        </div>
+        <div id="manual-clap" class="commercial-detection-mode-instructions-wrapper">
+            <div id="double-clap-mode-starter-instructions" class="mode-how-to settings-box">
+                <b>HOW IT WORKS:</b><br />
+                Double clap to play/pause the overlay set below over top of commercials. To get started, click "Save & Apply" to be taken to the microphone configuration settings page.
+            </div>
+            <div id="double-clap-mode-returner-instructions" class="mode-how-to settings-box" style="display: none;">
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate extension. From that point forward, double clap every time a commercial begins and ends.
             </div>
         </div>
 
@@ -360,9 +376,44 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays pixel indicator on screen all the time and adds additional logging to the background.</span></span>
+                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays various diagnostic information on screen all the time and adds additional logging to the background.</span></span>
                 <input type="checkbox" name="isDebugMode" id="isDebugMode">
             </div>
+
+
+            <h3>MANUAL OPERATIONS</h3>
+
+            <div class="general-field">
+                <label class="checkbox-label">Always Allow Keyboard Shortcut</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter what mode of commercial detection being used, this extension always allows hitting the extension keyboard shortcut to manually switch back and forth from overlays being played over commercials at any point. This cannot be disabled.</span></span>
+                <input type="checkbox" checked disabled>
+            </div>
+
+            <div class="general-field">
+                <label class="checkbox-label" for="isDoubleClapMode">Always Allow Double Clap &#128079;&#128079;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter what mode of commercial detection being used, always allow a double clap to manually switch back and forth from overlays being played over commercials at any point.</span></span>
+                <input type="checkbox" name="isDoubleClapMode" id="isDoubleClapMode">
+            </div>
+
+            <div class="clap-sensitivity-wrapper settings-box">
+                <div class="general-field">
+                    <label for="clapSensitivity">&#128079; Clap Sensitivity:</label>
+                    <input type="range" id="clapSensitivity" name="clapSensitivity" min="0" max="100" step="10" list="tickmarks">
+                    <datalist id="tickmarks">
+                        <option value="0" label="Low"></option>
+                        <option value="10" label=""></option>
+                        <option value="20" label=""></option>
+                        <option value="30" label=""></option>
+                        <option value="40" label=""></option>
+                        <option value="50" label="Medium"></option>
+                        <option value="60" label=""></option>
+                        <option value="70" label=""></option>
+                        <option value="80" label=""></option>
+                        <option value="90" label=""></option>
+                        <option value="100" label="High"></option>
+                    </datalist>
+                </div>
+                <div class="general-field note">Navigate to <a href="/mic-settings-for-double-clap.html" target="_blank">Configuration Page</a> to experiment with clap sensitivity options.</div>
+            </div>
+
 
             <h3>SETTING PROFILES</h3>
 

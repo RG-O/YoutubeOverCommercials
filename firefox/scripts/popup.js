@@ -4,7 +4,9 @@ var profiles = {};
 var gridCells;
 var pipGridCells;
 var hasPreviouslyInstalledCompanionApp;
+var hasGrantedMicAccess = false;
 
+//TODO: I now have such a crazy amount of user set values that are stored/retrieved all over the place, is there a way to create a singular location to manage them?
 //grab all user set values
 chrome.storage.sync.get([
     'overlayVideoType',
@@ -43,7 +45,9 @@ chrome.storage.sync.get([
     'todayCommercialsBlockedSeconds',
     'firstCommercialTimerDate',
     'lastCommercialTimerDate',
-    'hasPreviouslyInstalledCompanionApp'
+    'hasPreviouslyInstalledCompanionApp',
+    'isDoubleClapMode',
+    'clapSensitivity',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -83,6 +87,8 @@ chrome.storage.sync.get([
     optionsForm.audioLevelThreshold.value = result.audioLevelThreshold ?? 5;
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
+    optionsForm.isDoubleClapMode.checked = result.isDoubleClapMode ?? false;
+    optionsForm.clapSensitivity.value = result.clapSensitivity ?? 30;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
@@ -236,8 +242,15 @@ chrome.storage.sync.get([
     //clear cache on buy me a coffee image to show updated supporter count
     document.getElementById('buy-me-coffee').src = `https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=${today}&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff`;
 
-    //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
-    runAllToggles();
+    //check if user granted extension mic access for later double clap mode checks
+    navigator.permissions.query({ name: "microphone" }).then((result) => {
+        if (result.state === "granted") {
+            hasGrantedMicAccess = true;
+        }
+
+        //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
+        runAllToggles();
+    });
 
 });
 
@@ -321,14 +334,25 @@ document.getElementById("save-button").onclick = function () {
             isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
             audioLevelThreshold: optionsForm.audioLevelThreshold.value,
             shouldOverlayVideoSizeAndLocationAutoSet: optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked,
-            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked
+            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
+            isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
+            clapSensitivity: optionsForm.clapSensitivity.value,
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
 
-            //TODO: only show this message if one of these values have been updated and extension has already been initiated
-            alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
+            if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
+                alert("You will now be taken to a special extension page to configure your microphone settings");
+
+                let url = chrome.runtime.getURL('mic-settings-for-double-clap.html');
+                window.open(url, '_blank');
+            } else {
+                //TODO: only show this message if one of these values have been updated and extension has already been initiated
+                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            }
+
             //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
             window.close();
 
@@ -491,6 +515,22 @@ function togglePiPFieldsVisability() {
     }
 }
 
+function toggleDoubleClapUI() {
+    if (commercialDetectionMode === 'manual-clap' || optionsForm.isDoubleClapMode.checked) {
+        document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'block';
+    } else {
+        document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'none';
+    }
+
+    if (hasGrantedMicAccess) {
+        document.getElementById('double-clap-mode-starter-instructions').style.display = 'none';
+        document.getElementById('double-clap-mode-returner-instructions').style.display = 'block';
+    } else {
+        document.getElementById('double-clap-mode-starter-instructions').style.display = 'block';
+        document.getElementById('double-clap-mode-returner-instructions').style.display = 'none';
+    }
+}
+
 
 function toggleWithIDProfileSaveButtonVisability() {
     if (optionsForm.overlayVideoType.value === 'spotify' || optionsForm.overlayVideoType.value === 'other-tabs') {
@@ -648,7 +688,9 @@ function saveProfile(shouldSaveWithID) {
             isOtherSiteTroubleshootMode: optionsForm.isOtherSiteTroubleshootMode.checked,
             audioLevelThreshold: optionsForm.audioLevelThreshold.value,
             shouldOverlayVideoSizeAndLocationAutoSet: optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked,
-            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked
+            shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
+            isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
+            clapSensitivity: optionsForm.clapSensitivity.value,
         };
 
         chrome.storage.sync.set({ profiles }, () => {
@@ -706,6 +748,8 @@ function applyProfile() {
             if (typeof profiles[selectedProfile].audioLevelThreshold !== 'undefined') { optionsForm.audioLevelThreshold.value = profiles[selectedProfile].audioLevelThreshold; }
             if (typeof profiles[selectedProfile].shouldOverlayVideoSizeAndLocationAutoSet !== 'undefined') { optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = profiles[selectedProfile].shouldOverlayVideoSizeAndLocationAutoSet; }
             if (typeof profiles[selectedProfile].shouldShuffleYTPlaylist !== 'undefined') { optionsForm.shouldShuffleYTPlaylist.checked = profiles[selectedProfile].shouldShuffleYTPlaylist; }
+            if (typeof profiles[selectedProfile].isDoubleClapMode !== 'undefined') { optionsForm.isDoubleClapMode.checked = profiles[selectedProfile].isDoubleClapMode; }
+            if (typeof profiles[selectedProfile].clapSensitivity !== 'undefined') { optionsForm.clapSensitivity.value = profiles[selectedProfile].clapSensitivity; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();

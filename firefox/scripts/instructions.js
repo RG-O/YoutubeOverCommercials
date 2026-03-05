@@ -48,4 +48,13 @@ if (purpose === 'opposite-mode-instructions') {
         document.body.appendChild(script);
     }, 500);
 
-}//else regular pixel mode instructions
+} else if (purpose === 'listen-double-clap' || purpose === 'listen-double-clap-configure') {
+
+    setTimeout(() => {
+        let script = document.createElement('script');
+        script.src = "/scripts/double-clap-detector.js";
+        document.body.appendChild(script);
+    }, 100);
+
+} //else regular pixel mode instructions
+

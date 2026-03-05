@@ -158,3 +158,32 @@
     pointer-events: none !important;
     z-index: 2147483647 !important;
 }
+
+.double-clap-indicator-container {
+    color: rgb(140, 179, 210, 0.9) !important;
+    /*background-color: rgba(255, 255, 255, 0.8) !important;*/
+    background-color: transparent !important;
+    font-size: 12px !important;
+    line-height: 0 !important;
+    pointer-events: none;
+    z-index: 2147483647 !important;
+    position: absolute !important;
+    font-family: "Montserrat", sans-serif !important;
+    /*display: flex;*/
+    align-items: center !important;
+}
+
+.double-clap-debug-overlay {
+    /*position: fixed !important;
+    bottom: 5px !important;
+    left: 5px !important;
+    z-index: 2147483647 !important;*/
+    background: rgba(0,0,0,0.4) !important;
+    padding: 2px !important;
+    border-radius: 6px !important;
+    color: #0f0 !important;
+    font: 11px monospace !important;
+    width: 280px !important;
+    margin-top: 15px !important;
+    margin-bottom: 15px !important;
+}

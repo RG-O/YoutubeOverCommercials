@@ -88,7 +88,7 @@ chrome.storage.sync.get([
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
     optionsForm.isDoubleClapMode.checked = result.isDoubleClapMode ?? false;
-    optionsForm.clapSensitivity.value = result.clapSensitivity ?? 1;
+    optionsForm.clapSensitivity.value = result.clapSensitivity ?? 30;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
