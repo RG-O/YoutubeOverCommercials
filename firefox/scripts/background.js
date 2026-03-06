@@ -228,8 +228,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     } else if (message.action === "firefox-inject-clap-detector") {
 
-        console.log(sender.frameId);
-
         chrome.scripting.executeScript({
             target: { tabId: sender.tab.id, frameIds: [ sender.frameId ] },
             files: ["scripts/double-clap-detector.js"]

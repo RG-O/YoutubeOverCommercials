@@ -88,6 +88,7 @@ chrome.storage.sync.get([
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
     optionsForm.isDoubleClapMode.checked = result.isDoubleClapMode ?? false;
+    optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 30;
     optionsForm.clapSensitivity.value = result.clapSensitivity ?? 30;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
@@ -113,6 +114,7 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
         modeRadios[i].addEventListener('change', pingCompanionApp);
         modeRadios[i].addEventListener('change', enableSaveButton);
+        modeRadios[i].addEventListener('change', toggleDoubleClapUI);
     }
 
     document.getElementById(optionsForm.overlayVideoType.value).style.display = 'block';
@@ -130,6 +132,7 @@ chrome.storage.sync.get([
     document.getElementById('shouldOverlayVideoSizeAndLocationAutoSet').addEventListener('change', toggleDimensionsFieldsVisability);
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
     optionsForm.profileSelect.addEventListener('change', applyProfile);
+    optionsForm.isDoubleClapMode.addEventListener('change', toggleDoubleClapUI);
     document.getElementById("saveProfile").addEventListener("click", function (event) {
         event.preventDefault(); //prevent popup from being reloaded
         saveProfile(false);
@@ -156,7 +159,12 @@ chrome.storage.sync.get([
         optionsForm.profileName.value = optionsForm.profileName.value.replace(/[^A-Za-z0-9-_]/g, '');
         updateSaveProfileButtonsText();
     });
-
+    optionsForm.clapSensitivityRange.addEventListener('input', function (e) {
+        setClapSensitivityField();
+    });
+    optionsForm.clapSensitivity.addEventListener('input', function (e) {
+        setClapSensitivityRangeField();
+    });
     optionsForm.companionAppPingRetry.addEventListener("click", function (event) {
         event.preventDefault(); //prevent popup from being reloaded
         pingCompanionApp();
@@ -515,8 +523,9 @@ function togglePiPFieldsVisability() {
     }
 }
 
+
 function toggleDoubleClapUI() {
-    if (commercialDetectionMode === 'manual-clap' || optionsForm.isDoubleClapMode.checked) {
+    if (optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'block';
     } else {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'none';
@@ -529,6 +538,16 @@ function toggleDoubleClapUI() {
         document.getElementById('double-clap-mode-starter-instructions').style.display = 'block';
         document.getElementById('double-clap-mode-returner-instructions').style.display = 'none';
     }
+}
+
+
+function setClapSensitivityField() {
+    optionsForm.clapSensitivity.value = optionsForm.clapSensitivityRange.value;
+}
+
+
+function setClapSensitivityRangeField() {
+    optionsForm.clapSensitivityRange.value = optionsForm.clapSensitivity.value;
 }
 
 
@@ -602,6 +621,8 @@ function runAllToggles() {
     setPiPDisplayPositionGrid();
     pingCompanionApp();
     enableSaveButton();
+    setClapSensitivityRangeField();
+    toggleDoubleClapUI();
 }
 
 

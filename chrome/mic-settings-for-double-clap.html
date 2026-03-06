@@ -33,7 +33,7 @@
         <h2>Microphone & Clap Sensitivity Settings</h2>
 
         <p id="grant-access-message">
-            You will have to grant the extension access to your microphone in order to use the double clap detection mode. Make sure to <b>select "Allow while visiting the site"</b> to avoid interuptions later.
+            You will have to grant the extension access to your microphone in order to use the double clap detection mode. <span id="chrome-mic-selection-tip">Make sure to <b>select "Allow while visiting the site"</b> to avoid interuptions later.</span>
         </p>
 
         <div id="mic-access-error" class="error" style="display: none;">
@@ -57,22 +57,25 @@
                 </div>
 
                 <label for="clapSensitivity">&#128079; Clap Sensitivity:</label>
-                <div class="clap-sensitivity-wrapper settings-box" style="margin-bottom: 7px;">
-                    <div class="general-field">
-                        <input type="range" id="clapSensitivity" name="clapSensitivity" min="0" max="100" step="10" list="tickmarks">
-                        <datalist id="tickmarks">
-                            <option value="0" label="Low"></option>
-                            <option value="10" label=""></option>
-                            <option value="20" label=""></option>
-                            <option value="30" label=""></option>
-                            <option value="40" label=""></option>
-                            <option value="50" label="Medium"></option>
-                            <option value="60" label=""></option>
-                            <option value="70" label=""></option>
-                            <option value="80" label=""></option>
-                            <option value="90" label=""></option>
-                            <option value="100" label="High"></option>
-                        </datalist>
+                <div class="clap-sensitivity-wrapper settings-box">
+                    <div class="general-field range-and-number-wrapper">
+                        <div class="range-wrapper">
+                            <input type="range" id="clapSensitivityRange" name="clapSensitivityRange" class="clap-sensitivity-range" min="0" max="100" step="10">
+                            <datalist id="tickmarks">
+                                <option value="0" label="Low"></option>
+                                <option value="10" label=""></option>
+                                <option value="20" label=""></option>
+                                <option value="30" label=""></option>
+                                <option value="40" label=""></option>
+                                <option value="50" label="Medium"></option>
+                                <option value="60" label=""></option>
+                                <option value="70" label=""></option>
+                                <option value="80" label=""></option>
+                                <option value="90" label=""></option>
+                                <option value="100" label="High"></option>
+                            </datalist>
+                        </div>
+                        <input id="clapSensitivity" name="clapSensitivity" class="range-number-display" type="number" min="0" max="100">
                     </div>
                 </div>
                 <div id="sensitivity-warning" class="warning" style="display: none;">

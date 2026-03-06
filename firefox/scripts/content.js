@@ -1,5 +1,5 @@
 
-var isFirefox = true; //******************** remember to also update in background.js and overlay.js
+var isFirefox = true; //******************** remember to also update in background.js, overlay.js, and mic-settings-for-double-clap.js //TODO: can I pass this value somehow?
 
 //utility variables
 var isCommercialState = false;

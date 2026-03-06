@@ -25,7 +25,9 @@ document.addEventListener('DOMContentLoaded', function () {
         prepFoClapMonitor();
     }
 
-    setKeyboardShortcutText();
+    if (isFirefox) {
+        firefoxSpecificUpdates();
+    }
 
     demoVideo = document.getElementById("demo-vido");
 
@@ -33,13 +35,13 @@ document.addEventListener('DOMContentLoaded', function () {
 }, false);
 
 
-function setKeyboardShortcutText() {
-    if (isFirefox) {
-        let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
-        for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
-            keyboardShortcuts[i].innerHTML = `<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>`;
-        }
+function firefoxSpecificUpdates() {
+    let keyboardShortcuts = document.getElementsByClassName('keyboard-shortcut');
+    for (let i = 0, max = keyboardShortcuts.length; i < max; i++) {
+        keyboardShortcuts[i].innerHTML = `<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>C</kbd>`;
     }
+
+    document.getElementById('chrome-mic-selection-tip').style.display = 'none';
 }
 
 
@@ -61,6 +63,27 @@ function checkMicAccess() {
 }
 
 
+//stop listing for claps when user leaves configuration page to avoid ever having two clap detectors running at the same time
+function toggleLeavePage() {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            closeDoubleClapDetectorIFrame();
+            toggleReenterPage();
+        }
+    });
+}
+
+
+//reload page upon reentry to open clap detector again
+function toggleReenterPage() {
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            location.reload();
+        }
+    });
+}
+
+
 //TODO: most of this code is duplicated from content.js, can these use shared code?
 function prepFoClapMonitor() {
     chrome.storage.sync.get(['clapSensitivity'], (result) => {
@@ -68,6 +91,7 @@ function prepFoClapMonitor() {
         document.getElementById('loading-spinner').style.display = 'block';
 
         let clapSensitivity = result.clapSensitivity ?? 30;
+        form.clapSensitivityRange.value = clapSensitivity;
         form.clapSensitivity.value = clapSensitivity;
         addDoubleClapDetectorIFrame(clapSensitivity);
         launchClapPort();
@@ -116,6 +140,7 @@ function launchClapPort() {
             } else if (message.action === "update-clap-debug-metrics") {
                 updateClapDebugOverlay(message.clapDebugOverlayData);
             } else if (message.action === "mic-permission-success") {
+                toggleLeavePage();
                 initiateClapIndicator();
                 micReadyPageReconfiguration(message.inUseMicName);
             } else if (message.action === "mic-permission-error") {
@@ -148,7 +173,22 @@ function micPermissionErrorPageReconfiguration() {
 }
 
 
-form.clapSensitivity.addEventListener('change', (event) => {
+form.clapSensitivityRange.addEventListener('input', function (e) {
+    form.clapSensitivity.value = form.clapSensitivityRange.value;
+});
+form.clapSensitivity.addEventListener('input', function (e) {
+    form.clapSensitivityRange.value = form.clapSensitivity.value;
+});
+
+form.clapSensitivityRange.addEventListener('input', (e) => {
+    showHideSensitivityWarnings();
+});
+form.clapSensitivity.addEventListener('input', (e) => {
+    showHideSensitivityWarnings();
+});
+
+
+function showHideSensitivityWarnings() {
     clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: form.clapSensitivity.value });
     if (form.clapSensitivity.value > 50 && form.clapSensitivity.value < 100) {
         document.getElementById('sensitivity-warning').style.display = 'block';
@@ -160,7 +200,7 @@ form.clapSensitivity.addEventListener('change', (event) => {
         document.getElementById('sensitivity-warning').style.display = 'none';
         document.getElementById('background-noise-warning-extreme').style.display = 'none';
     }
-});
+}
 
 
 document.getElementById("save-button").onclick = function () {

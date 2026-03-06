@@ -1,5 +1,4 @@
 
-
 var microphoneContext;
 var microphoneAnalyser;
 var microphoneAnalyserFrequency;
@@ -37,12 +36,22 @@ var clapMonitorLastRanTime;
 var consecutiveClapMonitorRunDelays = 0;
 var wasLastClapMonitorRunSlowErrorConfirmed = false;
 var attackHoldFrames = 3;
+var clapPort = null;
 
-const queryString = window.location.search;
-const urlParams = new URLSearchParams(queryString);
-const scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap';
-const isDebugMode = urlParams.get('debug');
-var clapSensitivity = urlParams.get('sensitivity') ?? 30;
+//note: since firefox handles mic permissions differently and you can't port directly between this script and the content one...
+//the firefox version injects this js directly into the same frame as the content script so it shares all the same variables and functions as the content script...
+//except for the configuration page, that behaves the same way as chrome
+//TODO: set up some sort of namespaces or imports/exports for the variables/functions in this file
+var isInContentFrame = false;
+if (typeof mainVideoCollection !== 'undefined') {
+    isInContentFrame = true;
+} else {
+    let queryString = window.location.search;
+    let urlParams = new URLSearchParams(queryString);
+    window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap';
+    window.isDebugMode = urlParams.get('debug');
+    window.clapSensitivity = urlParams.get('sensitivity') ?? 30;
+}
 
 //user set preferences:
 var quietNoiseFloor;
@@ -70,28 +79,31 @@ const maxSensitivityValues = {
 
 if (isDebugMode) console.log('double-clap-detector.js running');
 
-var clapPort = null;
-chrome.runtime.onConnect.addListener(p => {
-    if (p.name === "clap-detector") {
-        if (isDebugMode) console.log('clap-detector connected');
-        clapPort = p;
-        clapPort.onDisconnect.addListener(() => {
-            clapPort = null;
-        });
-
-        clapPort.onMessage.addListener(message => {
-            if (message.action === "connected") {
-                prepFoClapMonitor();
-            } else if (message.action === "update-sensitivity") {
-                clapSensitivity = message.clapSensitivity;
-                setClapSensitivity(clapSensitivity);
-            }
-        });
-    }
-});
-
-
 setClapSensitivity(clapSensitivity);
+
+
+if (isInContentFrame) {
+    prepFoClapMonitor();
+} else {
+    chrome.runtime.onConnect.addListener(p => {
+        if (p.name === "clap-detector") {
+            if (isDebugMode) console.log('clap-detector connected');
+            clapPort = p;
+            clapPort.onDisconnect.addListener(() => {
+                clapPort = null;
+            });
+
+            clapPort.onMessage.addListener(message => {
+                if (message.action === "connected") {
+                    prepFoClapMonitor();
+                } else if (message.action === "update-sensitivity") {
+                    clapSensitivity = message.clapSensitivity;
+                    setClapSensitivity(clapSensitivity);
+                }
+            });
+        }
+    });
+}
 
 
 function setClapSensitivity(clapSensitivity) {
@@ -131,10 +143,7 @@ function prepFoClapMonitor() {
             if (isDebugMode) console.log('microphone connected');
 
             let inUseMicName = stream.getAudioTracks()[0].label;
-            sendToContent({
-                action: "mic-permission-success",
-                inUseMicName: inUseMicName
-            });
+            sendMicPermissionSuccess(inUseMicName);
 
             microphoneContext = new AudioContext();
             microphoneAnalyser = microphoneContext.createAnalyser();
@@ -154,13 +163,14 @@ function prepFoClapMonitor() {
         .catch((error) => {
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                 //don't want to open this tab if it is already open
-                if (scriptPurpose !== 'listen-double-clap-configure') {
+                //TODO: can I even do this from the a content script in firefox?
+                if (scriptPurpose !== 'listen-double-clap-configure' || isInContentFrame) {
                     //have to open this from here instead of content due to permissions
                     let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?message=permission-error');
                     window.open(url, '_blank');
                 }
 
-                sendToContent({ action: "mic-permission-error" }); //this will initiate closing this iframe
+                sendMicPermissionError();
             } else {
                 console.error(error);
             }
@@ -329,7 +339,7 @@ function onClap(now) {
 
             confirmDoubleClapSuccessTimer = setTimeout(() => {
                 // No third clap -> success
-                sendToContent({ action: "manual-commercial-mode-toggle" });
+                sendManualCommercialModeToggle();
 
                 sendClapIndicator(
                     // microphone
@@ -366,6 +376,18 @@ function onClap(now) {
 }
 
 
+function resetClaps() {
+    firstClapTime = null;
+
+    if (confirmDoubleClapSuccessTimer) {
+        clearTimeout(confirmDoubleClapSuccessTimer);
+        confirmDoubleClapSuccessTimer = null;
+    }
+
+    clapState = ClapState.IDLE;
+}
+
+
 function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
 }
@@ -376,26 +398,54 @@ function lerp(a, b, t) {
 }
 
 
-function sendClapIndicator(text, debugText, resetAfterMs = null) {
-    //TODO: had helper function to see if port is open?
-    sendToContent({
-        action: "update-clap-indicator",
-        text: text,
-        debugText: debugText,
-        resetAfterMs: resetAfterMs
-    });
+//checks for slowdowns in clap monitoring and let user know //TODO: avoid these slowdowns completely
+function performanceCheck(timeNow) {
+    let timeBetweenClapMonitorRuns = timeNow - clapMonitorLastRanTime;
+    if (timeBetweenClapMonitorRuns > 500) {
+        consecutiveClapMonitorRunDelays++;
+        if (consecutiveClapMonitorRunDelays > 10) {
+            sendSlowClapMonitorIssue();
+
+            wasLastClapMonitorRunSlowErrorConfirmed = true;
+        }
+    } else {
+        consecutiveClapMonitorRunDelays = 0;
+        if (wasLastClapMonitorRunSlowErrorConfirmed) {
+            sendClapIndicator(
+                // microphone
+                // clap
+                // clap
+                '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F',
+                'waiting for claps...'
+            );
+
+            wasLastClapMonitorRunSlowErrorConfirmed = false;
+        }
+    }
+    clapMonitorLastRanTime = timeNow;
 }
 
 
-function resetClaps() {
-    firstClapTime = null;
-
-    if (confirmDoubleClapSuccessTimer) {
-        clearTimeout(confirmDoubleClapSuccessTimer);
-        confirmDoubleClapSuccessTimer = null;
+function sendClapIndicator(text, debugText, resetAfterMs = null) {
+    if (isInContentFrame) {
+        setClapIndicator(text, resetAfterMs);
+    } else {
+        sendToContent({
+            action: "update-clap-indicator",
+            text: text,
+            debugText: debugText,
+            resetAfterMs: resetAfterMs
+        });
     }
+}
 
-    clapState = ClapState.IDLE;
+
+function sendManualCommercialModeToggle() {
+    if (isInContentFrame) {
+        manualCommercialModeToggle();
+    } else {
+        sendToContent({ action: "manual-commercial-mode-toggle" });
+    }
 }
 
 
@@ -414,35 +464,42 @@ function sendClapDebugOverlay() {
         hfThreshold,
     }
 
-    sendToContent({
-        action: "update-clap-debug-metrics",
-        clapDebugOverlayData: clapDebugOverlayData,
-    });
+    if (isInContentFrame) {
+        updateClapDebugOverlay(clapDebugOverlayData);
+    } else {
+        sendToContent({
+            action: "update-clap-debug-metrics",
+            clapDebugOverlayData: clapDebugOverlayData,
+        });
+    }
 }
 
 
-//checks for slowdowns in clap monitoring and let user know //TODO: avoid these slowdowns completely
-function performanceCheck(timeNow) {
-    let timeBetweenClapMonitorRuns = timeNow - clapMonitorLastRanTime;
-    if (timeBetweenClapMonitorRuns > 500) {
-        consecutiveClapMonitorRunDelays++;
-        if (consecutiveClapMonitorRunDelays > 10) {
-            sendToContent({ action: "slow-clap-monitor-issue" });
-            wasLastClapMonitorRunSlowErrorConfirmed = true;
-        }
+function sendMicPermissionSuccess(inUseMicName) {
+    if (isInContentFrame) {
+        micPermissionSuccess(inUseMicName);
     } else {
-        consecutiveClapMonitorRunDelays = 0;
-        if (wasLastClapMonitorRunSlowErrorConfirmed) {
-            sendClapIndicator(
-                // microphone
-                // clap
-                // clap
-                '\uD83C\uDFA4 \uD83D\uDC4F \uD83D\uDC4F',
-                'waiting for claps...'
-            );
-
-            wasLastClapMonitorRunSlowErrorConfirmed = false;
-        }
+        sendToContent({
+            action: "mic-permission-success",
+            inUseMicName: inUseMicName
+        });
     }
-    clapMonitorLastRanTime = timeNow;
+}
+
+
+function sendMicPermissionError() {
+    if (isInContentFrame) {
+        micPermissionError();
+    } else {
+        sendToContent({ action: "mic-permission-error" }); //this will initiate closing this iframe
+    }
+}
+
+
+function sendSlowClapMonitorIssue() {
+    if (isInContentFrame) {
+        slowClapMonitorIssue();
+    } else {
+        sendToContent({ action: "slow-clap-monitor-issue" });
+    }
 }

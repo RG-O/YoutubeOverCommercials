@@ -114,6 +114,7 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
         modeRadios[i].addEventListener('change', pingCompanionApp);
         modeRadios[i].addEventListener('change', enableSaveButton);
+        modeRadios[i].addEventListener('change', toggleDoubleClapUI);
     }
 
     document.getElementById(optionsForm.overlayVideoType.value).style.display = 'block';
@@ -131,6 +132,7 @@ chrome.storage.sync.get([
     document.getElementById('shouldOverlayVideoSizeAndLocationAutoSet').addEventListener('change', toggleDimensionsFieldsVisability);
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
     optionsForm.profileSelect.addEventListener('change', applyProfile);
+    optionsForm.isDoubleClapMode.addEventListener('change', toggleDoubleClapUI);
     document.getElementById("saveProfile").addEventListener("click", function (event) {
         event.preventDefault(); //prevent popup from being reloaded
         saveProfile(false);
@@ -158,10 +160,10 @@ chrome.storage.sync.get([
         updateSaveProfileButtonsText();
     });
     optionsForm.clapSensitivityRange.addEventListener('input', function (e) {
-        optionsForm.clapSensitivity.value = optionsForm.clapSensitivityRange.value;
+        setClapSensitivityField();
     });
     optionsForm.clapSensitivity.addEventListener('input', function (e) {
-        optionsForm.clapSensitivityRange.value = optionsForm.clapSensitivity.value;
+        setClapSensitivityRangeField();
     });
     optionsForm.companionAppPingRetry.addEventListener("click", function (event) {
         event.preventDefault(); //prevent popup from being reloaded
@@ -521,8 +523,9 @@ function togglePiPFieldsVisability() {
     }
 }
 
+
 function toggleDoubleClapUI() {
-    if (commercialDetectionMode === 'manual-clap' || optionsForm.isDoubleClapMode.checked) {
+    if (optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'block';
     } else {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'none';
@@ -535,6 +538,16 @@ function toggleDoubleClapUI() {
         document.getElementById('double-clap-mode-starter-instructions').style.display = 'block';
         document.getElementById('double-clap-mode-returner-instructions').style.display = 'none';
     }
+}
+
+
+function setClapSensitivityField() {
+    optionsForm.clapSensitivity.value = optionsForm.clapSensitivityRange.value;
+}
+
+
+function setClapSensitivityRangeField() {
+    optionsForm.clapSensitivityRange.value = optionsForm.clapSensitivity.value;
 }
 
 
@@ -608,6 +621,8 @@ function runAllToggles() {
     setPiPDisplayPositionGrid();
     pingCompanionApp();
     enableSaveButton();
+    setClapSensitivityRangeField();
+    toggleDoubleClapUI();
 }
 
 

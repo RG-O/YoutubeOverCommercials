@@ -1,5 +1,5 @@
 
-var isFirefox = false; //******************** remember to also update in background.js and overlay.js
+var isFirefox = false; //******************** remember to also update in background.js, overlay.js, and mic-settings-for-double-clap.js //TODO: can I pass this value somehow?
 
 //utility variables
 var isCommercialState = false;
@@ -2537,8 +2537,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                 //TODO: get this to work even when isFirstRun is false?
                 if (isDoubleClapMode) {
-                    //TODO: add utility for checking if clap port is connected
-                    if (clapPort) clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: clapSensitivity });
+                    if (isFirefox) {
+                        //note: this function is actually in double-clap-detector.js
+                        setClapSensitivity(clapSensitivity);
+                    } else {
+                        //TODO: add utility for checking if clap port is connected
+                        if (clapPort) clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: clapSensitivity });
+                    }
                 }
 
                 //verify user is not switching from or to audio only overlays //TODO: get that to work
@@ -2735,10 +2740,13 @@ function stopCommercialTimer() {
 
 
 function prepFoClapMonitor() {
-    //TODO: should initiateClapIndicator be moved below the others?
     initiateClapIndicator();
-    addDoubleClapDetectorIFrame();
-    launchClapPort();
+    if (isFirefox) {
+        chrome.runtime.sendMessage({ action: "firefox-inject-clap-detector" });
+    } else {
+        addDoubleClapDetectorIFrame();
+        launchClapPort();
+    }
 }
 
 
@@ -2788,8 +2796,7 @@ function launchClapPort() {
 
 
 function clapPortConnectionSuccess() {
-    shortPausePlayMainVideo();
-
+    //shortPausePlayMainVideo();
     clapPort.onMessage.addListener(message => {
         if (message.action === "update-clap-indicator") {
             setClapIndicator(message.text, message.resetAfterMs);
@@ -2799,17 +2806,33 @@ function clapPortConnectionSuccess() {
         } else if (message.action === "update-clap-debug-metrics") {
             updateClapDebugOverlay(message.clapDebugOverlayData);
         } else if (message.action === "mic-permission-success") {
-            if (isDebugMode) console.log('Mic Permission Succes. Using Mic: ' + message.inUseMicName);
+            micPermissionSuccess(message.inUseMicName);
         } else if (message.action === "mic-permission-error") {
-            //TODO: update message here
-            setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
-            closeDoubleClapDetectorIFrame();
-            //note: opening config mic page from the double-clap-detector.js
+            micPermissionError();
         } else if (message.action === "slow-clap-monitor-issue") {
-            //TODO: update message here
-            setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Currently experiencing issues listening for claps. Please try manually pausing and replaying main video or refreshing page and initiating extension again.'); // microphone and two warning triangles
+            slowClapMonitorIssue();
         }
     });
+}
+
+
+function micPermissionSuccess(inUseMicName) {
+    resetClapsIndicator();
+    //TODO: is this play/pause better right before or after the mic is connected?
+    shortPausePlayMainVideo();
+    if (isDebugMode) console.log('Mic Permission Succes. Using Mic: ' + inUseMicName);
+}
+
+
+function micPermissionError() {
+    setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
+    closeDoubleClapDetectorIFrame();
+    //note: opening config mic page from the double-clap-detector.js
+}
+
+
+function slowClapMonitorIssue() {
+    setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Currently experiencing issues listening for claps. Please try manually pausing and replaying main video or refreshing page and initiating extension again.'); // microphone and two warning triangles
 }
 
 
@@ -2972,7 +2995,7 @@ function initiateClapIndicator() {
     setOverlaySizeAndLocation(doubleClapIndicatorContainer, false, false, doubleClapIndicatorContainerLocation.horizontal, doubleClapIndicatorContainerLocation.vertical, "10px");
 
     doubleClapIndicator = document.createElement('div');
-    resetClapsIndicator();
+    doubleClapIndicator.innerText = 'Loading clap detector...';
     
     if (commercialDetectionMode === 'manual-clap') {
         let additionalWrapper = document.createElement('div');
