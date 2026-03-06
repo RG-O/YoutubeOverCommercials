@@ -26,3 +26,7 @@ Follow installation instructions for the optional companion app [here](https://g
 ## Support Me
 
 Support the dev: https://www.buymeacoffee.com/ryango :)
+
+## Discord
+
+Come join the extension discord: https://discord.gg/ccGtN2gker
