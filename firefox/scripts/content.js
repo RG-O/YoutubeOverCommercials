@@ -1092,10 +1092,10 @@ function captureOriginalPixelColor(selectedPixel) {
         }
 
         if (isDoubleClapMode) {
-            //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
+            //TODO: is it better that I'm doing this before spotify?
             setTimeout(() => {
                 prepFoClapMonitor();
-            }, 3000);
+            }, 1000);
         }
 
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
@@ -1522,10 +1522,10 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
     }
 
     if (isDoubleClapMode) {
-        //set to 3 second in case they have spotify and have not accepted the microphone access prompt yet
+        //TODO: is it better that I'm doing this before spotify?
         setTimeout(() => {
             prepFoClapMonitor();
-        }, 3000);
+        }, 1000);
     }
 }
 
@@ -1851,6 +1851,7 @@ function prepForAudioMonitor() {
     }
 
     if (isDoubleClapMode) {
+        //TODO: is it better that I'm doing this before spotify?
         setTimeout(() => {
             prepFoClapMonitor();
         }, 1000);
