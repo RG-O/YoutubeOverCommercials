@@ -91,6 +91,7 @@ function prepFoClapMonitor() {
         document.getElementById('loading-spinner').style.display = 'block';
 
         let clapSensitivity = result.clapSensitivity ?? 30;
+        form.clapSensitivityRange.value = clapSensitivity;
         form.clapSensitivity.value = clapSensitivity;
         addDoubleClapDetectorIFrame(clapSensitivity);
         launchClapPort();
@@ -172,7 +173,22 @@ function micPermissionErrorPageReconfiguration() {
 }
 
 
-form.clapSensitivity.addEventListener('change', (event) => {
+form.clapSensitivityRange.addEventListener('input', function (e) {
+    form.clapSensitivity.value = form.clapSensitivityRange.value;
+});
+form.clapSensitivity.addEventListener('input', function (e) {
+    form.clapSensitivityRange.value = form.clapSensitivity.value;
+});
+
+form.clapSensitivityRange.addEventListener('input', (e) => {
+    showHideSensitivityWarnings();
+});
+form.clapSensitivity.addEventListener('input', (e) => {
+    showHideSensitivityWarnings();
+});
+
+
+function showHideSensitivityWarnings() {
     clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: form.clapSensitivity.value });
     if (form.clapSensitivity.value > 50 && form.clapSensitivity.value < 100) {
         document.getElementById('sensitivity-warning').style.display = 'block';
@@ -184,7 +200,7 @@ form.clapSensitivity.addEventListener('change', (event) => {
         document.getElementById('sensitivity-warning').style.display = 'none';
         document.getElementById('background-noise-warning-extreme').style.display = 'none';
     }
-});
+}
 
 
 document.getElementById("save-button").onclick = function () {

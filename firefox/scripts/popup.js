@@ -88,6 +88,7 @@ chrome.storage.sync.get([
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
     optionsForm.isDoubleClapMode.checked = result.isDoubleClapMode ?? false;
+    optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 30;
     optionsForm.clapSensitivity.value = result.clapSensitivity ?? 30;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
@@ -156,7 +157,12 @@ chrome.storage.sync.get([
         optionsForm.profileName.value = optionsForm.profileName.value.replace(/[^A-Za-z0-9-_]/g, '');
         updateSaveProfileButtonsText();
     });
-
+    optionsForm.clapSensitivityRange.addEventListener('input', function (e) {
+        optionsForm.clapSensitivity.value = optionsForm.clapSensitivityRange.value;
+    });
+    optionsForm.clapSensitivity.addEventListener('input', function (e) {
+        optionsForm.clapSensitivityRange.value = optionsForm.clapSensitivity.value;
+    });
     optionsForm.companionAppPingRetry.addEventListener("click", function (event) {
         event.preventDefault(); //prevent popup from being reloaded
         pingCompanionApp();
