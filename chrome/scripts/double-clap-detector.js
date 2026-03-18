@@ -61,20 +61,20 @@ var hfThreshold;
 var hfMin;
 var hfMax;
 const minSensitivityValues = {
-    quietNoiseFloor: 0.06,
-    baseAttackThreshold: 0.05,
-    minAttackThreshold: 0.04,
-    hfThreshold: 2300,
-    hfMin: 8200,
-    hfMax: 9200
+    quietNoiseFloor: 0.075,
+    baseAttackThreshold: 0.054,
+    minAttackThreshold: 0.05,
+    hfThreshold: 2400,
+    hfMin: 8300,
+    hfMax: 9300
 };
 const maxSensitivityValues = {
     quietNoiseFloor: 0.005,
-    baseAttackThreshold: 0.008,
-    minAttackThreshold: 0.007,
-    hfThreshold: 500,
-    hfMin: 6500,
-    hfMax: 7500
+    baseAttackThreshold: 0.007,
+    minAttackThreshold: 0.005,
+    hfThreshold: 450,
+    hfMin: 6400,
+    hfMax: 7400
 };
 
 if (isDebugMode) console.log('double-clap-detector.js running');
