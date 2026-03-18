@@ -166,7 +166,7 @@ function prepFoClapMonitor() {
                 //TODO: can I even do this from the a content script in firefox?
                 if (scriptPurpose !== 'listen-double-clap-configure' || isInContentFrame) {
                     //have to open this from here instead of content due to permissions
-                    let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?message=permission-error');
+                    let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=permission-error');
                     window.open(url, '_blank');
                 }
 

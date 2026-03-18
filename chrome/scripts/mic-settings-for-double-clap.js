@@ -1,5 +1,5 @@
 
-var isFirefox = false; //********************
+let isFirefox = !!(window.location.href.indexOf('moz-extension') >= 0); //TODO: can this be used more?
 
 var isDebugMode = true;
 var getStartedButton;
@@ -18,6 +18,9 @@ var clapIndicatorResetTimer = null;
 var doubleClapDetectorIFrameContainer;
 var clapPort;
 
+let queryString = window.location.search;
+let urlParams = new URLSearchParams(queryString);
+let pageOpenReason = urlParams.get('page-open-reason') ?? 'unknown';
 
 document.addEventListener('DOMContentLoaded', function () {
     getStartedButton = document.getElementById("get-started-button");
@@ -58,6 +61,13 @@ function checkMicAccess() {
     navigator.permissions.query({ name: "microphone" }).then((result) => {
         if (result.state === "granted") {
             prepFoClapMonitor();
+
+            if (pageOpenReason === 'permission-error') {
+                //mic access is granted to extension but it isn't working on page user came from
+                otherPageMicAccessError();
+            }
+        } else if (pageOpenReason === 'permission-error') {
+            micPermissionErrorPageReconfiguration();
         }
     });
 }
@@ -78,6 +88,7 @@ function toggleLeavePage() {
 function toggleReenterPage() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
+            window.history.replaceState(null, '', window.location.pathname); //remove url parameters
             location.reload();
         }
     });
@@ -173,6 +184,15 @@ function micPermissionErrorPageReconfiguration() {
 }
 
 
+function otherPageMicAccessError() {
+    if (isFirefox) {
+        document.getElementById('previous-page-mic-access-error-firefox').style.display = 'block';
+    } else {
+        document.getElementById('previous-page-mic-access-error-chrome').style.display = 'block';
+    }
+}
+
+
 form.clapSensitivityRange.addEventListener('input', function (e) {
     form.clapSensitivity.value = form.clapSensitivityRange.value;
 });
@@ -211,7 +231,11 @@ document.getElementById("save-button").onclick = function () {
         }
         closeDoubleClapDetectorIFrame();
 
-        document.getElementById('show-on-save').style.display = 'block';
+        if (pageOpenReason === 'permission-error') {
+            document.getElementById('show-on-save-from-error').style.display = 'block';
+        } else {
+            document.getElementById('show-on-save').style.display = 'block';
+        }
     });
 }
 

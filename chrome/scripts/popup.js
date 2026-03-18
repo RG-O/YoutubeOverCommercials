@@ -354,7 +354,7 @@ document.getElementById("save-button").onclick = function () {
             if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
                 alert("You will now be taken to a special extension page to configure your microphone settings");
 
-                let url = chrome.runtime.getURL('mic-settings-for-double-clap.html');
+                let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=forced-configuration');
                 window.open(url, '_blank');
             } else {
                 //TODO: only show this message if one of these values have been updated and extension has already been initiated

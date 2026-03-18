@@ -226,6 +226,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
+    } else if (message.action === "chrome-initiate-clap-detector-iframe") {
+
+        chrome.tabs.sendMessage(
+            sender.tab.id,
+            { action: "add_clap_detector_iframe" },
+            { frameId: 0 }, //note: always injecting in top frame to avoid any iframe sandbox permission restrictions
+        );
+
+    } else if (message.action === "chrome-close-clap-detector-iframe") {
+
+        chrome.tabs.sendMessage(
+            sender.tab.id,
+            { action: "close_clap_detector_iframe" },
+            { frameId: 0 },
+        );
+
     } else if (message.action === "firefox-inject-clap-detector") {
 
         chrome.scripting.executeScript({
@@ -245,6 +261,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "chrome-view-tab-audio") {
 
         chromeListenToTab(message, sender);
+
+    } else if (message.action === "chrome-listen-microphone") {
+
+        chromeListenToMicrophone();
 
     }
 });
@@ -314,6 +334,29 @@ async function chromeListenToTab(message, sender) {
         constraints: constraints
     });
 
+}
+
+
+function chromeListenToMicrophone() {
+    chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
+        let clapSensitivity = result.clapSensitivity ?? 30;
+        let isDebugMode = result.isDebugMode ?? false;
+
+        let offscreenURL = 'offscreen.html?purpose=listen-double-clap&sensitivity=' + clapSensitivity;
+        if (isDebugMode) {
+            offscreenURL += '&debug=true';
+        }
+        chrome.offscreen.createDocument({
+            url: offscreenURL,
+            reasons: ['USER_MEDIA'],
+            justification: 'Listening to microphone to detect user claps'
+        }, function () {
+            chrome.runtime.sendMessage({
+                target: 'offscreen',
+                action: 'start-listening-microphone',
+            });
+        });
+    });
 }
 
 

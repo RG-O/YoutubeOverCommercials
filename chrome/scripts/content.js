@@ -2257,6 +2257,7 @@ function stopViewingTab() {
             action: "close"
         });
 
+        //TODO: is this necessary?
         window.removeEventListener('beforeunload', stopViewingTab);
 
     }
@@ -2466,7 +2467,7 @@ function closeSpotify() {
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action == 'content_update_logo_text') {
 
-        //TODO: can this prompt be brought above the message if so it applies to all?
+        //TODO: can this prompt be brought above the message if so it applies to all? note: except for the last one, but I guess that could be separated
         //ignore this message if not in necessary frame
         if (!mainVideoCollection) {
             return;
@@ -2593,6 +2594,25 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             });
 
         } //else do not update preferences because this gets updated on first run anyway
+
+    } else if (message.action == 'add_clap_detector_iframe') {
+
+        if (!inIFrame()) {
+            //as this won't be ran in the same frame that this was called from, it is safest to grab these preferences fresh
+            chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
+                let clapSensitivity = result.clapSensitivity ?? 30;
+                let isDebugMode = result.isDebugMode ?? false;
+
+                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
+            });
+
+        }
+
+    } else if (message.action == 'close_clap_detector_iframe') {
+
+        if (!inIFrame()) {
+            closeDoubleClapDetectorIFrame();
+        }
 
     }
 });
@@ -2742,16 +2762,29 @@ function stopCommercialTimer() {
 
 function prepFoClapMonitor() {
     initiateClapIndicator();
+
     if (isFirefox) {
         chrome.runtime.sendMessage({ action: "firefox-inject-clap-detector" });
     } else {
-        addDoubleClapDetectorIFrame();
+        if (commercialDetectionMode === 'manual-clap') {
+            chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
+            window.addEventListener('beforeunload', stopViewingTab);
+        } else {
+            //TODO: figure out closing/pausing offscreen doc for other modes so I can use offscreen doc here, as well. Note: only one offscreen doc can be open at a time
+            if (inIFrame()) {
+                chrome.runtime.sendMessage({ action: "chrome-initiate-clap-detector-iframe" });
+            } else {
+                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
+            }
+            
+        }
+
         launchClapPort();
     }
 }
 
 
-function addDoubleClapDetectorIFrame() {
+function addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode) {
     let insertLocation = document.getElementsByTagName('body')[0];
 
     doubleClapDetectorIFrameContainer = document.createElement('div');
@@ -2772,8 +2805,9 @@ function addDoubleClapDetectorIFrame() {
 
 
 function closeDoubleClapDetectorIFrame() {
-    //TODO: better way to do this than removing it?
-    doubleClapDetectorIFrameContainer.remove();
+    if (doubleClapDetectorIFrameContainer) {
+        doubleClapDetectorIFrameContainer.remove();
+    }
 }
 
 
@@ -2827,7 +2861,15 @@ function micPermissionSuccess(inUseMicName) {
 
 function micPermissionError() {
     setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
-    closeDoubleClapDetectorIFrame();
+    if (commercialDetectionMode === 'manual-clap') {
+        stopViewingTab();
+    } else {
+        if (inIFrame()) {
+            chrome.runtime.sendMessage({ action: "chrome-close-clap-detector-iframe" });
+        } else {
+            closeDoubleClapDetectorIFrame();
+        }
+    }
     //note: opening config mic page from the double-clap-detector.js
 }
 
