@@ -58,25 +58,57 @@ chrome.storage.sync.get([
     }
 
     //TODO: separate isOverlayVideoZoomMode into two settings, one that can zoom the video tag and the other that zooms on iframe (user could use both)
-    if (isOverlayVideoZoomMode && window.location.hostname == overlayHostName && overlayHostName != 'www.youtube.com') {
+    if (isOverlayVideoZoomMode && overlayHostName != 'www.youtube.com') {
         //make sure we are in iframe to make sure we don't zoom in on primary video if that is also in an iframe
         if (inIFrame()) {
             setTimeout(() => {
-                let iFrame = document.getElementsByTagName('iframe')[0];
+                if (window.location.hostname == overlayHostName) {
+                    let iFrame = document.getElementsByTagName('iframe')[0];
 
-                if (iFrame) {
-                    zoomInOnElement(iFrame);
+                    if (iFrame) {
+                        zoomInOnElement(iFrame);
 
-                    if (shouldHideYTBackground) {
-                        iFrame.style.setProperty("background", "transparent", "important");
+                        if (shouldHideYTBackground) {
+                            iFrame.style.setProperty("background", "transparent", "important");
 
-                        let parent = iFrame.parentElement;
-                        while (parent) {
-                            parent.style.setProperty("background", "transparent", "important");
-                            parent = parent.parentElement;
+                            let parent = iFrame.parentElement;
+                            while (parent) {
+                                parent.style.setProperty("background", "transparent", "important");
+                                parent = parent.parentElement;
+                            }
                         }
                     }
                 }
+
+                //wait until the user gets the video start or else it may be hard to do afterwards
+                setTimeout(() => {
+                    //hide all scrollbars
+                    //TODO: make own function to share with below
+                    let hideScollStyle = document.createElement("style");
+                    hideScollStyle.textContent = `
+                        ::-webkit-scrollbar {
+                            display: none;
+                        }
+                    `;
+                    let insertLocation = document.getElementsByTagName('body')[0];
+                    insertLocation.appendChild(hideScollStyle);
+
+                    //hide practically everything that isn't in the top frame, the main video frame, or is a video
+                    //TODO: make own function
+                    const keep = new Set();
+                    document.querySelectorAll('video, iframe').forEach(el => {
+                        let parent = el;
+                        while (parent) {
+                            keep.add(parent);
+                            parent = parent.parentElement;
+                        }
+                    });
+                    document.querySelectorAll('*').forEach(el => {
+                        if (!keep.has(el)) {
+                            el.style.display = 'none';
+                        }
+                    });
+                }, 15000);
             }, 1000);
         }
     }
