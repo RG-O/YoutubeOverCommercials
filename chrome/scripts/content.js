@@ -134,6 +134,8 @@ function setOverlayVideo() {
 
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
+    let iFrame = document.createElement('iframe');
+
     let url;
     if (overlayVideoType == 'yt-playlist') {
         url = "https://www.youtube.com/embed/?listType=playlist&amp;list=";
@@ -142,6 +144,9 @@ function setOverlayVideo() {
             let randomStart = Math.floor(Math.random() * 10) + 1;
             url += '&index=' + randomStart;
         }
+
+        //TODO: do this for all and not just youtube?
+        iFrame.referrerPolicy = "strict-origin-when-cross-origin";
     } else if (overlayVideoType == 'yt-video' || overlayVideoType == 'yt-live') {
         url = "https://www.youtube.com/embed/";
         if (overlayVideoType == 'yt-video') {
@@ -149,6 +154,8 @@ function setOverlayVideo() {
         } else {
             url = url.concat(ytLiveID);
         }
+
+        iFrame.referrerPolicy = "strict-origin-when-cross-origin";
     } else if (overlayVideoType == 'other-video') {
         if (isFirefox) {
             if (overlayHostName === chrome.i18n.getMessage("@@extension_id")) {
@@ -167,7 +174,7 @@ function setOverlayVideo() {
         url = otherLiveURL;
     }
 
-    let iFrame = document.createElement('iframe');
+    
     iFrame.src = url;
     iFrame.width = "100%";
     iFrame.height = "100%";
