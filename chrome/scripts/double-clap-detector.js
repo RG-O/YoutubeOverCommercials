@@ -339,8 +339,6 @@ function onClap(now) {
 
             confirmDoubleClapSuccessTimer = setTimeout(() => {
                 // No third clap -> success
-                sendManualCommercialModeToggle();
-
                 sendClapIndicator(
                     // microphone
                     // green check
@@ -349,6 +347,8 @@ function onClap(now) {
                     'successful double clap!',
                     1000
                 );
+
+                sendManualCommercialModeToggle();
 
                 resetClaps();
             }, guardAfter);
@@ -442,7 +442,7 @@ function sendClapIndicator(text, debugText, resetAfterMs = null) {
 
 function sendManualCommercialModeToggle() {
     if (isInContentFrame) {
-        manualCommercialModeToggle();
+        doubleClapCommercialModeToggle();
     } else {
         sendToContent({ action: "manual-commercial-mode-toggle" });
     }

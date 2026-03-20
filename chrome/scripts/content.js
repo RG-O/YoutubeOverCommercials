@@ -113,6 +113,7 @@ var shouldOverlayVideoSizeAndLocationAutoSet;
 var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
+var isDoubleClapOnlyReturnMode = true; //777
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -662,6 +663,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             isDoubleClapMode = result.isDoubleClapMode ?? false;
                             if (commercialDetectionMode === 'manual-clap') {
                                 isDoubleClapMode = true;
+                                isDoubleClapOnlyReturnMode = false;
                             }
                             clapSensitivity = result.clapSensitivity ?? 30;
 
@@ -2328,7 +2330,7 @@ function fullscreenChanged() {
         }
 
         if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
-            overlayVideo.style.visibility = "hidden";
+            if (overlayVideo) overlayVideo.style.visibility = "hidden";
         }
 
         //TODO: should I be doing it this way?
@@ -2795,6 +2797,7 @@ function addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode) {
     let insertLocation = document.getElementsByTagName('body')[0];
 
     doubleClapDetectorIFrameContainer = document.createElement('div');
+    doubleClapDetectorIFrameContainer.id = 'lcb-double-clap-detector-iframe-container';
     doubleClapDetectorIFrameContainer.style.display = "none";
     insertLocation.appendChild(doubleClapDetectorIFrameContainer);
 
@@ -2844,7 +2847,7 @@ function clapPortConnectionSuccess() {
             setClapIndicator(message.text, message.resetAfterMs);
             if (isDebugMode) console.log(message.debugText);
         } else if (message.action === "manual-commercial-mode-toggle") {
-            manualCommercialModeToggle();
+            doubleClapCommercialModeToggle();
         } else if (message.action === "update-clap-debug-metrics") {
             updateClapDebugOverlay(message.clapDebugOverlayData);
         } else if (message.action === "mic-permission-success") {
@@ -2900,6 +2903,15 @@ function shortPausePlayMainVideo() {
     setTimeout(() => {
         if (playingVideo) playingVideo.play();
     }, 500);
+}
+
+
+function doubleClapCommercialModeToggle() {
+    if (isDoubleClapOnlyReturnMode && !isCommercialState) {
+        setClapIndicator('\uD83C\uDFA4 \uD83D\uDEC7 \uD83D\uDEC7', 1000); //microphone and two prohibited sign emojis
+    } else {
+        manualCommercialModeToggle();
+    }
 }
 
 
