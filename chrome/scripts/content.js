@@ -2908,7 +2908,7 @@ function shortPausePlayMainVideo() {
 
 function doubleClapCommercialModeToggle() {
     if (isDoubleClapOnlyReturnMode && !isCommercialState) {
-        setClapIndicator('\uD83C\uDFA4 \uD83D\uDEC7 \uD83D\uDEC7', 1000); //microphone and two prohibited sign emojis
+        setClapIndicator('\uD83C\uDFA4 \uD83D\uDEAB \uD83D\uDEAB', 1000); //microphone and two prohibited sign emojis
     } else {
         manualCommercialModeToggle();
     }
