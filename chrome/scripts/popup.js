@@ -48,6 +48,7 @@ chrome.storage.sync.get([
     'hasPreviouslyInstalledCompanionApp',
     'isDoubleClapMode',
     'clapSensitivity',
+    'isDoubleClapOnlyReturnMode',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -90,6 +91,7 @@ chrome.storage.sync.get([
     optionsForm.isDoubleClapMode.checked = result.isDoubleClapMode ?? false;
     optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 30;
     optionsForm.clapSensitivity.value = result.clapSensitivity ?? 30;
+    optionsForm.isDoubleClapOnlyReturnMode.checked = result.isDoubleClapOnlyReturnMode ?? false;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
@@ -345,6 +347,7 @@ document.getElementById("save-button").onclick = function () {
             shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
+            isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
         }, function () {
 
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
@@ -453,6 +456,7 @@ function setOverlayDisplayPositionGrid() {
     });
 }
 
+
 function clearOverlayDisplayPositionGrid() {
     gridCells.forEach(cell => cell.classList.remove('selected'));
 }
@@ -468,6 +472,7 @@ function setPiPDisplayPositionGrid() {
         }
     });
 }
+
 
 function clearPiPDisplayPositionGrid() {
     pipGridCells.forEach(cell => cell.classList.remove('selected'));
@@ -529,6 +534,12 @@ function toggleDoubleClapUI() {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'block';
     } else {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'none';
+    }
+
+    if (optionsForm.commercialDetectionMode.value === 'manual-clap') {
+        document.getElementsByClassName('double-clap-only-return-mode-wrapper')[0].style.display = 'none';
+    } else {
+        document.getElementsByClassName('double-clap-only-return-mode-wrapper')[0].style.display = 'block';
     }
 
     if (hasGrantedMicAccess) {
@@ -712,6 +723,7 @@ function saveProfile(shouldSaveWithID) {
             shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
+            isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
         };
 
         chrome.storage.sync.set({ profiles }, () => {
@@ -737,6 +749,7 @@ function applyProfile() {
     if (selectedProfile) {
         if (profiles[selectedProfile]) {
 
+            //TODO: this could easily be a loop, right?
             if (typeof profiles[selectedProfile].overlayVideoType !== 'undefined') { optionsForm.overlayVideoType.value = profiles[selectedProfile].overlayVideoType; }
             if (typeof profiles[selectedProfile].ytPlaylistID !== 'undefined') { optionsForm.ytPlaylistID.value = profiles[selectedProfile].ytPlaylistID; }
             if (typeof profiles[selectedProfile].ytVideoID !== 'undefined') { optionsForm.ytVideoID.value = profiles[selectedProfile].ytVideoID; }
@@ -771,6 +784,7 @@ function applyProfile() {
             if (typeof profiles[selectedProfile].shouldShuffleYTPlaylist !== 'undefined') { optionsForm.shouldShuffleYTPlaylist.checked = profiles[selectedProfile].shouldShuffleYTPlaylist; }
             if (typeof profiles[selectedProfile].isDoubleClapMode !== 'undefined') { optionsForm.isDoubleClapMode.checked = profiles[selectedProfile].isDoubleClapMode; }
             if (typeof profiles[selectedProfile].clapSensitivity !== 'undefined') { optionsForm.clapSensitivity.value = profiles[selectedProfile].clapSensitivity; }
+            if (typeof profiles[selectedProfile].isDoubleClapOnlyReturnMode !== 'undefined') { optionsForm.isDoubleClapOnlyReturnMode.checked = profiles[selectedProfile].isDoubleClapOnlyReturnMode; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();

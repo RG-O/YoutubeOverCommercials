@@ -113,7 +113,7 @@ var shouldOverlayVideoSizeAndLocationAutoSet;
 var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
-var isDoubleClapOnlyReturnMode = true; //777
+var isDoubleClapOnlyReturnMode;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -597,6 +597,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'shouldShuffleYTPlaylist',
                             'isDoubleClapMode',
                             'clapSensitivity',
+                            'isDoubleClapOnlyReturnMode',
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -661,6 +662,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             audioLevelThreshold = result.audioLevelThreshold ?? 5;
                             shouldShuffleYTPlaylist = result.shouldShuffleYTPlaylist ?? false;
                             isDoubleClapMode = result.isDoubleClapMode ?? false;
+                            isDoubleClapOnlyReturnMode = result.isDoubleClapOnlyReturnMode ?? false;
                             if (commercialDetectionMode === 'manual-clap') {
                                 isDoubleClapMode = true;
                                 isDoubleClapOnlyReturnMode = false;
