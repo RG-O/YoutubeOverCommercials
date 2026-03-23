@@ -131,7 +131,7 @@ function setOverlayVideo() {
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
     insertLocation.insertBefore(overlayVideo, null);
-    overlayVideo.style.visibility = "visible";
+    overlayVideo.style.display = "block";
 
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
 
@@ -187,6 +187,25 @@ function setOverlayVideo() {
 }
 
 
+function showOverlayVideo() {
+    overlayVideo.style.display = "block";
+    //TODO: add a clear timeout for show and hide
+    setTimeout(() => {
+        overlayVideo.classList.remove("hidden");
+    }, 300);
+    
+}
+
+
+function hideOverlayVideo() {
+    overlayVideo.classList.add("hidden");
+    //wait for fade animation to run
+    setTimeout(() => {
+        overlayVideo.style.display = "none";
+    }, 200);
+}
+
+
 function removeOverlayVideo() {
     overlayVideo.remove();
     overlayScreen.remove();
@@ -214,7 +233,8 @@ function addOverlayFade(insertLocation) {
             //setting location of hole for the advanced logo detector to look through
             overlayScreen.style.setProperty("left", `${(advancedLogoSelectionTopLeftLocation.x - 3)}px`, "important");
             overlayScreen.style.setProperty("top", `${(advancedLogoSelectionTopLeftLocation.y - 1)}px`, "important");
-            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            //TODO: have mainVideoFade be an actual number instead of doing this weird decimal thing
+            overlayScreen.style.setProperty("--overlay-alpha", `.${mainVideoFade}`);
             insertLocation.insertBefore(overlayScreen, null);
 
         } else if (selectedPixel) {
@@ -232,7 +252,7 @@ function addOverlayFade(insertLocation) {
             //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
             overlayScreen.style.left = (selectedPixel.x - 3) + 'px';
             overlayScreen.style.top = (selectedPixel.y - 3) + 'px';
-            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            overlayScreen.style.setProperty("--overlay-alpha", `.${mainVideoFade}`);
             insertLocation.insertBefore(overlayScreen, null);
 
         } else {
@@ -249,9 +269,12 @@ function showOverlayFade() {
 
     if (mainVideoFade > 0) {
         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+            //dim slow like a movie theater
+            overlayScreen.style.setProperty("transition", "background-color 5s ease");
             overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
         } else {
-            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            overlayScreen.style.setProperty("transition", "box-shadow 5s ease");
+            overlayScreen.style.setProperty("--overlay-alpha", `.${mainVideoFade}`);
         }
     }
 
@@ -262,9 +285,12 @@ function hideOverlayFade() {
 
     if (mainVideoFade > 0) {
         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+            //remove fade fast to get back to the action
+            overlayScreen.style.setProperty("transition", "background-color 0.2s ease");
             overlayScreen.style.backgroundColor = "transparent";
         } else {
-            overlayScreen.style.boxShadow = "0 0 0";
+            overlayScreen.style.setProperty("transition", "box-shadow 0.2s ease");
+            overlayScreen.style.setProperty("--overlay-alpha", "0");
         }
     }
 
@@ -476,7 +502,7 @@ function endCommercialMode() {
         if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
             enterPiPMode();
         } else {
-            overlayVideo.style.visibility = "hidden";
+            hideOverlayVideo();
         }
 
         hideOverlayFade();
@@ -526,7 +552,7 @@ function startCommercialMode() {
                 exitPiPMode();
             }
 
-            overlayVideo.style.visibility = "visible";
+            showOverlayVideo();
 
         }
 
@@ -2332,7 +2358,8 @@ function fullscreenChanged() {
         }
 
         if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
-            if (overlayVideo) overlayVideo.style.visibility = "hidden";
+            if (overlayVideo) hideOverlayVideo();
+
         }
 
         //TODO: should I be doing it this way?

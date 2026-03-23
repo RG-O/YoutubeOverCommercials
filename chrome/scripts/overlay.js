@@ -11,6 +11,8 @@ var isCorrectOverlayFrame = true;
 var shouldShuffleYTPlaylist;
 var maxPlaylistVideoNumber;
 var playlistVideosPlayedArray = [];
+var overlayVideoLocationHorizontal;
+var overlayVideoLocationVertical;
 
 
 //grab user set values and then run initialCommercialState() right when script is injected (assuming script is injected after frame had some time to load)
@@ -21,7 +23,9 @@ chrome.storage.sync.get([
     'isOtherSiteTroubleshootMode',
     'isOverlayVideoZoomMode',
     'commercialDetectionMode',
-    'shouldShuffleYTPlaylist'
+    'shouldShuffleYTPlaylist',
+    'overlayVideoLocationHorizontal',
+    'overlayVideoLocationVertical',
 ], (result) => {
 
     overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
@@ -38,6 +42,8 @@ chrome.storage.sync.get([
     if (overlayVideoType !== 'yt-playlist') {
         shouldShuffleYTPlaylist = false;
     }
+    overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+    overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -143,7 +149,20 @@ function initialCommercialState() {
 
     //initial click or play on the overlay video
     if (overlayHostName == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
+
         document.getElementsByClassName('video-stream html5-main-video')[0].click();
+
+        setTimeout(() => {
+
+            //unmute youtube video if muted
+            if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
+
+                document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+
+            }
+
+        }, 5000);
+
     } else if (overlayHostName != 'tv.youtube.com') {
 
         if (isOtherSiteTroubleshootMode) {
@@ -186,17 +205,22 @@ function initialCommercialState() {
             myYTOCVideo = document.getElementsByTagName('video')[0];
         }
 
-        if (myYTOCVideo && shouldHideYTBackground) {
-            myYTOCVideo.style.setProperty("background", "transparent", "important");
+        if (myYTOCVideo) {
+            if (shouldHideYTBackground) {
+                myYTOCVideo.style.setProperty("background", "transparent", "important");
 
-            let parent = myYTOCVideo.parentElement;
-            while (parent) {
-                parent.style.setProperty("background", "transparent", "important");
-                parent = parent.parentElement;
+                let parent = myYTOCVideo.parentElement;
+                while (parent) {
+                    parent.style.setProperty("background", "transparent", "important");
+                    parent = parent.parentElement;
+                }
             }
+
+            //TODO: get this to work
+            //adjustOverlayVideoPositioning(myYTOCVideo, overlayVideoLocationHorizontal, overlayVideoLocationVertical);
         }
 
-        if (isOverlayVideoZoomMode) {
+        if (isOverlayVideoZoomMode && overlayHostName != 'www.youtube.com') {
             //make sure we are in iframe to make sure we don't zoom in on primary video //TODO: may not actually be needed here because we already confirmed this is not where the primary video is
             if (inIFrame()) {
                 let overlayVideoCollection = document.getElementsByTagName('video');
@@ -407,9 +431,9 @@ function startCommercialState() {
 
     if (overlayHostName == 'www.youtube.com') {
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
+        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
 
-            document.getElementsByClassName('ytp-mute-button')[0].click();
+            document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
 
         } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
 
@@ -474,9 +498,9 @@ function stopCommercialState() {
 
     if (overlayHostName == 'www.youtube.com') {
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Mute (m)"]')) {
+        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Mute"]')) {
 
-            document.getElementsByClassName('ytp-mute-button')[0].click();
+            document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
 
         } else if (overlayVideoType != 'yt-live' && !document.getElementsByTagName('video')[0].paused) {
 
@@ -561,6 +585,25 @@ function getRandomVideoNumber() {
     const index = Math.floor(Math.random() * playlistVideosPlayedArray.length);
     //removes the video number from array when it returns it
     return playlistVideosPlayedArray.splice(index, 1)[0];
+}
+
+
+//TODO: get this to work
+function adjustOverlayVideoPositioning(overlay, xLocation, yLocation) {
+
+    if (xLocation == 'left') {
+        overlay.style.setProperty("left", "0", "important");
+    }
+    if (xLocation == 'right') {
+        overlay.style.setProperty("right", "0", "important");
+    }
+    if (yLocation == 'top') {
+        overlay.style.setProperty("top", "0", "important");
+    }
+    if (yLocation == 'bottom') {
+        overlay.style.setProperty("bottom", "0", "important");
+    }
+
 }
 
 
