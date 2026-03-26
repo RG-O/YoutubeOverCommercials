@@ -6,6 +6,16 @@ var pipGridCells;
 var hasPreviouslyInstalledCompanionApp;
 var hasGrantedMicAccess = false;
 
+//variables that currently cannot be updated after initiation of the extension. declaring them here to see if user updates them to see if I should tell them to refresh.
+var overlayVideoType; //note: this variable can sorta change
+var shouldHideYTBackground;
+var isOtherSiteTroubleshootMode;
+var isOverlayVideoZoomMode;
+var commercialDetectionMode;
+var shouldShuffleYTPlaylist;
+var isDebugMode;
+var isDoubleClapMode;
+
 //TODO: I now have such a crazy amount of user set values that are stored/retrieved all over the place, is there a way to create a singular location to manage them?
 //grab all user set values
 chrome.storage.sync.get([
@@ -66,7 +76,7 @@ chrome.storage.sync.get([
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
-    let commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+    commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
     //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings)
     if (commercialDetectionMode === 'auto') {
         commercialDetectionMode = 'auto-pixel-normal';
@@ -260,6 +270,16 @@ chrome.storage.sync.get([
 
         //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
         runAllToggles();
+
+        //capturing for comparison on save
+        overlayVideoType = optionsForm.overlayVideoType.value;
+        shouldHideYTBackground = optionsForm.shouldHideYTBackground.checked;
+        isOtherSiteTroubleshootMode = optionsForm.isOtherSiteTroubleshootMode.checked;
+        isOverlayVideoZoomMode = optionsForm.isOverlayVideoZoomMode.checked;
+        //commercialDetectionMode = optionsForm.commercialDetectionMode.value; //declared above
+        shouldShuffleYTPlaylist = optionsForm.shouldShuffleYTPlaylist.checked;
+        isDebugMode = optionsForm.isDebugMode.checked;
+        isDoubleClapMode = optionsForm.isDoubleClapMode.checked;
     });
 
 });
@@ -353,15 +373,37 @@ document.getElementById("save-button").onclick = function () {
             //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
             chrome.runtime.sendMessage({ action: "background_update_preferences" });
 
+            let isSwitchingToOrFromAudioAudioOnlyOverlay = false;
+            if (
+                overlayVideoType !== optionsForm.overlayVideoType.value &&
+                (
+                    overlayVideoType == 'spotify' ||
+                    overlayVideoType == 'other-tabs' ||
+                    optionsForm.overlayVideoType.value == 'spotify' ||
+                    optionsForm.overlayVideoType.value == 'other-tabs'
+                )
+            ) {
+                isSwitchingToOrFromAudioAudioOnlyOverlay = true;
+            }
+
             //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
             if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
                 alert("You will now be taken to a special extension page to configure your microphone settings");
 
                 let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=forced-configuration');
                 window.open(url, '_blank');
-            } else {
-                //TODO: only show this message if one of these values have been updated and extension has already been initiated
-                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+            } else if (
+                isSwitchingToOrFromAudioAudioOnlyOverlay ||
+                shouldHideYTBackground !== optionsForm.shouldHideYTBackground.checked ||
+                isOtherSiteTroubleshootMode !== optionsForm.isOtherSiteTroubleshootMode.checked ||
+                isOverlayVideoZoomMode !== optionsForm.isOverlayVideoZoomMode.checked ||
+                commercialDetectionMode !== optionsForm.commercialDetectionMode.value ||
+                shouldShuffleYTPlaylist !== optionsForm.shouldShuffleYTPlaylist.checked ||
+                isDebugMode !== optionsForm.isDebugMode.checked ||
+                isDoubleClapMode !== optionsForm.isDoubleClapMode.checked
+            ) {
+                //TODO: figure out if user has already initiated the extension or not
+                alert("Note: If you have already initiated the extension on a tab, one or more settings that you updated will need a page refresh in order to take effect.");
             }
 
             //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed

@@ -40,6 +40,7 @@ var audioLevelBar;
 var audioLevelThresholdLine;
 var windowWidth;
 var windowHeight;
+var selectedPixelGridLocation;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -52,6 +53,7 @@ var advancedLogoMismatchThreshold = 0.33; //note: will be lowered slightly if co
 var advancedLogoInfoContainer;
 var advancedLogoEdgeImage;
 var advancedLogoFinalMaskImage;
+var locationToBaseAutoOverlaySizeAndLocation;
 //var advancedLogoInsideLogoColorImageDebug; //debug-high
 var hasMaskCompleteMessageBeenDismissed = false;
 var consecutiveAdvancedLogoAnalysisCallFailures = 0;
@@ -989,6 +991,7 @@ function hideVerticleScrollbar() {
     let body = document.getElementsByTagName('body')[0];
 
     let hideScollStyle = document.createElement("style");
+    hideScollStyle.id = "lcb-hide-verticle-scroll-bar-style";
     hideScollStyle.textContent = `
         ::-webkit-scrollbar {
             display: none;
@@ -1078,7 +1081,7 @@ function pixelSelection(event) {
 
         document.addEventListener('fullscreenchange', fullscreenChanged);
 
-        let selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
+        selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
 
         //TODO: create user option to turn off logo completely
         setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation);
@@ -1418,10 +1421,9 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     document.addEventListener('fullscreenchange', fullscreenChanged);
 
     selectedPixel = { ...advancedLogoSelectionTopLeftLocation };
-    let selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
+    selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
     //TODO: I have a lot of different top/bottom and right/left screen checks all over the place, perhaps I should combine them.
     if (shouldOverlayVideoSizeAndLocationAutoSet) {
-        let locationToBaseAutoOverlaySizeAndLocation;
         if (selectedPixelGridLocation.isTop) {
             locationToBaseAutoOverlaySizeAndLocation = { ...advancedLogoSelectionBottomRightLocation };
         } else {
@@ -2547,28 +2549,57 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'ytLiveID',
                 'otherVideoURL',
                 'otherLiveURL',
+                //'isOtherSiteTroubleshootMode',
+                'mainVideoFade',
+                'videoOverlayWidth',
+                'videoOverlayHeight',
+                'overlayVideoLocationHorizontal',
+                'overlayVideoLocationVertical',
+                'mainVideoVolumeDuringCommercials',
+                'mainVideoVolumeDuringNonCommercials',
+                //'commercialDetectionMode',
                 'mismatchCountThreshold',
                 'matchCountThreshold',
                 'colorDifferenceMatchingThreshold',
                 'manualOverrideCooldown',
+                //'isDebugMode',
+                'isPiPMode',
                 'pipLocationHorizontal',
                 'pipLocationVertical',
                 'pipHeight',
                 'pipWidth',
                 'audioLevelThreshold',
+                'shouldOverlayVideoSizeAndLocationAutoSet',
+                //'shouldShuffleYTPlaylist',
+                //'isDoubleClapMode',
                 'clapSensitivity',
+                'isDoubleClapOnlyReturnMode',
             ], (result) => {
 
                 //set them to default if not set by user yet
+                mainVideoFade = result.mainVideoFade ?? 65;
+                mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
+                mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
+                if (mainVideoVolumeDuringCommercials > 0) {
+                    mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
+                }
+                if (mainVideoVolumeDuringNonCommercials > 0) {
+                    mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
+                }
                 mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                 matchCountThreshold = result.matchCountThreshold ?? 2;
                 colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                 manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                isPiPMode = result.isPiPMode ?? true;
                 pipLocationHorizontal = result.pipLocationHorizontal ?? 'left';
                 pipLocationVertical = result.pipLocationVertical ?? 'top';
                 pipHeight = result.pipHeight ?? 20;
                 pipWidth = result.pipWidth ?? 20;
                 audioLevelThreshold = result.audioLevelThreshold ?? 5;
+                isDoubleClapOnlyReturnMode = result.isDoubleClapOnlyReturnMode ?? false;
+                if (commercialDetectionMode === 'manual-clap') {
+                    isDoubleClapOnlyReturnMode = false;
+                }
                 clapSensitivity = result.clapSensitivity ?? 30;
 
                 if (audioLevelThresholdLine) {
@@ -2623,8 +2654,50 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                     }
 
+                    
+                    if (overlayVideo) {
+
+                        //if it is an auto pixel mode and user switching to autoset overlay video
+                        if (
+                            commercialDetectionMode.indexOf('auto-pixel') >= 0 &&
+                            result.shouldOverlayVideoSizeAndLocationAutoSet &&
+                            shouldOverlayVideoSizeAndLocationAutoSet !== result.shouldOverlayVideoSizeAndLocationAutoSet
+                        ) {
+
+                            if (!document.getElementById('lcb-hide-verticle-scroll-bar-style')) {
+                                hideVerticleScrollbar();
+                            }
+
+                            if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
+                                if (locationToBaseAutoOverlaySizeAndLocation && selectedPixelGridLocation) {
+                                    autoUpdateOverlayVideoSizeAndLocationValues(locationToBaseAutoOverlaySizeAndLocation, selectedPixelGridLocation)
+                                }
+                            } else {
+                                if (selectedPixel && selectedPixelGridLocation) {
+                                    autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixelGridLocation);
+                                }
+                            }
+
+                        } else if (
+                            videoOverlayWidth !== result.videoOverlayWidth ||
+                            videoOverlayHeight !== result.videoOverlayHeight ||
+                            overlayVideoLocationHorizontal !== result.overlayVideoLocationHorizontal ||
+                            overlayVideoLocationVertical !== result.overlayVideoLocationVertical
+                        ) {
+
+                            //updating video overlay size/position if user chose to do so
+                            overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                            overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                            videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                            videoOverlayHeight = result.videoOverlayHeight ?? 75;
+
+                            setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+
+                        }
+
+                    }
+
                 }
-                
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
