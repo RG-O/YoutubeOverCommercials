@@ -370,8 +370,13 @@ document.getElementById("save-button").onclick = function () {
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
         }, function () {
 
-            //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
-            chrome.runtime.sendMessage({ action: "background_update_preferences" });
+            let shouldDirectToMicConfig = false;
+            let shouldShowRefreshMessage = false;
+
+            //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
+            if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
+                shouldDirectToMicConfig = true;
+            }
 
             let isSwitchingToOrFromAudioAudioOnlyOverlay = false;
             if (
@@ -386,13 +391,7 @@ document.getElementById("save-button").onclick = function () {
                 isSwitchingToOrFromAudioAudioOnlyOverlay = true;
             }
 
-            //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
-            if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
-                alert("You will now be taken to a special extension page to configure your microphone settings");
-
-                let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=forced-configuration');
-                window.open(url, '_blank');
-            } else if (
+            if (
                 isSwitchingToOrFromAudioAudioOnlyOverlay ||
                 shouldHideYTBackground !== optionsForm.shouldHideYTBackground.checked ||
                 isOtherSiteTroubleshootMode !== optionsForm.isOtherSiteTroubleshootMode.checked ||
@@ -402,12 +401,22 @@ document.getElementById("save-button").onclick = function () {
                 isDebugMode !== optionsForm.isDebugMode.checked ||
                 isDoubleClapMode !== optionsForm.isDoubleClapMode.checked
             ) {
-                //TODO: figure out if user has already initiated the extension or not
-                alert("Note: If you have already initiated the extension on a tab, one or more settings that you updated will need a page refresh in order to take effect.");
+                shouldShowRefreshMessage = true;
             }
 
-            //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
-            window.close();
+            chrome.runtime.sendMessage({ action: "background_update_preferences" })
+                .then((response) => {
+                    if (!response.isLastExtensionInitiatedTabStillOpen) {
+                        shouldShowRefreshMessage = false;
+                    }
+
+                    closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig);
+                })
+                .catch((error) => {
+                    console.log(error);
+                    closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig);
+                });
+
 
         });
 
@@ -415,6 +424,24 @@ document.getElementById("save-button").onclick = function () {
         alert('Field missing. Please input all fields.');
     }
 
+}
+
+
+function closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig) {
+    if (shouldShowRefreshMessage) {
+        alert("One or more settings that you updated will need a page refresh in order to take effect.");
+    }
+
+    //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
+    if (shouldDirectToMicConfig) {
+        alert("You will now be taken to a special extension page to configure your microphone settings");
+
+        let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=forced-configuration');
+        window.open(url, '_blank');
+    }
+
+    //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
+    window.close();
 }
 
 

@@ -379,10 +379,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                         chrome.tabs.sendMessage(result.mainVideoTabID, { action: "content_update_preferences" });
 
+                        sendResponse({ isLastExtensionInitiatedTabStillOpen: true });
+
+                    } else {
+                        sendResponse({ isLastExtensionInitiatedTabStillOpen: false });
                     }
 
                 });
 
+            } else {
+                sendResponse({ isLastExtensionInitiatedTabStillOpen: false });
             }
 
         });
