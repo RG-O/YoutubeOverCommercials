@@ -429,7 +429,7 @@ document.getElementById("save-button").onclick = function () {
 
 function closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig) {
     if (shouldShowRefreshMessage) {
-        alert("One or more settings that you updated will need a page refresh in order to take effect.");
+        alert("One or more settings that you updated will need a page refresh and then a reinitiation of the extension in order to take effect.");
     }
 
     //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
