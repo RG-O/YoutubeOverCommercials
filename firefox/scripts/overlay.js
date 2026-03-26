@@ -11,6 +11,8 @@ var isCorrectOverlayFrame = true;
 var shouldShuffleYTPlaylist;
 var maxPlaylistVideoNumber;
 var playlistVideosPlayedArray = [];
+var overlayVideoLocationHorizontal;
+var overlayVideoLocationVertical;
 
 
 //grab user set values and then run initialCommercialState() right when script is injected (assuming script is injected after frame had some time to load)
@@ -21,7 +23,9 @@ chrome.storage.sync.get([
     'isOtherSiteTroubleshootMode',
     'isOverlayVideoZoomMode',
     'commercialDetectionMode',
-    'shouldShuffleYTPlaylist'
+    'shouldShuffleYTPlaylist',
+    'overlayVideoLocationHorizontal',
+    'overlayVideoLocationVertical',
 ], (result) => {
 
     overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
@@ -38,6 +42,8 @@ chrome.storage.sync.get([
     if (overlayVideoType !== 'yt-playlist') {
         shouldShuffleYTPlaylist = false;
     }
+    overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+    overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -58,25 +64,66 @@ chrome.storage.sync.get([
     }
 
     //TODO: separate isOverlayVideoZoomMode into two settings, one that can zoom the video tag and the other that zooms on iframe (user could use both)
-    if (isOverlayVideoZoomMode && window.location.hostname == overlayHostName && overlayHostName != 'www.youtube.com') {
+    if (isOverlayVideoZoomMode && overlayHostName != 'www.youtube.com') {
         //make sure we are in iframe to make sure we don't zoom in on primary video if that is also in an iframe
         if (inIFrame()) {
             setTimeout(() => {
-                let iFrame = document.getElementsByTagName('iframe')[0];
+                if (window.location.hostname == overlayHostName) {
+                    let iFrame = document.getElementsByTagName('iframe')[0];
 
-                if (iFrame) {
-                    zoomInOnElement(iFrame);
+                    if (iFrame) {
+                        zoomInOnElement(iFrame);
 
-                    if (shouldHideYTBackground) {
-                        iFrame.style.setProperty("background", "transparent", "important");
+                        if (shouldHideYTBackground) {
+                            iFrame.style.setProperty("background", "transparent", "important");
 
-                        let parent = iFrame.parentElement;
-                        while (parent) {
-                            parent.style.setProperty("background", "transparent", "important");
-                            parent = parent.parentElement;
+                            let parent = iFrame.parentElement;
+                            while (parent) {
+                                parent.style.setProperty("background", "transparent", "important");
+                                parent = parent.parentElement;
+                            }
                         }
                     }
                 }
+
+                //wait until the user gets the video start or else it may be hard to do afterwards
+                setTimeout(() => {
+                    //hide all scrollbars
+                    //TODO: make own function to share with below
+                    let hideScollStyle = document.createElement("style");
+                    hideScollStyle.textContent = `
+                        ::-webkit-scrollbar {
+                            display: none;
+                        }
+                    `;
+                    let insertLocation = document.getElementsByTagName('body')[0];
+                    insertLocation.appendChild(hideScollStyle);
+                    if (isFirefox) {
+                        if (document.getElementsByTagName('html')[0]) {
+                            //TODO: I believe scrollbar-width is experimental and not supported with all firefox versions, I should try to find something else
+                            document.getElementsByTagName('html')[0].style.scrollbarWidth = "none";
+                        }
+                        if (document.getElementsByTagName('body')[0]) {
+                            document.getElementsByTagName('body')[0].style.scrollbarWidth = "none";
+                        }
+                    }
+
+                    //hide practically everything that isn't in the top frame, the main video frame, or is a video
+                    //TODO: make own function
+                    const keep = new Set();
+                    document.querySelectorAll('video, iframe').forEach(el => {
+                        let parent = el;
+                        while (parent) {
+                            keep.add(parent);
+                            parent = parent.parentElement;
+                        }
+                    });
+                    document.querySelectorAll('*').forEach(el => {
+                        if (!keep.has(el)) {
+                            el.style.display = 'none';
+                        }
+                    });
+                }, 15000);
             }, 1000);
         }
     }
@@ -111,7 +158,21 @@ function initialCommercialState() {
 
     //initial click or play on the overlay video
     if (overlayHostName == 'www.youtube.com' && document.getElementsByClassName('video-stream html5-main-video')[0]) {
+
         document.getElementsByClassName('video-stream html5-main-video')[0].click();
+
+        setTimeout(() => {
+
+            //unmute youtube video if muted
+            //accounting for both the old and new youtube UI. As of 3/26/26, chrome gets the new UI and firefox gets the old UI, I assume firefox will update to the new in the future
+            if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
+                document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            } else if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[aria-label="Unmute (m)"]')) {
+                document.getElementsByClassName('ytp-mute-button')[0].click();
+            }
+
+        }, 5000);
+
     } else if (overlayHostName != 'tv.youtube.com') {
 
         if (isOtherSiteTroubleshootMode) {
@@ -154,17 +215,22 @@ function initialCommercialState() {
             myYTOCVideo = document.getElementsByTagName('video')[0];
         }
 
-        if (myYTOCVideo && shouldHideYTBackground) {
-            myYTOCVideo.style.setProperty("background", "transparent", "important");
+        if (myYTOCVideo) {
+            if (shouldHideYTBackground) {
+                myYTOCVideo.style.setProperty("background", "transparent", "important");
 
-            let parent = myYTOCVideo.parentElement;
-            while (parent) {
-                parent.style.setProperty("background", "transparent", "important");
-                parent = parent.parentElement;
+                let parent = myYTOCVideo.parentElement;
+                while (parent) {
+                    parent.style.setProperty("background", "transparent", "important");
+                    parent = parent.parentElement;
+                }
             }
+
+            //TODO: get this to work
+            //adjustOverlayVideoPositioning(myYTOCVideo, overlayVideoLocationHorizontal, overlayVideoLocationVertical);
         }
 
-        if (isOverlayVideoZoomMode) {
+        if (isOverlayVideoZoomMode && overlayHostName != 'www.youtube.com') {
             //make sure we are in iframe to make sure we don't zoom in on primary video //TODO: may not actually be needed here because we already confirmed this is not where the primary video is
             if (inIFrame()) {
                 let overlayVideoCollection = document.getElementsByTagName('video');
@@ -375,9 +441,14 @@ function startCommercialState() {
 
     if (overlayHostName == 'www.youtube.com') {
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Unmute (m)"]')) {
+        if (overlayVideoType == 'yt-live') {
 
-            document.getElementsByClassName('ytp-mute-button')[0].click();
+            //account for the old and new youtube UI like above
+            if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
+                document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            } else if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[aria-label="Unmute (m)"]')) {
+                document.getElementsByClassName('ytp-mute-button')[0].click();
+            }
 
         } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
 
@@ -386,7 +457,6 @@ function startCommercialState() {
             } else {
                 document.getElementsByTagName('video')[0].play();
             }
-            
 
         }
 
@@ -442,9 +512,14 @@ function stopCommercialState() {
 
     if (overlayHostName == 'www.youtube.com') {
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[title="Mute (m)"]')) {
+        if (overlayVideoType == 'yt-live') {
 
-            document.getElementsByClassName('ytp-mute-button')[0].click();
+            //account for the old and new youtube UI like above
+            if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Mute"]')) {
+                document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            } else if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[aria-label="Mute (m)"]')) {
+                document.getElementsByClassName('ytp-mute-button')[0].click();
+            }
 
         } else if (overlayVideoType != 'yt-live' && !document.getElementsByTagName('video')[0].paused) {
 
@@ -529,6 +604,25 @@ function getRandomVideoNumber() {
     const index = Math.floor(Math.random() * playlistVideosPlayedArray.length);
     //removes the video number from array when it returns it
     return playlistVideosPlayedArray.splice(index, 1)[0];
+}
+
+
+//TODO: get this to work
+function adjustOverlayVideoPositioning(overlay, xLocation, yLocation) {
+
+    if (xLocation == 'left') {
+        overlay.style.setProperty("left", "0", "important");
+    }
+    if (xLocation == 'right') {
+        overlay.style.setProperty("right", "0", "important");
+    }
+    if (yLocation == 'top') {
+        overlay.style.setProperty("top", "0", "important");
+    }
+    if (yLocation == 'bottom') {
+        overlay.style.setProperty("bottom", "0", "important");
+    }
+
 }
 
 
