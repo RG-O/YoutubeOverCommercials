@@ -18,7 +18,6 @@ var secondClapTime;
 var lastClapDetectedAt = 0;
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
-const NOISE_MULTIPLIER = 3.2;
 var micNoiseFloor = 0.003;
 var hf;
 var isClap;
@@ -51,10 +50,11 @@ if (typeof mainVideoCollection !== 'undefined') {
     let urlParams = new URLSearchParams(queryString);
     window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap'; //note: not established in content.js so do not use for firefox except for confirguration page
     window.isDebugMode = urlParams.get('debug');
-    window.clapSensitivity = urlParams.get('sensitivity') ?? 30;
+    window.clapSensitivity = urlParams.get('sensitivity') ?? 40;
 }
 
 //user set preferences:
+var noiseMultiplier;
 var quietNoiseFloor;
 var baseAttackThreshold;
 var minAttackThreshold;
@@ -62,14 +62,16 @@ var hfThreshold;
 var hfMin;
 var hfMax;
 const minSensitivityValues = {
-    quietNoiseFloor: 0.075,
-    baseAttackThreshold: 0.054,
-    minAttackThreshold: 0.05,
-    hfThreshold: 2400,
-    hfMin: 8300,
-    hfMax: 9300
+    noiseMultiplier: 2.8,
+    quietNoiseFloor: 0.078,
+    baseAttackThreshold: 0.056,
+    minAttackThreshold: 0.052,
+    hfThreshold: 2500,
+    hfMin: 8500,
+    hfMax: 9500
 };
 const maxSensitivityValues = {
+    noiseMultiplier: 3.4,
     quietNoiseFloor: 0.005,
     baseAttackThreshold: 0.007,
     minAttackThreshold: 0.005,
@@ -112,6 +114,7 @@ function setClapSensitivity(clapSensitivity) {
     const percent = clamp(clapSensitivity, 0, 100);
     const t = percent / 100;
 
+    noiseMultiplier = lerp(minSensitivityValues.noiseMultiplier, maxSensitivityValues.noiseMultiplier, t);
     quietNoiseFloor = lerp(minSensitivityValues.quietNoiseFloor, maxSensitivityValues.quietNoiseFloor, t);
     baseAttackThreshold = lerp(minSensitivityValues.baseAttackThreshold, maxSensitivityValues.baseAttackThreshold, t);
     minAttackThreshold = lerp(minSensitivityValues.minAttackThreshold, maxSensitivityValues.minAttackThreshold, t);
@@ -199,7 +202,7 @@ function clapMonitor() {
     micNoise = micNoise ? micNoise * (1 - ALPHA) + micRMS * ALPHA : micRMS;
     micAttack = micRMS - lastRMS;
     lastRMS = micRMS;
-    rmsThreshold = micNoise * NOISE_MULTIPLIER;
+    rmsThreshold = micNoise * noiseMultiplier;
     let isRMSHit = micRMS > rmsThreshold;
 
     micNoiseFloor = micNoiseFloor * 0.99 + micRMS * 0.01;

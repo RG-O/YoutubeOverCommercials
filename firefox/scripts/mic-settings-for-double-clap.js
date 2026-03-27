@@ -101,7 +101,7 @@ function prepFoClapMonitor() {
         getStartedButton.disabled = true;
         document.getElementById('loading-spinner').style.display = 'block';
 
-        let clapSensitivity = result.clapSensitivity ?? 30;
+        let clapSensitivity = result.clapSensitivity ?? 40;
         form.clapSensitivityRange.value = clapSensitivity;
         form.clapSensitivity.value = clapSensitivity;
         addDoubleClapDetectorIFrame(clapSensitivity);
