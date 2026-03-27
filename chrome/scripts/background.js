@@ -362,11 +362,14 @@ function chromeListenToMicrophone() {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "capture_main_video_tab_id") {
-
-        //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+        //saving tab id to chrome storage to avoid global variables clearing out in service worker (and more) //TODO: figure out if better way for this
         chrome.storage.sync.set({ mainVideoTabID: sender.tab.id });
+    }
+});
 
-    } else if (message.action === "background_update_preferences") {
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "background_update_preferences") {
 
         chrome.storage.sync.get(['mainVideoTabID'], (result) => {
 
@@ -394,6 +397,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         });
 
     }
+
+    //return true to indicate that the response will be sent asynchronously
+    return true;
 });
 
 

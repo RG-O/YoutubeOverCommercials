@@ -1,18 +1,36 @@
 
 var isFirefox = false; //********************
 
+//utility variables
+var isCorrectOverlayFrame = true;
+var maxPlaylistVideoNumber;
+var xMap = {
+    left: "0%",
+    middle: "50%",
+    right: "100%"
+};
+var yMap = {
+    top: "0%",
+    middle: "50%",
+    bottom: "100%"
+};
+
+//user set variables
+//TODO: make these variables private to this file so they can never clash with content.js
 var overlayVideoType;
 var shouldHideYTBackground;
 var overlayHostName;
 var isOtherSiteTroubleshootMode;
 var isOverlayVideoZoomMode;
 var commercialDetectionMode;
-var isCorrectOverlayFrame = true;
 var shouldShuffleYTPlaylist;
-var maxPlaylistVideoNumber;
 var playlistVideosPlayedArray = [];
-var overlayVideoLocationHorizontal;
-var overlayVideoLocationVertical;
+var overlayScopedVideoLocationHorizontal;
+var overlayScopedVideoLocationVertical;
+var shouldOverlayScopedVideoSizeAndLocationAutoSet;
+var isPiPModeOverlayScoped;
+var pipLocationHorizontalOverlayScoped;
+var pipLocationVerticalOverlayScoped;
 
 
 //grab user set values and then run initialCommercialState() right when script is injected (assuming script is injected after frame had some time to load)
@@ -26,6 +44,10 @@ chrome.storage.sync.get([
     'shouldShuffleYTPlaylist',
     'overlayVideoLocationHorizontal',
     'overlayVideoLocationVertical',
+    'isPiPMode',
+    'pipLocationHorizontal',
+    'pipLocationVertical',
+    'shouldOverlayVideoSizeAndLocationAutoSet',
 ], (result) => {
 
     overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
@@ -42,8 +64,19 @@ chrome.storage.sync.get([
     if (overlayVideoType !== 'yt-playlist') {
         shouldShuffleYTPlaylist = false;
     }
-    overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
-    overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+    overlayScopedVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+    overlayScopedVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+    isPiPModeOverlayScoped = result.isPiPMode ?? true;
+    pipLocationHorizontalOverlayScoped = result.pipLocationHorizontal ?? 'top';
+    pipLocationVerticalOverlayScoped = result.pipLocationVertical ?? 'left';
+    shouldOverlayScopedVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
+    if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+        shouldOverlayScopedVideoSizeAndLocationAutoSet = false;
+    }
+    if (shouldOverlayScopedVideoSizeAndLocationAutoSet) {
+        overlayScopedVideoLocationHorizontal = 'middle';
+        overlayScopedVideoLocationVertical = 'middle';
+    }
 
     //making sure if requested overlay video isn't a yt video and has same domain as main/background video that script wasn't loaded into that main video frame
     if (overlayHostName != 'www.youtube.com') {
@@ -72,7 +105,8 @@ chrome.storage.sync.get([
                     let iFrame = document.getElementsByTagName('iframe')[0];
 
                     if (iFrame) {
-                        zoomInOnElement(iFrame);
+                        //zoomInOnVideo(iFrame, overlayScopedVideoLocationHorizontal, overlayScopedVideoLocationVertical);
+                        zoomInOnIFrame(iFrame);
 
                         if (shouldHideYTBackground) {
                             iFrame.style.setProperty("background", "transparent", "important");
@@ -98,6 +132,15 @@ chrome.storage.sync.get([
                     `;
                     let insertLocation = document.getElementsByTagName('body')[0];
                     insertLocation.appendChild(hideScollStyle);
+                    if (isFirefox) {
+                        if (document.getElementsByTagName('html')[0]) {
+                            //TODO: I believe scrollbar-width is experimental and not supported with all firefox versions, I should try to find something else
+                            document.getElementsByTagName('html')[0].style.scrollbarWidth = "none";
+                        }
+                        if (document.getElementsByTagName('body')[0]) {
+                            document.getElementsByTagName('body')[0].style.scrollbarWidth = "none";
+                        }
+                    }
 
                     //hide practically everything that isn't in the top frame, the main video frame, or is a video
                     //TODO: make own function
@@ -105,6 +148,7 @@ chrome.storage.sync.get([
                     document.querySelectorAll('video, iframe').forEach(el => {
                         let parent = el;
                         while (parent) {
+                            parent.style.setProperty("background", "transparent", "important"); //make background transparent if we can't hide it completely //TODO: any other style suppression I can do here without accidentally hiding the video? //TODO: set behind shouldHideYTBackground check?
                             keep.add(parent);
                             parent = parent.parentElement;
                         }
@@ -114,7 +158,7 @@ chrome.storage.sync.get([
                             el.style.display = 'none';
                         }
                     });
-                }, 15000);
+                }, 12000);
             }, 1000);
         }
     }
@@ -141,6 +185,47 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         if (isCorrectOverlayFrame) {
             stopCommercialState();
         }
+    } else if (message.action == 'content_update_preferences') {
+        //TODO: allow more preferences to be live updated
+        //TODO: can isCorrectOverlayFrame be trusted here?
+        if (isCorrectOverlayFrame) {
+            if (isOverlayVideoZoomMode && overlayHostName != 'www.youtube.com' && inIFrame()) {
+                chrome.storage.sync.get([
+                    'overlayVideoLocationHorizontal',
+                    'overlayVideoLocationVertical',
+                    'isPiPMode',
+                    'pipLocationHorizontal',
+                    'pipLocationVertical',
+                    'shouldOverlayVideoSizeAndLocationAutoSet',
+                ], (result) => {
+                    if (
+                        overlayScopedVideoLocationHorizontal !== result.overlayVideoLocationHorizontal ||
+                        overlayScopedVideoLocationVertical !== result.overlayVideoLocationVertical ||
+                        shouldOverlayScopedVideoSizeAndLocationAutoSet !== result.shouldOverlayVideoSizeAndLocationAutoSet
+                    ) {
+                        overlayScopedVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                        overlayScopedVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                        shouldOverlayScopedVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
+                        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                            shouldOverlayScopedVideoSizeAndLocationAutoSet = false;
+                        }
+                        if (shouldOverlayScopedVideoSizeAndLocationAutoSet) {
+                            overlayScopedVideoLocationHorizontal = 'middle';
+                            overlayScopedVideoLocationVertical = 'middle';
+                        }
+
+                        let overlayVideoCollection = document.getElementsByTagName('video');
+                        for (let i = 0; i < overlayVideoCollection.length; i++) {
+                            setVideoPositioningWithinOverlay(overlayVideoCollection[i], overlayScopedVideoLocationHorizontal, overlayScopedVideoLocationVertical);
+                        }
+                    }
+
+                    isPiPModeOverlayScoped = result.isPiPMode ?? true;
+                    pipLocationHorizontalOverlayScoped = result.pipLocationHorizontal ?? 'top';
+                    pipLocationVerticalOverlayScoped = result.pipLocationVertical ?? 'left';
+                });
+            }
+        }
     }
 });
 
@@ -155,10 +240,11 @@ function initialCommercialState() {
         setTimeout(() => {
 
             //unmute youtube video if muted
+            //accounting for both the old and new youtube UI. As of 3/26/26, chrome gets the new UI and firefox gets the old UI, I assume firefox will update to the new in the future
             if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
-
                 document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
-
+            } else if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[aria-label="Unmute (m)"]')) {
+                document.getElementsByClassName('ytp-mute-button')[0].click();
             }
 
         }, 5000);
@@ -216,8 +302,7 @@ function initialCommercialState() {
                 }
             }
 
-            //TODO: get this to work
-            //adjustOverlayVideoPositioning(myYTOCVideo, overlayVideoLocationHorizontal, overlayVideoLocationVertical);
+            //TODO: get some sort of overlay positioning to work while not in zoom mode
         }
 
         if (isOverlayVideoZoomMode && overlayHostName != 'www.youtube.com') {
@@ -225,7 +310,8 @@ function initialCommercialState() {
             if (inIFrame()) {
                 let overlayVideoCollection = document.getElementsByTagName('video');
                 for (let i = 0; i < overlayVideoCollection.length; i++) {
-                    zoomInOnElement(overlayVideoCollection[i]);
+                    zoomInOnVideo(overlayVideoCollection[i]);
+                    setVideoPositioningWithinOverlay(overlayVideoCollection[i], overlayScopedVideoLocationHorizontal, overlayScopedVideoLocationVertical);
                     //make sure user can still controll video while zoomed in
                     //clear controls first
                     overlayVideoCollection[i].removeAttribute('controls');
@@ -431,9 +517,14 @@ function startCommercialState() {
 
     if (overlayHostName == 'www.youtube.com') {
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
+        if (overlayVideoType == 'yt-live') {
 
-            document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            //account for the old and new youtube UI like above
+            if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Unmute"]')) {
+                document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            } else if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[aria-label="Unmute (m)"]')) {
+                document.getElementsByClassName('ytp-mute-button')[0].click();
+            }
 
         } else if (overlayVideoType != 'yt-live' && document.getElementsByTagName('video')[0].paused) {
 
@@ -442,13 +533,14 @@ function startCommercialState() {
             } else {
                 document.getElementsByTagName('video')[0].play();
             }
-            
 
         }
 
     } else {
 
         if (overlayVideoType == 'other-live') {
+
+            let overlayVideoCollection = document.getElementsByTagName('video');
 
             if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Unmute (m)"]')) {
 
@@ -458,7 +550,6 @@ function startCommercialState() {
 
                 if (isOtherSiteTroubleshootMode) {
 
-                    let overlayVideoCollection = document.getElementsByTagName('video');
                     for (let i = 0; i < overlayVideoCollection.length; i++) {
                         overlayVideoCollection[i].muted = false;
                     }
@@ -468,6 +559,14 @@ function startCommercialState() {
                     document.getElementsByTagName('video')[0].muted = false;
 
                 }
+            }
+
+            if (isPiPModeOverlayScoped && isOverlayVideoZoomMode) {
+
+                for (let i = 0; i < overlayVideoCollection.length; i++) {
+                    setVideoPositioningWithinOverlay(overlayVideoCollection[i], overlayScopedVideoLocationHorizontal, overlayScopedVideoLocationVertical);
+                }
+
             }
 
         } else if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Play (k)"]')) {
@@ -498,9 +597,14 @@ function stopCommercialState() {
 
     if (overlayHostName == 'www.youtube.com') {
 
-        if (overlayVideoType == 'yt-live' && document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Mute"]')) {
+        if (overlayVideoType == 'yt-live') {
 
-            document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            //account for the old and new youtube UI like above
+            if (document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0] && document.querySelector('[aria-label="Mute"]')) {
+                document.getElementsByClassName('ytdVolumeControlsMuteIconButton')[0].click();
+            } else if (document.getElementsByClassName('ytp-mute-button')[0] && document.querySelector('[aria-label="Mute (m)"]')) {
+                document.getElementsByClassName('ytp-mute-button')[0].click();
+            }
 
         } else if (overlayVideoType != 'yt-live' && !document.getElementsByTagName('video')[0].paused) {
 
@@ -512,6 +616,8 @@ function stopCommercialState() {
 
         if (overlayVideoType == 'other-live') {
 
+            let overlayVideoCollection = document.getElementsByTagName('video');
+
             if (overlayHostName == 'tv.youtube.com' && document.querySelector('[aria-label="Mute (m)"]')) {
 
                 document.querySelector('[aria-label="Mute (m)"]').click();
@@ -520,7 +626,7 @@ function stopCommercialState() {
 
                 if (isOtherSiteTroubleshootMode) {
 
-                    let overlayVideoCollection = document.getElementsByTagName('video');
+                    
                     for (let i = 0; i < overlayVideoCollection.length; i++) {
                         overlayVideoCollection[i].muted = true;
                     }
@@ -529,6 +635,14 @@ function stopCommercialState() {
 
                     document.getElementsByTagName('video')[0].muted = true;
 
+                }
+
+            }
+
+            if (isPiPModeOverlayScoped && isOverlayVideoZoomMode) {
+
+                for (let i = 0; i < overlayVideoCollection.length; i++) {
+                    setVideoPositioningWithinOverlay(overlayVideoCollection[i], pipLocationHorizontalOverlayScoped, pipLocationVerticalOverlayScoped);
                 }
 
             }
@@ -558,7 +672,7 @@ function stopCommercialState() {
 
 
 //sets iframe to take up the full frame
-function zoomInOnElement(zoomElement) {
+function zoomInOnIFrame(zoomElement) {
     zoomElement.style.setProperty("visibility", "visible", "important");
     zoomElement.style.setProperty("position", "fixed", "important");
     zoomElement.style.setProperty("top", "0", "important");
@@ -570,6 +684,31 @@ function zoomInOnElement(zoomElement) {
     zoomElement.style.setProperty("padding", "0", "important");
     zoomElement.style.setProperty("border-width", "0", "important");
     zoomElement.style.setProperty("z-index", "2147483647", "important");
+}
+
+
+//sets video to take up the full frame
+function zoomInOnVideo(zoomElement) {
+    zoomElement.style.setProperty("position", "fixed", "important");
+    zoomElement.style.setProperty("max-width", "100%", "important");
+    zoomElement.style.setProperty("max-height", "100%", "important");
+    zoomElement.style.setProperty("left", "0", "important");
+    zoomElement.style.setProperty("top", "0", "important");
+    zoomElement.style.setProperty("width", "100vw", "important");
+    zoomElement.style.setProperty("height", "100vh", "important");
+    zoomElement.style.setProperty("object-fit", "contain", "important");
+    zoomElement.style.setProperty("padding", "0", "important");
+    zoomElement.style.setProperty("border-width", "0", "important");
+    zoomElement.style.setProperty("z-index", "2147483647", "important");
+}
+
+
+function setVideoPositioningWithinOverlay(video, xLocation, yLocation) {
+    const x = xMap[xLocation] || "50%";
+    const y = yMap[yLocation] || "50%";
+
+    video.style.setProperty("transition", "object-position 0.3s ease", "important");
+    video.style.setProperty("object-position", `${x} ${y}`, "important");
 }
 
 
@@ -585,25 +724,6 @@ function getRandomVideoNumber() {
     const index = Math.floor(Math.random() * playlistVideosPlayedArray.length);
     //removes the video number from array when it returns it
     return playlistVideosPlayedArray.splice(index, 1)[0];
-}
-
-
-//TODO: get this to work
-function adjustOverlayVideoPositioning(overlay, xLocation, yLocation) {
-
-    if (xLocation == 'left') {
-        overlay.style.setProperty("left", "0", "important");
-    }
-    if (xLocation == 'right') {
-        overlay.style.setProperty("right", "0", "important");
-    }
-    if (yLocation == 'top') {
-        overlay.style.setProperty("top", "0", "important");
-    }
-    if (yLocation == 'bottom') {
-        overlay.style.setProperty("bottom", "0", "important");
-    }
-
 }
 
 

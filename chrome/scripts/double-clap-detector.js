@@ -11,8 +11,8 @@ var lastRMS = 0;
 var rmsThreshold;
 var micAttack;
 var attackThreshold;
-const SECOND_CLAP_TIME_WINDOW_MIN = 190;
-const SECOND_CLAP_TIME_WINDOW_MAX = 440;
+const SECOND_CLAP_TIME_WINDOW_MIN = 220;
+const SECOND_CLAP_TIME_WINDOW_MAX = 480;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
@@ -41,6 +41,7 @@ var clapPort = null;
 //note: since firefox handles mic permissions differently and you can't port directly between this script and the content one...
 //the firefox version injects this js directly into the same frame as the content script so it shares all the same variables and functions as the content script...
 //except for the configuration page, that behaves the same way as chrome
+//for chrome, this script is never in the main video content frame. it is either in offscreen or in an iframed extension page on the tab.
 //TODO: set up some sort of namespaces or imports/exports for the variables/functions in this file
 var isInContentFrame = false;
 if (typeof mainVideoCollection !== 'undefined') {
@@ -48,7 +49,7 @@ if (typeof mainVideoCollection !== 'undefined') {
 } else {
     let queryString = window.location.search;
     let urlParams = new URLSearchParams(queryString);
-    window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap';
+    window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap'; //note: not established in content.js so do not use for firefox except for confirguration page
     window.isDebugMode = urlParams.get('debug');
     window.clapSensitivity = urlParams.get('sensitivity') ?? 30;
 }
@@ -78,6 +79,7 @@ const maxSensitivityValues = {
 };
 
 if (isDebugMode) console.log('double-clap-detector.js running');
+
 
 setClapSensitivity(clapSensitivity);
 
@@ -162,10 +164,14 @@ function prepFoClapMonitor() {
         })
         .catch((error) => {
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                //don't want to open this tab if it is already open
-                //TODO: can I even do this from the a content script in firefox?
-                if (scriptPurpose !== 'listen-double-clap-configure' || isInContentFrame) {
-                    //have to open this from here instead of content due to permissions
+                if (isDebugMode) console.log(error);
+
+                if (isInContentFrame) {
+                    //firefox
+                    alert('Message from Live Commercial Blocker Extension: This site may need granted microphone access or may not allow microphone access period. Please try granting microphone access to the site, using a different streaming site, or using a different commercial detection mode. Sorry for the inconvenience.');
+                } else if (scriptPurpose !== 'listen-double-clap-configure') { //don't want to open this tab if it is already open
+                    //chrome
+                    //have to open this from here for chrome instead of content due to permissions
                     let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=permission-error');
                     window.open(url, '_blank');
                 }

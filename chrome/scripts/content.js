@@ -353,9 +353,9 @@ function initialRun() {
         let overlayInjectionTimeout;
         if (isOtherSiteTroubleshootMode) {
             //wait longer to inject overlay.js for potentially iframes loading inside iframes
-            overlayInjectionTimeout = 5000;
+            overlayInjectionTimeout = 6000;
         } else {
-            overlayInjectionTimeout = 1000;
+            overlayInjectionTimeout = 1500;
         }
         //wait a little bit for the video to load //TODO: get indicator of when completely loaded
         setTimeout(() => {
@@ -551,7 +551,7 @@ function startCommercialMode() {
             showOverlayFade();
 
             if (isPiPMode && isLiveOverlayVideo) {
-                exitPiPMode();
+                resetOverlayVideoSizeAndLocation();
             }
 
             showOverlayVideo();
@@ -2296,7 +2296,7 @@ function stopViewingTab() {
             action: "close"
         });
 
-        //TODO: is this necessary?
+        //TODO: is removing this even listener necessary?
         window.removeEventListener('beforeunload', stopViewingTab);
 
     }
@@ -2657,12 +2657,14 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     
                     if (overlayVideo) {
 
-                        //if it is an auto pixel mode and user switching to autoset overlay video
                         if (
                             commercialDetectionMode.indexOf('auto-pixel') >= 0 &&
                             result.shouldOverlayVideoSizeAndLocationAutoSet &&
                             shouldOverlayVideoSizeAndLocationAutoSet !== result.shouldOverlayVideoSizeAndLocationAutoSet
                         ) {
+
+                            //if it is an auto pixel mode and user switching to autoset overlay video
+                            shouldOverlayVideoSizeAndLocationAutoSet = true;
 
                             if (!document.getElementById('lcb-hide-verticle-scroll-bar-style')) {
                                 hideVerticleScrollbar();
@@ -2679,19 +2681,27 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                             }
 
                         } else if (
-                            videoOverlayWidth !== result.videoOverlayWidth ||
-                            videoOverlayHeight !== result.videoOverlayHeight ||
-                            overlayVideoLocationHorizontal !== result.overlayVideoLocationHorizontal ||
-                            overlayVideoLocationVertical !== result.overlayVideoLocationVertical
+                            !result.shouldOverlayVideoSizeAndLocationAutoSet &&
+                            (
+                                shouldOverlayVideoSizeAndLocationAutoSet !== result.shouldOverlayVideoSizeAndLocationAutoSet ||
+                                videoOverlayWidth !== result.videoOverlayWidth ||
+                                videoOverlayHeight !== result.videoOverlayHeight ||
+                                overlayVideoLocationHorizontal !== result.overlayVideoLocationHorizontal ||
+                                overlayVideoLocationVertical !== result.overlayVideoLocationVertical
+                            )
                         ) {
 
-                            //updating video overlay size/position if user chose to do so
+                            //updating video overlay size/position if user chose to do so or if they are switching away from an auto set
+                            shouldOverlayVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
+                            if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                                shouldOverlayVideoSizeAndLocationAutoSet = false;
+                            }
                             overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
                             overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
                             videoOverlayWidth = result.videoOverlayWidth ?? 75;
                             videoOverlayHeight = result.videoOverlayHeight ?? 75;
 
-                            setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+                            resetOverlayVideoSizeAndLocation();
 
                         }
 
@@ -2775,7 +2785,7 @@ function enterPiPMode() {
 }
 
 
-function exitPiPMode() {
+function resetOverlayVideoSizeAndLocation() {
 
     overlayVideo.style.removeProperty("right");
     overlayVideo.style.removeProperty("left");
@@ -2783,7 +2793,6 @@ function exitPiPMode() {
     overlayVideo.style.removeProperty("top");
 
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
-
 }
 
 
@@ -2805,7 +2814,6 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixe
         overlayVideoLocationVertical = 'top';
         videoOverlayHeight = (((selectedPixel.y - aboveSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
     }
-
 }
 
 
@@ -2883,6 +2891,7 @@ function prepFoClapMonitor() {
         } else {
             //TODO: figure out closing/pausing offscreen doc for other modes so I can use offscreen doc here, as well. Note: only one offscreen doc can be open at a time
             if (inIFrame()) {
+                //request to open in top level frame to avoid any iframe sandbox permission restrictions, etc.
                 chrome.runtime.sendMessage({ action: "chrome-initiate-clap-detector-iframe" });
             } else {
                 addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
