@@ -695,7 +695,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isDoubleClapMode = true;
                                 isDoubleClapOnlyReturnMode = false;
                             }
-                            clapSensitivity = result.clapSensitivity ?? 30;
+                            clapSensitivity = result.clapSensitivity ?? 40;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -2600,7 +2600,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 if (commercialDetectionMode === 'manual-clap') {
                     isDoubleClapOnlyReturnMode = false;
                 }
-                clapSensitivity = result.clapSensitivity ?? 30;
+                clapSensitivity = result.clapSensitivity ?? 40;
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
@@ -2721,7 +2721,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         if (!inIFrame()) {
             //as this won't be ran in the same frame that this was called from, it is safest to grab these preferences fresh
             chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
-                let clapSensitivity = result.clapSensitivity ?? 30;
+                let clapSensitivity = result.clapSensitivity ?? 40;
                 let isDebugMode = result.isDebugMode ?? false;
 
                 addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
