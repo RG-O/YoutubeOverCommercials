@@ -62,20 +62,20 @@ var hfThreshold;
 var hfMin;
 var hfMax;
 const minSensitivityValues = {
-    noiseMultiplier: 2.8,
-    quietNoiseFloor: 0.078,
-    baseAttackThreshold: 0.056,
-    minAttackThreshold: 0.052,
-    hfThreshold: 2500,
-    hfMin: 8500,
-    hfMax: 9500
+    noiseMultiplier: 2.3,
+    quietNoiseFloor: 0.11,
+    baseAttackThreshold: 0.066,
+    minAttackThreshold: 0.063,
+    hfThreshold: 1800,
+    hfMin: 8000,
+    hfMax: 9000
 };
 const maxSensitivityValues = {
-    noiseMultiplier: 3.4,
-    quietNoiseFloor: 0.005,
-    baseAttackThreshold: 0.007,
-    minAttackThreshold: 0.005,
-    hfThreshold: 450,
+    noiseMultiplier: 3.5,
+    quietNoiseFloor: 0.004,
+    baseAttackThreshold: 0.0035,
+    minAttackThreshold: 0.0025,
+    hfThreshold: 370,
     hfMin: 6400,
     hfMax: 7400
 };
