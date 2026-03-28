@@ -73,9 +73,9 @@ const minSensitivityValues = {
 const maxSensitivityValues = {
     noiseMultiplier: 3.5,
     quietNoiseFloor: 0.004,
-    baseAttackThreshold: 0.0035,
-    minAttackThreshold: 0.0025,
-    hfThreshold: 370,
+    baseAttackThreshold: 0.003,
+    minAttackThreshold: 0.002,
+    hfThreshold: 340,
     hfMin: 6400,
     hfMax: 7400
 };
