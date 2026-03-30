@@ -11,8 +11,8 @@ var lastRMS = 0;
 var rmsThreshold;
 var micAttack;
 var attackThreshold;
-const SECOND_CLAP_TIME_WINDOW_MIN = 220;
-const SECOND_CLAP_TIME_WINDOW_MAX = 480;
+const SECOND_CLAP_TIME_WINDOW_MIN = 250;
+const SECOND_CLAP_TIME_WINDOW_MAX = 520;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
@@ -62,20 +62,20 @@ var hfThreshold;
 var hfMin;
 var hfMax;
 const minSensitivityValues = {
-    noiseMultiplier: 2.8,
-    quietNoiseFloor: 0.078,
-    baseAttackThreshold: 0.056,
-    minAttackThreshold: 0.052,
-    hfThreshold: 2500,
-    hfMin: 8500,
-    hfMax: 9500
+    noiseMultiplier: 2.3,
+    quietNoiseFloor: 0.11,
+    baseAttackThreshold: 0.066,
+    minAttackThreshold: 0.063,
+    hfThreshold: 1800,
+    hfMin: 8000,
+    hfMax: 9000
 };
 const maxSensitivityValues = {
-    noiseMultiplier: 3.4,
-    quietNoiseFloor: 0.005,
-    baseAttackThreshold: 0.007,
-    minAttackThreshold: 0.005,
-    hfThreshold: 450,
+    noiseMultiplier: 3.5,
+    quietNoiseFloor: 0.004,
+    baseAttackThreshold: 0.003,
+    minAttackThreshold: 0.002,
+    hfThreshold: 340,
     hfMin: 6400,
     hfMax: 7400
 };
