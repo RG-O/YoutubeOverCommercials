@@ -23,6 +23,8 @@ chrome.runtime.onMessage.addListener(function (message) {
         } else if (message.action == 'start-listening') {
             constraints = message.constraints;
             startListening(constraints);
+        } else if (message.action == 'start-listening-microphone') {
+            insertDoubleClapDetectorScript();
         } else if (message.action == 'stop-viewing') {
             //not currently being used, as offscreen is just closed and reopened in order to pause and resume viewing tab
             stopViewing();
@@ -98,6 +100,15 @@ async function startListening(constraints) {
 
     }
 
+}
+
+
+function insertDoubleClapDetectorScript() {
+    setTimeout(() => {
+        let script = document.createElement('script');
+        script.src = "/scripts/double-clap-detector.js";
+        document.body.appendChild(script);
+    }, 100);
 }
 
 

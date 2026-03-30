@@ -226,6 +226,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
+    } else if (message.action === "chrome-initiate-clap-detector-iframe") {
+
+        chrome.tabs.sendMessage(
+            sender.tab.id,
+            { action: "add_clap_detector_iframe" },
+            { frameId: 0 }, //note: always injecting in top frame to avoid any iframe sandbox permission restrictions
+        );
+
+    } else if (message.action === "chrome-close-clap-detector-iframe") {
+
+        chrome.tabs.sendMessage(
+            sender.tab.id,
+            { action: "close_clap_detector_iframe" },
+            { frameId: 0 },
+        );
+
     } else if (message.action === "firefox-inject-clap-detector") {
 
         chrome.scripting.executeScript({
@@ -245,6 +261,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "chrome-view-tab-audio") {
 
         chromeListenToTab(message, sender);
+
+    } else if (message.action === "chrome-listen-microphone") {
+
+        chromeListenToMicrophone();
 
     }
 });
@@ -317,13 +337,39 @@ async function chromeListenToTab(message, sender) {
 }
 
 
+function chromeListenToMicrophone() {
+    chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
+        let clapSensitivity = result.clapSensitivity ?? 30;
+        let isDebugMode = result.isDebugMode ?? false;
+
+        let offscreenURL = 'offscreen.html?purpose=listen-double-clap&sensitivity=' + clapSensitivity;
+        if (isDebugMode) {
+            offscreenURL += '&debug=true';
+        }
+        chrome.offscreen.createDocument({
+            url: offscreenURL,
+            reasons: ['USER_MEDIA'],
+            justification: 'Listening to microphone to detect user claps'
+        }, function () {
+            chrome.runtime.sendMessage({
+                target: 'offscreen',
+                action: 'start-listening-microphone',
+            });
+        });
+    });
+}
+
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "capture_main_video_tab_id") {
-
-        //saving tab id to chrome storage to avoid global variables clearing out in service worker //TODO: figure out if better way for this
+        //saving tab id to chrome storage to avoid global variables clearing out in service worker (and more) //TODO: figure out if better way for this
         chrome.storage.sync.set({ mainVideoTabID: sender.tab.id });
+    }
+});
 
-    } else if (message.action === "background_update_preferences") {
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "background_update_preferences") {
 
         chrome.storage.sync.get(['mainVideoTabID'], (result) => {
 
@@ -336,15 +382,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                         chrome.tabs.sendMessage(result.mainVideoTabID, { action: "content_update_preferences" });
 
+                        sendResponse({ isLastExtensionInitiatedTabStillOpen: true });
+
+                    } else {
+                        sendResponse({ isLastExtensionInitiatedTabStillOpen: false });
                     }
 
                 });
 
+            } else {
+                sendResponse({ isLastExtensionInitiatedTabStillOpen: false });
             }
 
         });
 
     }
+
+    //return true to indicate that the response will be sent asynchronously
+    return true;
 });
 
 

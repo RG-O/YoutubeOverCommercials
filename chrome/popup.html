@@ -395,7 +395,7 @@
 
             <div class="clap-sensitivity-wrapper settings-box">
                 <div class="general-field">
-                    <label for="clapSensitivity">Clap Sensitivity:</label>
+                    <label for="clapSensitivity">Clap Sensitivity:</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">The threshold of what this exension treats as a clap. Set this as low as you can while still detecting your claps to try to avoid false positives. If you are setting your sensitivity as high as this allows and it still isn't detecting your claps, you may need to disable any background noise filtering happening on your computer.</span></span>
                     <div class="range-and-number-wrapper">
                         <div class="range-wrapper">
                             <input type="range" id="clapSensitivityRange" name="clapSensitivityRange" class="clap-sensitivity-range" min="0" max="100" step="10" style="margin-top: 0px;">
@@ -415,7 +415,11 @@
                         </div>
                         <input id="clapSensitivity" name="clapSensitivity" class="range-number-display" type="number" min="0" max="100">
                     </div>
-                    <div class="general-field note" style="margin-top: 7px;">Navigate to <a href="/mic-settings-for-double-clap.html" target="_blank">Configuration Page</a> to experiment with clap sensitivity options.</div>
+                    <div class="general-field note" style="margin-top: 7px;">Navigate to <a href="/mic-settings-for-double-clap.html?page-open-reason=manual-configuration" target="_blank">Configuration Page</a> to experiment with clap sensitivity options.</div>
+                </div>
+                <div class="general-field double-clap-only-return-mode-wrapper">
+                    <label class="checkbox-label" for="isDoubleClapOnlyReturnMode">Disable Claps While Not Commercial</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter how perfectly you set your clap sensitivity, false positive double claps can still happen. Accidentally covering up your live game with a YouTube video can be really annoying. Use this setting so that double claps only bring you back to the action and not out of it.</span></span>
+                    <input type="checkbox" name="isDoubleClapOnlyReturnMode" id="isDoubleClapOnlyReturnMode">
                 </div>
             </div>
 

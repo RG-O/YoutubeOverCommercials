@@ -6,6 +6,16 @@ var pipGridCells;
 var hasPreviouslyInstalledCompanionApp;
 var hasGrantedMicAccess = false;
 
+//variables that currently cannot be updated after initiation of the extension. declaring them here to see if user updates them to see if I should tell them to refresh.
+var overlayVideoType; //note: this variable can sorta change
+var shouldHideYTBackground;
+var isOtherSiteTroubleshootMode;
+var isOverlayVideoZoomMode;
+var commercialDetectionMode;
+var shouldShuffleYTPlaylist;
+var isDebugMode;
+var isDoubleClapMode;
+
 //TODO: I now have such a crazy amount of user set values that are stored/retrieved all over the place, is there a way to create a singular location to manage them?
 //grab all user set values
 chrome.storage.sync.get([
@@ -48,6 +58,7 @@ chrome.storage.sync.get([
     'hasPreviouslyInstalledCompanionApp',
     'isDoubleClapMode',
     'clapSensitivity',
+    'isDoubleClapOnlyReturnMode',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -65,7 +76,7 @@ chrome.storage.sync.get([
     optionsForm.mainVideoVolumeDuringCommercials.value = result.mainVideoVolumeDuringCommercials ?? 0;
     optionsForm.mainVideoVolumeDuringNonCommercials.value = result.mainVideoVolumeDuringNonCommercials ?? 100;
     optionsForm.shouldHideYTBackground.checked = result.shouldHideYTBackground ?? true;
-    let commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+    commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
     //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings)
     if (commercialDetectionMode === 'auto') {
         commercialDetectionMode = 'auto-pixel-normal';
@@ -88,8 +99,9 @@ chrome.storage.sync.get([
     optionsForm.shouldOverlayVideoSizeAndLocationAutoSet.checked = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
     optionsForm.shouldShuffleYTPlaylist.checked = result.shouldShuffleYTPlaylist ?? false;
     optionsForm.isDoubleClapMode.checked = result.isDoubleClapMode ?? false;
-    optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 30;
-    optionsForm.clapSensitivity.value = result.clapSensitivity ?? 30;
+    optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 40;
+    optionsForm.clapSensitivity.value = result.clapSensitivity ?? 40;
+    optionsForm.isDoubleClapOnlyReturnMode.checked = result.isDoubleClapOnlyReturnMode ?? false;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
@@ -258,6 +270,16 @@ chrome.storage.sync.get([
 
         //TODO: Do complete overhull of which fields hide/show (or enable/disable) when various commercial detection modes and overlay types are chosen
         runAllToggles();
+
+        //capturing for comparison on save
+        overlayVideoType = optionsForm.overlayVideoType.value;
+        shouldHideYTBackground = optionsForm.shouldHideYTBackground.checked;
+        isOtherSiteTroubleshootMode = optionsForm.isOtherSiteTroubleshootMode.checked;
+        isOverlayVideoZoomMode = optionsForm.isOverlayVideoZoomMode.checked;
+        //commercialDetectionMode = optionsForm.commercialDetectionMode.value; //declared above
+        shouldShuffleYTPlaylist = optionsForm.shouldShuffleYTPlaylist.checked;
+        isDebugMode = optionsForm.isDebugMode.checked;
+        isDoubleClapMode = optionsForm.isDoubleClapMode.checked;
     });
 
 });
@@ -345,24 +367,56 @@ document.getElementById("save-button").onclick = function () {
             shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
+            isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
         }, function () {
 
-            //TODO: get these values to update after extension has already been initiated - partially completed with background_update_preferences
-            chrome.runtime.sendMessage({ action: "background_update_preferences" });
+            let shouldDirectToMicConfig = false;
+            let shouldShowRefreshMessage = false;
 
             //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
             if ((optionsForm.commercialDetectionMode.value === 'manual-clap' || optionsForm.isDoubleClapMode.checked) && !hasGrantedMicAccess) {
-                alert("You will now be taken to a special extension page to configure your microphone settings");
-
-                let url = chrome.runtime.getURL('mic-settings-for-double-clap.html');
-                window.open(url, '_blank');
-            } else {
-                //TODO: only show this message if one of these values have been updated and extension has already been initiated
-                alert("Changes saved successfully! Note: If extension has already been initiated, you may need to refresh page for some updates take effect.");
+                shouldDirectToMicConfig = true;
             }
 
-            //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
-            window.close();
+            let isSwitchingToOrFromAudioAudioOnlyOverlay = false;
+            if (
+                overlayVideoType !== optionsForm.overlayVideoType.value &&
+                (
+                    overlayVideoType == 'spotify' ||
+                    overlayVideoType == 'other-tabs' ||
+                    optionsForm.overlayVideoType.value == 'spotify' ||
+                    optionsForm.overlayVideoType.value == 'other-tabs'
+                )
+            ) {
+                isSwitchingToOrFromAudioAudioOnlyOverlay = true;
+            }
+
+            if (
+                isSwitchingToOrFromAudioAudioOnlyOverlay ||
+                shouldHideYTBackground !== optionsForm.shouldHideYTBackground.checked ||
+                isOtherSiteTroubleshootMode !== optionsForm.isOtherSiteTroubleshootMode.checked ||
+                isOverlayVideoZoomMode !== optionsForm.isOverlayVideoZoomMode.checked ||
+                commercialDetectionMode !== optionsForm.commercialDetectionMode.value ||
+                shouldShuffleYTPlaylist !== optionsForm.shouldShuffleYTPlaylist.checked ||
+                isDebugMode !== optionsForm.isDebugMode.checked ||
+                isDoubleClapMode !== optionsForm.isDoubleClapMode.checked
+            ) {
+                shouldShowRefreshMessage = true;
+            }
+
+            chrome.runtime.sendMessage({ action: "background_update_preferences" })
+                .then((response) => {
+                    if (!response.isLastExtensionInitiatedTabStillOpen) {
+                        shouldShowRefreshMessage = false;
+                    }
+
+                    closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig);
+                })
+                .catch((error) => {
+                    console.log(error);
+                    closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig);
+                });
+
 
         });
 
@@ -370,6 +424,24 @@ document.getElementById("save-button").onclick = function () {
         alert('Field missing. Please input all fields.');
     }
 
+}
+
+
+function closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig) {
+    if (shouldShowRefreshMessage) {
+        alert("One or more settings that you updated will need a page refresh and then a reinitiation of the extension in order to take effect.");
+    }
+
+    //bring user to clap configuration page if they are trying to use it but haven't set up their mic yet
+    if (shouldDirectToMicConfig) {
+        alert("You will now be taken to a special extension page to configure your microphone settings");
+
+        let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=forced-configuration');
+        window.open(url, '_blank');
+    }
+
+    //note: order of when the window is closed is important as firefox stops processing anything in popup.js once the popup window is closed
+    window.close();
 }
 
 
@@ -453,6 +525,7 @@ function setOverlayDisplayPositionGrid() {
     });
 }
 
+
 function clearOverlayDisplayPositionGrid() {
     gridCells.forEach(cell => cell.classList.remove('selected'));
 }
@@ -468,6 +541,7 @@ function setPiPDisplayPositionGrid() {
         }
     });
 }
+
 
 function clearPiPDisplayPositionGrid() {
     pipGridCells.forEach(cell => cell.classList.remove('selected'));
@@ -529,6 +603,12 @@ function toggleDoubleClapUI() {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'block';
     } else {
         document.getElementsByClassName('clap-sensitivity-wrapper')[0].style.display = 'none';
+    }
+
+    if (optionsForm.commercialDetectionMode.value === 'manual-clap') {
+        document.getElementsByClassName('double-clap-only-return-mode-wrapper')[0].style.display = 'none';
+    } else {
+        document.getElementsByClassName('double-clap-only-return-mode-wrapper')[0].style.display = 'block';
     }
 
     if (hasGrantedMicAccess) {
@@ -712,6 +792,7 @@ function saveProfile(shouldSaveWithID) {
             shouldShuffleYTPlaylist: optionsForm.shouldShuffleYTPlaylist.checked,
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
+            isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
         };
 
         chrome.storage.sync.set({ profiles }, () => {
@@ -737,6 +818,7 @@ function applyProfile() {
     if (selectedProfile) {
         if (profiles[selectedProfile]) {
 
+            //TODO: this could easily be a loop, right?
             if (typeof profiles[selectedProfile].overlayVideoType !== 'undefined') { optionsForm.overlayVideoType.value = profiles[selectedProfile].overlayVideoType; }
             if (typeof profiles[selectedProfile].ytPlaylistID !== 'undefined') { optionsForm.ytPlaylistID.value = profiles[selectedProfile].ytPlaylistID; }
             if (typeof profiles[selectedProfile].ytVideoID !== 'undefined') { optionsForm.ytVideoID.value = profiles[selectedProfile].ytVideoID; }
@@ -771,6 +853,7 @@ function applyProfile() {
             if (typeof profiles[selectedProfile].shouldShuffleYTPlaylist !== 'undefined') { optionsForm.shouldShuffleYTPlaylist.checked = profiles[selectedProfile].shouldShuffleYTPlaylist; }
             if (typeof profiles[selectedProfile].isDoubleClapMode !== 'undefined') { optionsForm.isDoubleClapMode.checked = profiles[selectedProfile].isDoubleClapMode; }
             if (typeof profiles[selectedProfile].clapSensitivity !== 'undefined') { optionsForm.clapSensitivity.value = profiles[selectedProfile].clapSensitivity; }
+            if (typeof profiles[selectedProfile].isDoubleClapOnlyReturnMode !== 'undefined') { optionsForm.isDoubleClapOnlyReturnMode.checked = profiles[selectedProfile].isDoubleClapOnlyReturnMode; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();

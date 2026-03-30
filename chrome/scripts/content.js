@@ -40,6 +40,7 @@ var audioLevelBar;
 var audioLevelThresholdLine;
 var windowWidth;
 var windowHeight;
+var selectedPixelGridLocation;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -52,6 +53,7 @@ var advancedLogoMismatchThreshold = 0.33; //note: will be lowered slightly if co
 var advancedLogoInfoContainer;
 var advancedLogoEdgeImage;
 var advancedLogoFinalMaskImage;
+var locationToBaseAutoOverlaySizeAndLocation;
 //var advancedLogoInsideLogoColorImageDebug; //debug-high
 var hasMaskCompleteMessageBeenDismissed = false;
 var consecutiveAdvancedLogoAnalysisCallFailures = 0;
@@ -113,6 +115,7 @@ var shouldOverlayVideoSizeAndLocationAutoSet;
 var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
+var isDoubleClapOnlyReturnMode;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -130,9 +133,11 @@ function setOverlayVideo() {
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
     insertLocation.insertBefore(overlayVideo, null);
-    overlayVideo.style.visibility = "visible";
+    overlayVideo.style.display = "block";
 
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+
+    let iFrame = document.createElement('iframe');
 
     let url;
     if (overlayVideoType == 'yt-playlist') {
@@ -142,6 +147,9 @@ function setOverlayVideo() {
             let randomStart = Math.floor(Math.random() * 10) + 1;
             url += '&index=' + randomStart;
         }
+
+        //TODO: do this for all and not just youtube?
+        iFrame.referrerPolicy = "strict-origin-when-cross-origin";
     } else if (overlayVideoType == 'yt-video' || overlayVideoType == 'yt-live') {
         url = "https://www.youtube.com/embed/";
         if (overlayVideoType == 'yt-video') {
@@ -149,6 +157,8 @@ function setOverlayVideo() {
         } else {
             url = url.concat(ytLiveID);
         }
+
+        iFrame.referrerPolicy = "strict-origin-when-cross-origin";
     } else if (overlayVideoType == 'other-video') {
         if (isFirefox) {
             if (overlayHostName === chrome.i18n.getMessage("@@extension_id")) {
@@ -167,7 +177,7 @@ function setOverlayVideo() {
         url = otherLiveURL;
     }
 
-    let iFrame = document.createElement('iframe');
+    
     iFrame.src = url;
     iFrame.width = "100%";
     iFrame.height = "100%";
@@ -176,6 +186,25 @@ function setOverlayVideo() {
 
     overlayVideo.appendChild(iFrame);
 
+}
+
+
+function showOverlayVideo() {
+    overlayVideo.style.display = "block";
+    //TODO: add a clear timeout for show and hide
+    setTimeout(() => {
+        overlayVideo.classList.remove("hidden");
+    }, 300);
+    
+}
+
+
+function hideOverlayVideo() {
+    overlayVideo.classList.add("hidden");
+    //wait for fade animation to run
+    setTimeout(() => {
+        overlayVideo.style.display = "none";
+    }, 200);
 }
 
 
@@ -206,7 +235,8 @@ function addOverlayFade(insertLocation) {
             //setting location of hole for the advanced logo detector to look through
             overlayScreen.style.setProperty("left", `${(advancedLogoSelectionTopLeftLocation.x - 3)}px`, "important");
             overlayScreen.style.setProperty("top", `${(advancedLogoSelectionTopLeftLocation.y - 1)}px`, "important");
-            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            //TODO: have mainVideoFade be an actual number instead of doing this weird decimal thing
+            overlayScreen.style.setProperty("--overlay-alpha", `.${mainVideoFade}`);
             insertLocation.insertBefore(overlayScreen, null);
 
         } else if (selectedPixel) {
@@ -224,7 +254,7 @@ function addOverlayFade(insertLocation) {
             //setting location of hole for the pixel color detector to look through, subtracting by 3 for radius of hole
             overlayScreen.style.left = (selectedPixel.x - 3) + 'px';
             overlayScreen.style.top = (selectedPixel.y - 3) + 'px';
-            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            overlayScreen.style.setProperty("--overlay-alpha", `.${mainVideoFade}`);
             insertLocation.insertBefore(overlayScreen, null);
 
         } else {
@@ -241,9 +271,12 @@ function showOverlayFade() {
 
     if (mainVideoFade > 0) {
         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+            //dim slow like a movie theater
+            overlayScreen.style.setProperty("transition", "background-color 5s ease");
             overlayScreen.style.backgroundColor = "rgba(0, 0, 0, ." + mainVideoFade + ")";
         } else {
-            overlayScreen.style.boxShadow = "0 0 0 99999px rgba(0, 0, 0, ." + mainVideoFade + ")";
+            overlayScreen.style.setProperty("transition", "box-shadow 5s ease");
+            overlayScreen.style.setProperty("--overlay-alpha", `.${mainVideoFade}`);
         }
     }
 
@@ -254,9 +287,12 @@ function hideOverlayFade() {
 
     if (mainVideoFade > 0) {
         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+            //remove fade fast to get back to the action
+            overlayScreen.style.setProperty("transition", "background-color 0.2s ease");
             overlayScreen.style.backgroundColor = "transparent";
         } else {
-            overlayScreen.style.boxShadow = "0 0 0";
+            overlayScreen.style.setProperty("transition", "box-shadow 0.2s ease");
+            overlayScreen.style.setProperty("--overlay-alpha", "0");
         }
     }
 
@@ -317,9 +353,9 @@ function initialRun() {
         let overlayInjectionTimeout;
         if (isOtherSiteTroubleshootMode) {
             //wait longer to inject overlay.js for potentially iframes loading inside iframes
-            overlayInjectionTimeout = 5000;
+            overlayInjectionTimeout = 6000;
         } else {
-            overlayInjectionTimeout = 1000;
+            overlayInjectionTimeout = 1500;
         }
         //wait a little bit for the video to load //TODO: get indicator of when completely loaded
         setTimeout(() => {
@@ -468,7 +504,7 @@ function endCommercialMode() {
         if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
             enterPiPMode();
         } else {
-            overlayVideo.style.visibility = "hidden";
+            hideOverlayVideo();
         }
 
         hideOverlayFade();
@@ -515,10 +551,10 @@ function startCommercialMode() {
             showOverlayFade();
 
             if (isPiPMode && isLiveOverlayVideo) {
-                exitPiPMode();
+                resetOverlayVideoSizeAndLocation();
             }
 
-            overlayVideo.style.visibility = "visible";
+            showOverlayVideo();
 
         }
 
@@ -589,6 +625,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'shouldShuffleYTPlaylist',
                             'isDoubleClapMode',
                             'clapSensitivity',
+                            'isDoubleClapOnlyReturnMode',
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -653,10 +690,12 @@ chrome.runtime.onMessage.addListener(function (message) {
                             audioLevelThreshold = result.audioLevelThreshold ?? 5;
                             shouldShuffleYTPlaylist = result.shouldShuffleYTPlaylist ?? false;
                             isDoubleClapMode = result.isDoubleClapMode ?? false;
+                            isDoubleClapOnlyReturnMode = result.isDoubleClapOnlyReturnMode ?? false;
                             if (commercialDetectionMode === 'manual-clap') {
                                 isDoubleClapMode = true;
+                                isDoubleClapOnlyReturnMode = false;
                             }
-                            clapSensitivity = result.clapSensitivity ?? 30;
+                            clapSensitivity = result.clapSensitivity ?? 40;
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -952,6 +991,7 @@ function hideVerticleScrollbar() {
     let body = document.getElementsByTagName('body')[0];
 
     let hideScollStyle = document.createElement("style");
+    hideScollStyle.id = "lcb-hide-verticle-scroll-bar-style";
     hideScollStyle.textContent = `
         ::-webkit-scrollbar {
             display: none;
@@ -1041,7 +1081,7 @@ function pixelSelection(event) {
 
         document.addEventListener('fullscreenchange', fullscreenChanged);
 
-        let selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
+        selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
 
         //TODO: create user option to turn off logo completely
         setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation);
@@ -1381,10 +1421,9 @@ function fullLogoSelectionCompletion(event, startX, startY) {
     document.addEventListener('fullscreenchange', fullscreenChanged);
 
     selectedPixel = { ...advancedLogoSelectionTopLeftLocation };
-    let selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
+    selectedPixelGridLocation = getSelectedPixelGridLocation(selectedPixel);
     //TODO: I have a lot of different top/bottom and right/left screen checks all over the place, perhaps I should combine them.
     if (shouldOverlayVideoSizeAndLocationAutoSet) {
-        let locationToBaseAutoOverlaySizeAndLocation;
         if (selectedPixelGridLocation.isTop) {
             locationToBaseAutoOverlaySizeAndLocation = { ...advancedLogoSelectionBottomRightLocation };
         } else {
@@ -2257,6 +2296,7 @@ function stopViewingTab() {
             action: "close"
         });
 
+        //TODO: is removing this even listener necessary?
         window.removeEventListener('beforeunload', stopViewingTab);
 
     }
@@ -2320,7 +2360,8 @@ function fullscreenChanged() {
         }
 
         if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
-            overlayVideo.style.visibility = "hidden";
+            if (overlayVideo) hideOverlayVideo();
+
         }
 
         //TODO: should I be doing it this way?
@@ -2466,7 +2507,7 @@ function closeSpotify() {
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action == 'content_update_logo_text') {
 
-        //TODO: can this prompt be brought above the message if so it applies to all?
+        //TODO: can this prompt be brought above the message if so it applies to all? note: except for the last one, but I guess that could be separated
         //ignore this message if not in necessary frame
         if (!mainVideoCollection) {
             return;
@@ -2508,29 +2549,58 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'ytLiveID',
                 'otherVideoURL',
                 'otherLiveURL',
+                //'isOtherSiteTroubleshootMode',
+                'mainVideoFade',
+                'videoOverlayWidth',
+                'videoOverlayHeight',
+                'overlayVideoLocationHorizontal',
+                'overlayVideoLocationVertical',
+                'mainVideoVolumeDuringCommercials',
+                'mainVideoVolumeDuringNonCommercials',
+                //'commercialDetectionMode',
                 'mismatchCountThreshold',
                 'matchCountThreshold',
                 'colorDifferenceMatchingThreshold',
                 'manualOverrideCooldown',
+                //'isDebugMode',
+                'isPiPMode',
                 'pipLocationHorizontal',
                 'pipLocationVertical',
                 'pipHeight',
                 'pipWidth',
                 'audioLevelThreshold',
+                'shouldOverlayVideoSizeAndLocationAutoSet',
+                //'shouldShuffleYTPlaylist',
+                //'isDoubleClapMode',
                 'clapSensitivity',
+                'isDoubleClapOnlyReturnMode',
             ], (result) => {
 
                 //set them to default if not set by user yet
+                mainVideoFade = result.mainVideoFade ?? 65;
+                mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
+                mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
+                if (mainVideoVolumeDuringCommercials > 0) {
+                    mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
+                }
+                if (mainVideoVolumeDuringNonCommercials > 0) {
+                    mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
+                }
                 mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
                 matchCountThreshold = result.matchCountThreshold ?? 2;
                 colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
                 manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+                isPiPMode = result.isPiPMode ?? true;
                 pipLocationHorizontal = result.pipLocationHorizontal ?? 'left';
                 pipLocationVertical = result.pipLocationVertical ?? 'top';
                 pipHeight = result.pipHeight ?? 20;
                 pipWidth = result.pipWidth ?? 20;
                 audioLevelThreshold = result.audioLevelThreshold ?? 5;
-                clapSensitivity = result.clapSensitivity ?? 30;
+                isDoubleClapOnlyReturnMode = result.isDoubleClapOnlyReturnMode ?? false;
+                if (commercialDetectionMode === 'manual-clap') {
+                    isDoubleClapOnlyReturnMode = false;
+                }
+                clapSensitivity = result.clapSensitivity ?? 40;
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
@@ -2584,8 +2654,60 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                     }
 
+                    
+                    if (overlayVideo) {
+
+                        if (
+                            commercialDetectionMode.indexOf('auto-pixel') >= 0 &&
+                            result.shouldOverlayVideoSizeAndLocationAutoSet &&
+                            shouldOverlayVideoSizeAndLocationAutoSet !== result.shouldOverlayVideoSizeAndLocationAutoSet
+                        ) {
+
+                            //if it is an auto pixel mode and user switching to autoset overlay video
+                            shouldOverlayVideoSizeAndLocationAutoSet = true;
+
+                            if (!document.getElementById('lcb-hide-verticle-scroll-bar-style')) {
+                                hideVerticleScrollbar();
+                            }
+
+                            if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
+                                if (locationToBaseAutoOverlaySizeAndLocation && selectedPixelGridLocation) {
+                                    autoUpdateOverlayVideoSizeAndLocationValues(locationToBaseAutoOverlaySizeAndLocation, selectedPixelGridLocation)
+                                }
+                            } else {
+                                if (selectedPixel && selectedPixelGridLocation) {
+                                    autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixelGridLocation);
+                                }
+                            }
+
+                        } else if (
+                            !result.shouldOverlayVideoSizeAndLocationAutoSet &&
+                            (
+                                shouldOverlayVideoSizeAndLocationAutoSet !== result.shouldOverlayVideoSizeAndLocationAutoSet ||
+                                videoOverlayWidth !== result.videoOverlayWidth ||
+                                videoOverlayHeight !== result.videoOverlayHeight ||
+                                overlayVideoLocationHorizontal !== result.overlayVideoLocationHorizontal ||
+                                overlayVideoLocationVertical !== result.overlayVideoLocationVertical
+                            )
+                        ) {
+
+                            //updating video overlay size/position if user chose to do so or if they are switching away from an auto set
+                            shouldOverlayVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
+                            if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                                shouldOverlayVideoSizeAndLocationAutoSet = false;
+                            }
+                            overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                            overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                            videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                            videoOverlayHeight = result.videoOverlayHeight ?? 75;
+
+                            resetOverlayVideoSizeAndLocation();
+
+                        }
+
+                    }
+
                 }
-                
 
                 //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
@@ -2593,6 +2715,25 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             });
 
         } //else do not update preferences because this gets updated on first run anyway
+
+    } else if (message.action == 'add_clap_detector_iframe') {
+
+        if (!inIFrame()) {
+            //as this won't be ran in the same frame that this was called from, it is safest to grab these preferences fresh
+            chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
+                let clapSensitivity = result.clapSensitivity ?? 40;
+                let isDebugMode = result.isDebugMode ?? false;
+
+                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
+            });
+
+        }
+
+    } else if (message.action == 'close_clap_detector_iframe') {
+
+        if (!inIFrame()) {
+            closeDoubleClapDetectorIFrame();
+        }
 
     }
 });
@@ -2644,7 +2785,7 @@ function enterPiPMode() {
 }
 
 
-function exitPiPMode() {
+function resetOverlayVideoSizeAndLocation() {
 
     overlayVideo.style.removeProperty("right");
     overlayVideo.style.removeProperty("left");
@@ -2652,7 +2793,6 @@ function exitPiPMode() {
     overlayVideo.style.removeProperty("top");
 
     setOverlaySizeAndLocation(overlayVideo, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
-
 }
 
 
@@ -2674,7 +2814,6 @@ function autoUpdateOverlayVideoSizeAndLocationValues(selectedPixel, selectedPixe
         overlayVideoLocationVertical = 'top';
         videoOverlayHeight = (((selectedPixel.y - aboveSelectedPixelBuffer) / windowHeight) * 100).toFixed(3); //keeping 4px of room to view pixel and don't want to go below 0 in case user selected from very top
     }
-
 }
 
 
@@ -2742,19 +2881,34 @@ function stopCommercialTimer() {
 
 function prepFoClapMonitor() {
     initiateClapIndicator();
+
     if (isFirefox) {
         chrome.runtime.sendMessage({ action: "firefox-inject-clap-detector" });
     } else {
-        addDoubleClapDetectorIFrame();
+        if (commercialDetectionMode === 'manual-clap') {
+            chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
+            window.addEventListener('beforeunload', stopViewingTab);
+        } else {
+            //TODO: figure out closing/pausing offscreen doc for other modes so I can use offscreen doc here, as well. Note: only one offscreen doc can be open at a time
+            if (inIFrame()) {
+                //request to open in top level frame to avoid any iframe sandbox permission restrictions, etc.
+                chrome.runtime.sendMessage({ action: "chrome-initiate-clap-detector-iframe" });
+            } else {
+                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
+            }
+            
+        }
+
         launchClapPort();
     }
 }
 
 
-function addDoubleClapDetectorIFrame() {
+function addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode) {
     let insertLocation = document.getElementsByTagName('body')[0];
 
     doubleClapDetectorIFrameContainer = document.createElement('div');
+    doubleClapDetectorIFrameContainer.id = 'lcb-double-clap-detector-iframe-container';
     doubleClapDetectorIFrameContainer.style.display = "none";
     insertLocation.appendChild(doubleClapDetectorIFrameContainer);
 
@@ -2772,8 +2926,9 @@ function addDoubleClapDetectorIFrame() {
 
 
 function closeDoubleClapDetectorIFrame() {
-    //TODO: better way to do this than removing it?
-    doubleClapDetectorIFrameContainer.remove();
+    if (doubleClapDetectorIFrameContainer) {
+        doubleClapDetectorIFrameContainer.remove();
+    }
 }
 
 
@@ -2803,7 +2958,7 @@ function clapPortConnectionSuccess() {
             setClapIndicator(message.text, message.resetAfterMs);
             if (isDebugMode) console.log(message.debugText);
         } else if (message.action === "manual-commercial-mode-toggle") {
-            manualCommercialModeToggle();
+            doubleClapCommercialModeToggle();
         } else if (message.action === "update-clap-debug-metrics") {
             updateClapDebugOverlay(message.clapDebugOverlayData);
         } else if (message.action === "mic-permission-success") {
@@ -2827,7 +2982,15 @@ function micPermissionSuccess(inUseMicName) {
 
 function micPermissionError() {
     setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
-    closeDoubleClapDetectorIFrame();
+    if (commercialDetectionMode === 'manual-clap') {
+        stopViewingTab();
+    } else {
+        if (inIFrame()) {
+            chrome.runtime.sendMessage({ action: "chrome-close-clap-detector-iframe" });
+        } else {
+            closeDoubleClapDetectorIFrame();
+        }
+    }
     //note: opening config mic page from the double-clap-detector.js
 }
 
@@ -2851,6 +3014,15 @@ function shortPausePlayMainVideo() {
     setTimeout(() => {
         if (playingVideo) playingVideo.play();
     }, 500);
+}
+
+
+function doubleClapCommercialModeToggle() {
+    if (isDoubleClapOnlyReturnMode && !isCommercialState) {
+        setClapIndicator('\uD83C\uDFA4 \uD83D\uDEAB \uD83D\uDEAB', 1000); //microphone and two prohibited sign emojis
+    } else {
+        manualCommercialModeToggle();
+    }
 }
 
 

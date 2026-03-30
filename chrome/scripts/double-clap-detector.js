@@ -11,14 +11,13 @@ var lastRMS = 0;
 var rmsThreshold;
 var micAttack;
 var attackThreshold;
-const SECOND_CLAP_TIME_WINDOW_MIN = 190;
-const SECOND_CLAP_TIME_WINDOW_MAX = 440;
+const SECOND_CLAP_TIME_WINDOW_MIN = 250;
+const SECOND_CLAP_TIME_WINDOW_MAX = 520;
 var firstClapTime;
 var secondClapTime;
 var lastClapDetectedAt = 0;
 var attackFramesHeld = 0;
 const ALPHA = 0.01;
-const NOISE_MULTIPLIER = 3.2;
 var micNoiseFloor = 0.003;
 var hf;
 var isClap;
@@ -41,6 +40,7 @@ var clapPort = null;
 //note: since firefox handles mic permissions differently and you can't port directly between this script and the content one...
 //the firefox version injects this js directly into the same frame as the content script so it shares all the same variables and functions as the content script...
 //except for the configuration page, that behaves the same way as chrome
+//for chrome, this script is never in the main video content frame. it is either in offscreen or in an iframed extension page on the tab.
 //TODO: set up some sort of namespaces or imports/exports for the variables/functions in this file
 var isInContentFrame = false;
 if (typeof mainVideoCollection !== 'undefined') {
@@ -48,12 +48,13 @@ if (typeof mainVideoCollection !== 'undefined') {
 } else {
     let queryString = window.location.search;
     let urlParams = new URLSearchParams(queryString);
-    window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap';
+    window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap'; //note: not established in content.js so do not use for firefox except for confirguration page
     window.isDebugMode = urlParams.get('debug');
-    window.clapSensitivity = urlParams.get('sensitivity') ?? 30;
+    window.clapSensitivity = urlParams.get('sensitivity') ?? 40;
 }
 
 //user set preferences:
+var noiseMultiplier;
 var quietNoiseFloor;
 var baseAttackThreshold;
 var minAttackThreshold;
@@ -61,23 +62,26 @@ var hfThreshold;
 var hfMin;
 var hfMax;
 const minSensitivityValues = {
-    quietNoiseFloor: 0.06,
-    baseAttackThreshold: 0.05,
-    minAttackThreshold: 0.04,
-    hfThreshold: 2300,
-    hfMin: 8200,
-    hfMax: 9200
+    noiseMultiplier: 2.3,
+    quietNoiseFloor: 0.11,
+    baseAttackThreshold: 0.066,
+    minAttackThreshold: 0.063,
+    hfThreshold: 1800,
+    hfMin: 8000,
+    hfMax: 9000
 };
 const maxSensitivityValues = {
-    quietNoiseFloor: 0.005,
-    baseAttackThreshold: 0.008,
-    minAttackThreshold: 0.007,
-    hfThreshold: 500,
-    hfMin: 6500,
-    hfMax: 7500
+    noiseMultiplier: 3.5,
+    quietNoiseFloor: 0.004,
+    baseAttackThreshold: 0.003,
+    minAttackThreshold: 0.002,
+    hfThreshold: 340,
+    hfMin: 6400,
+    hfMax: 7400
 };
 
 if (isDebugMode) console.log('double-clap-detector.js running');
+
 
 setClapSensitivity(clapSensitivity);
 
@@ -110,6 +114,7 @@ function setClapSensitivity(clapSensitivity) {
     const percent = clamp(clapSensitivity, 0, 100);
     const t = percent / 100;
 
+    noiseMultiplier = lerp(minSensitivityValues.noiseMultiplier, maxSensitivityValues.noiseMultiplier, t);
     quietNoiseFloor = lerp(minSensitivityValues.quietNoiseFloor, maxSensitivityValues.quietNoiseFloor, t);
     baseAttackThreshold = lerp(minSensitivityValues.baseAttackThreshold, maxSensitivityValues.baseAttackThreshold, t);
     minAttackThreshold = lerp(minSensitivityValues.minAttackThreshold, maxSensitivityValues.minAttackThreshold, t);
@@ -162,11 +167,15 @@ function prepFoClapMonitor() {
         })
         .catch((error) => {
             if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-                //don't want to open this tab if it is already open
-                //TODO: can I even do this from the a content script in firefox?
-                if (scriptPurpose !== 'listen-double-clap-configure' || isInContentFrame) {
-                    //have to open this from here instead of content due to permissions
-                    let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?message=permission-error');
+                if (isDebugMode) console.log(error);
+
+                if (isInContentFrame) {
+                    //firefox
+                    alert('Message from Live Commercial Blocker Extension: This site may need granted microphone access or may not allow microphone access period. Please try granting microphone access to the site, using a different streaming site, or using a different commercial detection mode. Sorry for the inconvenience.');
+                } else if (scriptPurpose !== 'listen-double-clap-configure') { //don't want to open this tab if it is already open
+                    //chrome
+                    //have to open this from here for chrome instead of content due to permissions
+                    let url = chrome.runtime.getURL('mic-settings-for-double-clap.html?page-open-reason=permission-error');
                     window.open(url, '_blank');
                 }
 
@@ -193,7 +202,7 @@ function clapMonitor() {
     micNoise = micNoise ? micNoise * (1 - ALPHA) + micRMS * ALPHA : micRMS;
     micAttack = micRMS - lastRMS;
     lastRMS = micRMS;
-    rmsThreshold = micNoise * NOISE_MULTIPLIER;
+    rmsThreshold = micNoise * noiseMultiplier;
     let isRMSHit = micRMS > rmsThreshold;
 
     micNoiseFloor = micNoiseFloor * 0.99 + micRMS * 0.01;
@@ -339,8 +348,6 @@ function onClap(now) {
 
             confirmDoubleClapSuccessTimer = setTimeout(() => {
                 // No third clap -> success
-                sendManualCommercialModeToggle();
-
                 sendClapIndicator(
                     // microphone
                     // green check
@@ -349,6 +356,8 @@ function onClap(now) {
                     'successful double clap!',
                     1000
                 );
+
+                sendManualCommercialModeToggle();
 
                 resetClaps();
             }, guardAfter);
@@ -442,7 +451,7 @@ function sendClapIndicator(text, debugText, resetAfterMs = null) {
 
 function sendManualCommercialModeToggle() {
     if (isInContentFrame) {
-        manualCommercialModeToggle();
+        doubleClapCommercialModeToggle();
     } else {
         sendToContent({ action: "manual-commercial-mode-toggle" });
     }

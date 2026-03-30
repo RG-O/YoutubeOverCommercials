@@ -3,7 +3,13 @@
     z-index: 2147483647 !important;
     position: absolute !important;
     margin: auto !important;
+    transition: opacity 0.2s ease, width 0.05s ease, height 0.05s ease, top 0.05s ease, bottom 0.05s ease, left 0.05s ease, right 0.05s ease;
+    opacity: 1;
 }
+
+    .ytoc-overlay-video.hidden {
+        opacity: 0;
+    }
 
 .ytoc-overlay-screen {
     z-index: 2147483646 !important;
@@ -16,12 +22,16 @@
     width: 100% !important;
     height: 100% !important;
     pointer-events: none !important;
+    transition: background-color 0.2s ease;
 }
 
 .ytoc-overlay-screen-with-hole {
     z-index: 2147483646 !important;
     position: absolute !important;
     pointer-events: none !important;
+    --overlay-alpha: 0;
+    box-shadow: 0 0 0 99999px rgba(0, 0, 0, var(--overlay-alpha));
+    transition: box-shadow 0.2s ease;
 }
 
 .ytoc-main-video-message-alert {

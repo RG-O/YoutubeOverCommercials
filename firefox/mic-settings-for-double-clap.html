@@ -28,6 +28,13 @@
     <div id="all-content">
         <img class="logo-image" style="width: 340px;" src="LiveCommercialBlockerLogoLargeLandscape.png" />
 
+        <div id="previous-page-mic-access-error-chrome" class="error" style="display: none;">
+            The site double clap mode was just attempted on may be blocking microphone access. Please try using a different streaming site or a different commercial detection mode. Sorry for the inconvenience.
+        </div>
+        <div id="previous-page-mic-access-error-firefox" class="error" style="display: none;">
+            The site double clap mode was just attempted on may need granted microphone access or may not allow microphone access period. Please try granting microphone access to the site, using a different streaming site, or using a different commercial detection mode. Sorry for the inconvenience.
+        </div>
+
         <h1>Double Clap Microphone Configuration</h1>
 
         <h2>Microphone & Clap Sensitivity Settings</h2>
@@ -37,7 +44,7 @@
         </p>
 
         <div id="mic-access-error" class="error" style="display: none;">
-            Error accessing microphone. Please grant access to use this feature. Chrome Instructions: 1) Right click the Live Commercial Blocker extension icon in your list of extensions. 2) Select "Manage Extension". 3) Click "Site Settings". 4)  Set Microphone to "Allow". 5) Come back to this page and click "Get Started" button again.
+            Error accessing microphone. Please grant access to use this feature. Chrome Instructions: Try clicking "Get Started" button below. If that doesn't work, try the following steps: 1) Right click the Live Commercial Blocker extension icon in your list of extensions. 2) Select "Manage Extension". 3) Click "Site Settings". 4)  Set Microphone to "Allow". 5) Come back to this page and click "Get Started" button again.
         </div>
         <div id="loading-spinner" class="loading-spinner" style="display: none; margin-bottom: 10px"></div>
         <button class="button" id="get-started-button">Get Started</button>
@@ -113,6 +120,13 @@
             </p>
             <p>
                 Refresh this page if you would like to tinker some more with the clap sensitivity settings.
+            </p>
+        </div>
+
+        <div id="show-on-save-from-error" style="display: none;">
+            <h3 style="color: green;">Saved Successfully!</h3>
+            <p>
+                Now go back to the previous page, refresh, and try again.
             </p>
         </div>
 
