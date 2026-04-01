@@ -7,6 +7,27 @@ import mediapipe as mp
 import os
 from collections import deque
 
+
+# from pathlib import Path
+# import urllib.request
+# from tqdm import tqdm
+
+# MODEL_PATH = Path(__file__).parent / "gesture_recognizer.task"
+# MODEL_URL = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+
+# if not MODEL_PATH.exists():
+#     print("Downloading model...")
+
+#     class DownloadProgressBar(tqdm):
+#         def update_to(self, b=1, bsize=1, tsize=None):
+#             if tsize is not None:
+#                 self.total = tsize
+#             self.update(b * bsize - self.n)
+
+#     with DownloadProgressBar(unit='B', unit_scale=True, miniters=1, desc=MODEL_PATH.name) as t:
+#         urllib.request.urlretrieve(MODEL_URL, filename=MODEL_PATH, reporthook=t.update_to)
+
+
 # --------------------------------------------------
 # Configuration
 # --------------------------------------------------
@@ -14,9 +35,9 @@ from collections import deque
 # Confidence and duration thresholds for triggering an event.
 # Higher confidence requires less time.
 THRESHOLDS = [
-    (0.95, 0.5),
-    (0.80, 1.0),
-    (0.60, 2.0),
+    (0.95, 1.0),
+    (0.80, 2.0),
+    (0.65, 3.0),
 ]
 
 # Time (in seconds) after losing a gesture before resetting its state
