@@ -762,6 +762,10 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 
                                 initialRun();
 
+                                connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations
+
+                                
+
                             }
 
                         });
@@ -789,6 +793,45 @@ chrome.runtime.onMessage.addListener(function (message) {
     }
 
 });
+
+
+//777 //TODO: move to own script
+function connectToLocalWebSocket() {
+    let socket = new WebSocket("ws://localhost:8765");
+
+    socket.onopen = () => {
+        console.log("Connected to Python");
+    };
+
+    socket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log("Gesture received:", data);
+
+        //TODO: make extension care less about specifics, make things more general
+        //TODO: make way to receive just logobox updates
+        //TODO: commercial change request should also allow an optional logobox, so should on connection?
+        if (data.type === "gesture" && data.gesture === "Thumb_Up" && isCommercialState) {
+            manualCommercialModeToggle();
+        } else if (data.type === "gesture" && data.gesture === "Thumb_Down" && !isCommercialState) {
+            manualCommercialModeToggle();
+        } else {
+            console.log("nah");
+        }
+
+    };
+
+    //TODO: send to python every time commercial state changes, etc.
+
+    socket.onclose = () => {
+        console.log("Disconnected. Reconnecting...");
+        setTimeout(connectToLocalWebSocket, 1000);
+    };
+
+    socket.onerror = (err) => {
+        console.error("WebSocket error:", err);
+        socket.close();
+    };
+}
 
 
 function manualCommercialModeToggle() {
