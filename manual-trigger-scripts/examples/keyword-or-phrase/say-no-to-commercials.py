@@ -12,12 +12,12 @@ import os
 # --------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "vosk-model-small-en-us-0.15")
+MODEL_PATH = os.path.join(BASE_DIR, "model/vosk-model-small-en-us-0.15")
 
 # Phrases to detect
 TARGET_PHRASES = {
     "banana": "Thumb_Up",
-    "hate commercials": "Thumb_Down"
+    "tomato": "Thumb_Down"
 }
 
 COOLDOWN = 1.0  # seconds between triggers
@@ -73,6 +73,7 @@ async def listen_loop():
     print("Listening for voice commands...")
 
     last_trigger_time = 0
+    last_partial_text = ""
 
     # Start microphone stream
     with sd.RawInputStream(
@@ -82,18 +83,28 @@ async def listen_loop():
         channels=1,
         callback=audio_callback
     ):
+
         while True:
             data = audio_queue.get()
+            now = time.time()
 
             if recognizer.AcceptWaveform(data):
+                # Final result (you can ignore or keep for debugging)
                 result = json.loads(recognizer.Result())
                 text = result.get("text", "").lower().strip()
-
                 if text:
-                    now = time.time()
-                    print(f"Heard: {text}")
+                    print(f"[FINAL] {text}")
 
-                    # Check phrases
+            else:
+                # Partial (REAL-TIME)
+                partial = json.loads(recognizer.PartialResult())
+                text = partial.get("partial", "").lower().strip()
+
+                if text and text != last_partial_text:
+                    print(f"[PARTIAL] {text}")
+                    last_partial_text = text
+
+                    # Check for trigger words immediately
                     for phrase, mapped_name in TARGET_PHRASES.items():
                         if phrase in text:
                             if now - last_trigger_time > COOLDOWN:

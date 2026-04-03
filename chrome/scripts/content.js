@@ -80,6 +80,7 @@ const CLAP_HISTORY_MS = 2000;
 var clapIndicatorResetTimer = null;
 var doubleClapDetectorIFrameContainer;
 var clapPort;
+var hasInitiatedConnectionToWebSocket = false;
 
 //user set preferences (either directly or indirectly)
 var overlayVideoType;
@@ -704,6 +705,12 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 hideVerticleScrollbar();
                             }
 
+                            if (!hasInitiatedConnectionToWebSocket) {
+                                connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations or move to potentiallyIntrusiveSetup() and use that for all the auto modes and maybe rename it
+                                hasInitiatedConnectionToWebSocket = true
+                            }
+                            
+
                             //setting up for pixel selection for auto mode or continuing run for manual
                             if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
 
@@ -762,10 +769,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 
                                 initialRun();
 
-                                connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations
-
-                                
-
                             }
 
                         });
@@ -797,7 +800,7 @@ chrome.runtime.onMessage.addListener(function (message) {
 
 //777 //TODO: move to own script
 function connectToLocalWebSocket() {
-    let socket = new WebSocket("ws://localhost:8765");
+    socket = new WebSocket("ws://localhost:8765");
 
     socket.onopen = () => {
         console.log("Connected to Python");
