@@ -26,10 +26,11 @@ chrome.runtime.onMessage.addListener(function (message) {
         } else if (message.action == 'start-listening-microphone') {
             insertDoubleClapDetectorScript();
         } else if (message.action == 'stop-viewing') {
-            //not currently being used, as offscreen is just closed and reopened in order to pause and resume viewing tab
-            stopViewing();
+            stopViewing(true);
+        } else if (message.action == 'stop-listening') {
+            stopViewing(false);
         } else if (message.action == 'resume-viewing') {
-            //does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
+            //does not currently work, start-viewing works to resume
             startViewing(constraints);
         } else if (message.action == 'disconnect-tab-audio') {
             if (isAudioConnected) {
@@ -197,21 +198,24 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 });
 
 
-function stopViewing() {
+function stopViewing(isVideo) {
 
     if (viewing) {
 
         viewing = false;
 
-        //TODO: is pausing really necessary at all here?
-        videoElement.pause();
+        if (isVideo) {
+            //TODO: is pausing really necessary at all here?
+            videoElement.pause();
+            videoElement.remove();
+        }
 
         media.getTracks().forEach(function (track) {
             track.stop();
-            //track.enabled = false;
+            track.enabled = false;
         });
 
-        //media = undefined;
+        media = undefined;
 
     }
 

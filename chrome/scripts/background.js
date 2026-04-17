@@ -272,11 +272,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function chromeViewTab(message, sender) {
 
-    await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: ['USER_MEDIA'],
-        justification: 'Recording tab in order to extract user selected pixel color'
-    });
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA'],
+        'Recording tab in order to extract user selected pixel color'
+    );
 
     const streamId = await chrome.tabCapture.getMediaStreamId({
         targetTabId: sender.tab.id
@@ -308,11 +308,11 @@ async function chromeViewTab(message, sender) {
 
 async function chromeListenToTab(message, sender) {
 
-    await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: ['USER_MEDIA', 'AUDIO_PLAYBACK'],
-        justification: 'Recording tab in order to extract audio'
-    });
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA', 'AUDIO_PLAYBACK'],
+        'Recording tab in order to extract audio'
+    );
 
     const streamId = await chrome.tabCapture.getMediaStreamId({
         targetTabId: sender.tab.id
@@ -337,26 +337,43 @@ async function chromeListenToTab(message, sender) {
 }
 
 
-function chromeListenToMicrophone() {
-    chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
-        let clapSensitivity = result.clapSensitivity ?? 30;
-        let isDebugMode = result.isDebugMode ?? false;
+async function chromeListenToMicrophone() {
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA'],
+        'Listening to microphone to detect user claps'
+    );
 
-        let offscreenURL = 'offscreen.html?purpose=listen-double-clap&sensitivity=' + clapSensitivity;
-        if (isDebugMode) {
-            offscreenURL += '&debug=true';
-        }
-        chrome.offscreen.createDocument({
-            url: offscreenURL,
-            reasons: ['USER_MEDIA'],
-            justification: 'Listening to microphone to detect user claps'
-        }, function () {
-            chrome.runtime.sendMessage({
-                target: 'offscreen',
-                action: 'start-listening-microphone',
-            });
-        });
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'start-listening-microphone',
     });
+}
+
+
+let creating; //note: it is fine in this case to have a global variable in service worker since it doesn't really need to last very long
+async function setupOffscreenDocument(path, reasons, justification) {
+    const offscreenUrl = chrome.runtime.getURL(path);
+    const existingContexts = await chrome.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+        documentUrls: [offscreenUrl]
+    });
+
+    if (existingContexts.length > 0) {
+        return;
+    }
+
+    if (creating) {
+        await creating;
+    } else {
+        creating = chrome.offscreen.createDocument({
+            url: path,
+            reasons: reasons,
+            justification: justification,
+        });
+        await creating;
+        creating = null;
+    }
 }
 
 

@@ -372,7 +372,7 @@ function initialRun() {
 function potentiallyIntrusiveSetup() {
     if (isDoubleClapMode) {
         //Note: this happens elsewhere in manual clap and auto modes
-        prepFoClapMonitor();
+        prepForClapMonitorContent();
     }
 
 
@@ -1180,7 +1180,7 @@ function captureOriginalPixelColor(selectedPixel) {
         if (isDoubleClapMode) {
             //TODO: is it better that I'm doing this before spotify?
             setTimeout(() => {
-                prepFoClapMonitor();
+                prepForClapMonitorContent();
             }, 1000);
         }
 
@@ -1609,7 +1609,7 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
     if (isDoubleClapMode) {
         //TODO: is it better that I'm doing this before spotify?
         setTimeout(() => {
-            prepFoClapMonitor();
+            prepForClapMonitorContent();
         }, 1000);
     }
 }
@@ -1938,7 +1938,7 @@ function prepForAudioMonitor() {
     if (isDoubleClapMode) {
         //TODO: is it better that I'm doing this before spotify?
         setTimeout(() => {
-            prepFoClapMonitor();
+            prepForClapMonitorContent();
         }, 1000);
     }
 
@@ -2150,6 +2150,7 @@ function getAudioLevel() {
 
 }
 
+
 function setAudioLevelBar(level) {
     audioLevelBar.style.height = level + '%';
     audioLevelBar.style.backgroundColor = level < audioLevelThreshold ? 'rgb(140, 179, 210, 0.9)' : 'red';
@@ -2272,7 +2273,7 @@ function startViewingTab(windowDimensions) {
     if (!isFirefox) {
 
         chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions });
-        window.addEventListener('beforeunload', stopViewingTab);
+        window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
     }
 
@@ -2284,7 +2285,7 @@ function startListeningToTab() {
     if (!isFirefox) {
 
         chrome.runtime.sendMessage({ action: "chrome-view-tab-audio" });
-        window.addEventListener('beforeunload', stopViewingTab);
+        window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
     } else {
 
@@ -2332,7 +2333,7 @@ function startListeningToTab() {
 }
 
 
-function stopViewingTab() {
+function closeChromeOffscreenDoc() {
 
     if (!isFirefox) {
 
@@ -2343,14 +2344,13 @@ function stopViewingTab() {
         });
 
         //TODO: is removing this even listener necessary?
-        window.removeEventListener('beforeunload', stopViewingTab);
+        window.removeEventListener('beforeunload', closeChromeOffscreenDoc);
 
     }
 
 }
 
 
-//note: should use stopViewingTab() instead to close offscreen
 function pauseViewingTab() {
 
     if (!isFirefox) {
@@ -2365,7 +2365,21 @@ function pauseViewingTab() {
 }
 
 
-//note: does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
+function pauseListeningToTab() {
+
+    if (!isFirefox) {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "stop-listening"
+        });
+
+    }
+
+}
+
+
+//note: this does not work. to resume viewing or listening just "start" again. It will check if offscreen doc already open before creating a new one and then pass start message which works better to resume
 function resumeViewingTab() {
 
     if (!isFirefox) {
@@ -2449,7 +2463,12 @@ function pauseAutoMode(shouldDisplayMessage) {
         clearInterval(monitorIntervalID);
     }
 
-    stopViewingTab();
+    if (commercialDetectionMode !== 'auto-audio') {
+        pauseViewingTab();
+    } else {
+        pauseListeningToTab();
+    }
+    
 
     if (shouldDisplayMessage) {
         let pauseMessage = 'Live Commercial Blocker extension paused. Set video back to fullscreen to resume.';
@@ -2497,7 +2516,7 @@ function abortPixelSelection() {
     isAutoModeInitiated = false;
 
     removeBlockersListenersAndPixelSelectionInstructions();
-    stopViewingTab();
+    closeChromeOffscreenDoc();
     document.removeEventListener('fullscreenchange', abortPixelSelection);
 
     let abortMessage;
@@ -2925,7 +2944,7 @@ function stopCommercialTimer() {
 }
 
 
-function prepFoClapMonitor() {
+function prepForClapMonitorContent() {
     initiateClapIndicator();
 
     if (isFirefox) {
@@ -2933,7 +2952,7 @@ function prepFoClapMonitor() {
     } else {
         if (commercialDetectionMode === 'manual-clap') {
             chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
-            window.addEventListener('beforeunload', stopViewingTab);
+            window.addEventListener('beforeunload', closeChromeOffscreenDoc);
         } else {
             //TODO: figure out closing/pausing offscreen doc for other modes so I can use offscreen doc here, as well. Note: only one offscreen doc can be open at a time
             if (inIFrame()) {
@@ -2986,7 +3005,14 @@ function launchClapPort() {
         
         setTimeout(() => {
             try {
-                clapPort.postMessage({ action: "connected" });
+                clapPort.postMessage({
+                    action: "connected",
+                    data: {
+                        scriptPurpose: 'listen-double-clap', //TODO: maybe I could add a global variabl for this in content.js?
+                        isDebugMode: isDebugMode,
+                        clapSensitivity: clapSensitivity,
+                    }
+                });
                 clapPortConnectionSuccess();
             } catch {
                 if (isDebugMode) console.log('clapPort not ready, trying again.');
@@ -3029,7 +3055,7 @@ function micPermissionSuccess(inUseMicName) {
 function micPermissionError() {
     setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
     if (commercialDetectionMode === 'manual-clap') {
-        stopViewingTab();
+        closeChromeOffscreenDoc(); //TODO: should I pause here instead?
     } else {
         if (inIFrame()) {
             chrome.runtime.sendMessage({ action: "chrome-close-clap-detector-iframe" });
