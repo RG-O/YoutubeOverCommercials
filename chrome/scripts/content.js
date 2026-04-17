@@ -329,8 +329,8 @@ function initialRun() {
         setOverlayVideo();
     }
 
-    if (commercialDetectionMode.indexOf('auto') < 0 && commercialDetectionMode !== 'manual-clap') {
-        //note: this is called earlier for manual-clap
+    if (commercialDetectionMode === 'manual') {
+        document.addEventListener('fullscreenchange', fullscreenChanged);
         potentiallyIntrusiveSetup();
     }
 
@@ -368,23 +368,24 @@ function initialRun() {
 }
 
 
-//things that should be done very shortly after initiating the extension as to not bother the user later. the auto modes each have their own way of kicking off the things in here. //TODO: could the auto modes all use this function?
+//setup that could disrupt the user by either giving them a permissions prompt or switching tabs
 function potentiallyIntrusiveSetup() {
+    let spotifyDelay = 0;
+
     if (isDoubleClapMode) {
         //Note: this happens elsewhere in manual clap and auto modes
         prepForClapMonitorContent();
-    }
 
+        //add delay for switching over to spotify to give mic permissions prompt time to display if need be
+        spotifyDelay = 1000;
+    }
 
     if (overlayVideoType == 'spotify') {
-        //Note: this happens elsewhere in auto modes
-        chrome.runtime.sendMessage({ action: "open_spotify" });
-        window.addEventListener('beforeunload', closeSpotify);
+        setTimeout(() => {
+            chrome.runtime.sendMessage({ action: "open_spotify" });
+            window.addEventListener('beforeunload', closeSpotify);
+        }, spotifyDelay);
     }
-
-    //TODO: should this be moved above opening spotify?
-    //Note: this happens in pixelSelection() in auto mode
-    document.addEventListener('fullscreenchange', fullscreenChanged);
 }
 
 
@@ -705,10 +706,10 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 hideVerticleScrollbar();
                             }
 
-                            if (!hasInitiatedConnectionToWebSocket) {
-                                connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations or move to potentiallyIntrusiveSetup() and use that for all the auto modes and maybe rename it
-                                hasInitiatedConnectionToWebSocket = true
-                            }
+                            //if (!hasInitiatedConnectionToWebSocket) {
+                            //    connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations or move to potentiallyIntrusiveSetup() and use that for all the auto modes and maybe rename it
+                            //    hasInitiatedConnectionToWebSocket = true
+                            //}
 
                             //setting up for pixel selection for auto mode or continuing run for manual
                             if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
@@ -1160,27 +1161,21 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
+
             initialLogoBoxTextUpdate();
             if (!isDebugMode) { logoBox.style.display = 'none'; }
             removeElementsByClass('ytoc-selection-indicator');
+
+            //wait another sec for potentially intrusive setup
+            setTimeout(() => {
+                potentiallyIntrusiveSetup();
+            }, 1000);
+
         }, 2000);
 
-        if (overlayVideoType == 'spotify') {
-            //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
-            setTimeout(() => {
-                chrome.runtime.sendMessage({ action: "open_spotify" });
-                window.addEventListener('beforeunload', closeSpotify);
-            }, 2000);
-        } else if (overlayVideoType == 'other-tabs') {
+        if (overlayVideoType == 'other-tabs') {
             //if user has extension set to other-tabs, mute the other tabs now
             chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
-        }
-
-        if (isDoubleClapMode) {
-            //TODO: is it better that I'm doing this before spotify?
-            setTimeout(() => {
-                prepForClapMonitorContent();
-            }, 1000);
         }
 
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
@@ -1597,20 +1592,10 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
         advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
     }, delay);
 
-    if (overlayVideoType == 'spotify') {
-        //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
-        setTimeout(() => {
-            chrome.runtime.sendMessage({ action: "open_spotify" });
-            window.addEventListener('beforeunload', closeSpotify);
-        }, delay + 2000);
-    }
-
-    if (isDoubleClapMode) {
-        //TODO: is it better that I'm doing this before spotify?
-        setTimeout(() => {
-            prepForClapMonitorContent();
-        }, 1000);
-    }
+    //wait a sec for potentially intrusive setup
+    setTimeout(() => {
+        potentiallyIntrusiveSetup();
+    }, 1000);
 }
 
 
@@ -1923,23 +1908,15 @@ function prepForAudioMonitor() {
 
     document.addEventListener('fullscreenchange', fullscreenChanged);
 
-    if (overlayVideoType == 'spotify') {
-        //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
-        setTimeout(() => {
-            chrome.runtime.sendMessage({ action: "open_spotify" });
-            window.addEventListener('beforeunload', closeSpotify);
-        }, 2000);
-    } else if (overlayVideoType == 'other-tabs') {
+    if (overlayVideoType == 'other-tabs') {
         //if user has extension set to other-tabs, mute the other tabs now
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
     }
 
-    if (isDoubleClapMode) {
-        //TODO: is it better that I'm doing this before spotify?
-        setTimeout(() => {
-            prepForClapMonitorContent();
-        }, 1000);
-    }
+    //wait a sec for potentially intrusive setup
+    setTimeout(() => {
+        potentiallyIntrusiveSetup();
+    }, 1000);
 
     audioThresholdMonitor();
 
@@ -2936,6 +2913,9 @@ function prepForClapMonitorContent() {
 
         launchClapPort();
     }
+
+    //note: according to my googling, if this is ignored if already added
+    document.addEventListener('fullscreenchange', fullscreenChanged);
 }
 
 
@@ -2995,7 +2975,7 @@ function micPermissionSuccess(inUseMicName) {
 
 
 function micPermissionError() {
-    setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
+    setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue. May need refresh after granting access.'); // microphone and two warning triangles
     if (commercialDetectionMode === 'manual-clap') {
         closeChromeOffscreenDoc(); //TODO: should I pause here instead?
     } else {
