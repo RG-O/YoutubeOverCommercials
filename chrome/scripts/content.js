@@ -709,7 +709,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations or move to potentiallyIntrusiveSetup() and use that for all the auto modes and maybe rename it
                                 hasInitiatedConnectionToWebSocket = true
                             }
-                            
 
                             //setting up for pixel selection for auto mode or continuing run for manual
                             if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
@@ -2781,26 +2780,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
         } //else do not update preferences because this gets updated on first run anyway
 
-    } else if (message.action == 'add_clap_detector_iframe') {
-
-        if (!inIFrame()) {
-            //as this won't be ran in the same frame that this was called from, it is safest to grab these preferences fresh
-            chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
-                let clapSensitivity = result.clapSensitivity ?? 40;
-                let isDebugMode = result.isDebugMode ?? false;
-
-                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
-            });
-
-        }
-
-    } else if (message.action == 'close_clap_detector_iframe') {
-
-        if (!inIFrame()) {
-            closeDoubleClapDetectorIFrame();
-        }
-
     }
+
 });
 
 
@@ -2950,49 +2931,10 @@ function prepForClapMonitorContent() {
     if (isFirefox) {
         chrome.runtime.sendMessage({ action: "firefox-inject-clap-detector" });
     } else {
-        if (commercialDetectionMode === 'manual-clap') {
-            chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
-            window.addEventListener('beforeunload', closeChromeOffscreenDoc);
-        } else {
-            //TODO: figure out closing/pausing offscreen doc for other modes so I can use offscreen doc here, as well. Note: only one offscreen doc can be open at a time
-            if (inIFrame()) {
-                //request to open in top level frame to avoid any iframe sandbox permission restrictions, etc.
-                chrome.runtime.sendMessage({ action: "chrome-initiate-clap-detector-iframe" });
-            } else {
-                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
-            }
-            
-        }
+        chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
+        window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
         launchClapPort();
-    }
-}
-
-
-function addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode) {
-    let insertLocation = document.getElementsByTagName('body')[0];
-
-    doubleClapDetectorIFrameContainer = document.createElement('div');
-    doubleClapDetectorIFrameContainer.id = 'lcb-double-clap-detector-iframe-container';
-    doubleClapDetectorIFrameContainer.style.display = "none";
-    insertLocation.appendChild(doubleClapDetectorIFrameContainer);
-
-    let iFrame = document.createElement('iframe');
-    iFrame.style.display = "none";
-    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap&sensitivity=') + clapSensitivity;
-    if (isDebugMode) {
-        iFrameSource += '&debug=true';
-    }
-    iFrame.src = iFrameSource;
-    iFrame.allow = "microphone;";
-
-    doubleClapDetectorIFrameContainer.appendChild(iFrame);
-}
-
-
-function closeDoubleClapDetectorIFrame() {
-    if (doubleClapDetectorIFrameContainer) {
-        doubleClapDetectorIFrameContainer.remove();
     }
 }
 
