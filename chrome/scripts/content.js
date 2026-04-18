@@ -117,6 +117,9 @@ var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
+var isPluginOverlayMode = true; //777
+var pluginOverlayFramework = 'api'; //777
+var pluginOverlayAPIURL = 'http://localhost:64144'; //777
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -325,13 +328,23 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    if (!isAudioOnlyOverlay) {
+    if (!isAudioOnlyOverlay && overlayVideoType !== 'custom-plugin-overlay') {
         setOverlayVideo();
     }
+
+    let pluginOverlayFirstChangeDelay = 0;
 
     if (commercialDetectionMode === 'manual') {
         document.addEventListener('fullscreenchange', fullscreenChanged);
         potentiallyIntrusiveSetup();
+        //giving time between init and change state
+        pluginOverlayFirstChangeDelay = 3000;
+    }
+
+    if (isPluginOverlayMode) {
+        setTimeout(() => {
+            changePluginOverlayCommercialState(isCommercialState);
+        }, pluginOverlayFirstChangeDelay);
     }
 
     muteMainVideo();
@@ -380,12 +393,102 @@ function potentiallyIntrusiveSetup() {
         spotifyDelay = 1000;
     }
 
-    if (overlayVideoType == 'spotify') {
+    if (overlayVideoType === 'spotify') {
         setTimeout(() => {
             chrome.runtime.sendMessage({ action: "open_spotify" });
             window.addEventListener('beforeunload', closeSpotify);
         }, spotifyDelay);
     }
+
+    if (isPluginOverlayMode) {
+        pluginOverlayInitiation();
+    }
+}
+
+
+function pluginOverlayInitiation() {
+    if (pluginOverlayFramework === 'api') {
+        //TODO: create new function that this and below can share to call
+        const payload = {
+            type: "init",
+            timestamp: Date.now(),
+            data: { TODO: "Send all prefs here" },
+        };
+
+        chrome.runtime.sendMessage({
+            action: "call_custom_plugin_overlay_api",
+            pluginOverlayAPIURL: pluginOverlayAPIURL,
+            payload: payload,
+        }, function (response) {
+            console.log(response);
+            if (!response.wasSuccessfulCall) {
+                addMessageAlertToMainVideo("Issue connecting to your custom plugin API. See console for more info.");
+                console.log(response.error);
+            } else if (isDebugMode) {
+                console.log(response.pluginOverlayAPIResponse);
+            }
+        });
+
+        window.addEventListener('beforeunload', pluginOverlayEnd);
+    } else {
+        console.log('TODO: Add websocket connection here.');
+    }
+}
+
+
+function pluginOverlayEnd() {
+    if (pluginOverlayFramework === 'api') {
+        //TODO: create new function that this and below can share to call
+        const payload = {
+            type: "end",
+            timestamp: Date.now(),
+            data: { },
+        };
+
+        chrome.runtime.sendMessage({
+            action: "call_custom_plugin_overlay_api",
+            pluginOverlayAPIURL: pluginOverlayAPIURL,
+            payload: payload,
+        }, function (response) {
+            console.log(response);
+            if (!response.wasSuccessfulCall) {
+                addMessageAlertToMainVideo("Issue connecting to your custom plugin API. See console for more info.");
+                console.log(response.error);
+            } else if (isDebugMode) {
+                console.log(response.pluginOverlayAPIResponse);
+            }
+        });
+
+        window.addEventListener('beforeunload', pluginOverlayEnd);
+    } else {
+        console.log('TODO: Add websocket connection here.');
+    }
+}
+
+
+function changePluginOverlayCommercialState(isCommercialState) {
+    const payload = {
+        type: "state_change",
+        timestamp: Date.now(),
+        data: {
+            isCommercialState: isCommercialState,
+            TODO: "Send all prefs here",
+        },
+    };
+
+    chrome.runtime.sendMessage({
+        action: "call_custom_plugin_overlay_api",
+        pluginOverlayAPIURL: pluginOverlayAPIURL,
+        payload: payload,
+    }, function (response) {
+        console.log(response);
+        if (!response.wasSuccessfulCall) {
+            addMessageAlertToMainVideo("Issue connecting to your custom plugin API. See console for more info.");
+            console.log(response.error);
+        } else if (isDebugMode) {
+            console.log(response.pluginOverlayAPIResponse);
+        }
+    });
 }
 
 
@@ -499,6 +602,10 @@ function endCommercialMode() {
 
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
 
+        if (isPluginOverlayMode) {
+            changePluginOverlayCommercialState(isCommercialState);
+        }
+
     } else {
 
         chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
@@ -542,9 +649,13 @@ function startCommercialMode() {
 
         isCommercialState = true;
 
-        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+        if (isAudioOnlyOverlay) {
 
             chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
+
+            if (isPluginOverlayMode) {
+                changePluginOverlayCommercialState(isCommercialState);
+            }
 
         } else {
 
@@ -638,6 +749,10 @@ chrome.runtime.onMessage.addListener(function (message) {
                             } else if (overlayVideoType == 'yt-live' || overlayVideoType == 'other-live') {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = true;
+                            } else if (overlayVideoType === 'custom-plugin-overlay') {
+                                isAudioOnlyOverlay = true; //TODO: should I do this? is there a better way? //TODO: probably not because I want it to work with other modes? - maybe for the future
+                                isLiveOverlayVideo = false; //TODO: should I do this?
+                                isPluginOverlayMode = true; 
                             } else {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false;

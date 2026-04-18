@@ -522,3 +522,25 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     return true;
     
 });
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "call_custom_plugin_overlay_api") {
+        fetch(`${message.pluginOverlayAPIURL}/custom-plugin-overlay-api`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(message.payload)
+        })
+            .then(response => response.json())
+            .then(pluginOverlayAPIResponse => {
+                sendResponse({ pluginOverlayAPIResponse: pluginOverlayAPIResponse, wasSuccessfulCall: true });
+            })
+            .catch(error => {
+                console.error(error);
+                sendResponse({ wasSuccessfulCall: false, error: error });
+            });
+    }
+
+    //return true to indicate that the response will be sent asynchronously
+    return true;
+});

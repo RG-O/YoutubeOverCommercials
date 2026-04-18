@@ -84,7 +84,7 @@
         <div>
             <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
             <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual - Keyboard &#9000;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
-</div>
+        </div>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
                 <b>HOW TO USE:</b><br />
@@ -104,6 +104,34 @@
             <div id="double-clap-mode-returner-instructions" class="mode-how-to settings-box" style="display: none;">
                 <b>HOW TO USE:</b><br />
                 Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate extension. From that point forward, double clap every time a commercial begins and ends.
+            </div>
+        </div>
+
+        <div>
+            <input type="radio" id="commercialDetectionMode-custom-plugin-trigger" name="commercialDetectionMode" value="custom-plugin-trigger">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Custom Plugin</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">TODO: Description here.</span></span><span class="badge badge-advanced">Advanced</span>
+        </div>
+        <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
+            <div id="custom-plugin-trigger-loading" class="loading-spinner"></div>
+            <div id="custom-plugin-trigger-additional-setup" class="mode-how-to settings-box" style="display: none;">
+                <b>ADDITIONAL SETUP REQUIRED</b><br />
+                <br />
+                TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
+                <br />
+                TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+            </div>
+            <div id="custom-plugin-trigger-ping-error" class="error-box settings-box" style="display: none;">
+                <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
+                <div>
+                    TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                </div>
+            </div>
+            <div id="custom-plugin-trigger-success" class="success-box settings-box" style="display: none;">
+                TODO: Update all of this. Verified Advanced Logo Analyzer companion app is running properly on this machine.
+            </div>
+            <div id="custom-plugin-trigger-instructions" class="mode-how-to settings-box" style="display: none;">
+                <b>HOW TO USE:</b><br />
+                TODO: Update all of this. Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
             </div>
         </div>
 
@@ -212,7 +240,26 @@
             </div>
         </div>
 
+        <div>
+            <input type="radio" id="overlayVideoType-custom-plugin-overlay" name="overlayVideoType" value="custom-plugin-overlay">
+            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Custom Plugin</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">TODO: add description here.</span></span><span class="badge badge-advanced">Advanced</span>
+        </div>
+        <div id="custom-plugin-overlay" class="id-field-wrapper settings-box">
+            <div class="id-field-label">
+                <label>TODO - add radios for api or ws</label>
+            </div>
+            <div class="id-input-row">
+                <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL">
+                <button id="pull-button-pluginOverlayAPIURL" class="pull-id-button">
+                    Test
+                    <span class="pull-id-tooltip">Ping API.</span>
+                </button>
+            </div>
+        </div>
+
+
         <div style="padding-bottom: 15px"></div>
+
 
 
         <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Advanced Settings</button>
