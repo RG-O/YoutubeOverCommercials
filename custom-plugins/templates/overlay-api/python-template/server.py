@@ -4,36 +4,38 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 
-#TODO: delete to keep all in one
-@app.route("/init", methods=["POST"])
-def init():
-    data = request.json
-
-    print(data)
-
-    return jsonify({"status": "ok"})
-
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
     data = request.json
+    request_type = data["type"]
 
-    if data["type"] == "state_change":
+    if request_type == "commercial_state_change":
         is_commercial = data["data"]["isCommercialState"]
 
         if is_commercial:
-            print("START overlay")
+            print("Commercial State Started")
         else:
-            print("STOP overlay")
-    elif data["type"] == "init":
-        print(data)
-    elif data["type"] == "end":
-        print(data)
+            print("Commercial State Ended")
+    if request_type == "browser_fullscreen_state_change":
+        is_fullscreen = data["data"]["isFullscreen"]
 
+        if is_fullscreen:
+            print("User entered fullscreen on browser")
+            # Note: This does not get called before user initiates the extension
+        else:
+            print("User exited fullscreen on browser")
+            # Note: commercial_state_change: is_commercial = false usually gets sent directly before this if user exited fullscreen during commercial
+    elif request_type == "init":
+        print("Extension Initiated")
+        print(data)
+    elif request_type == "end":
+        print("Extension Stopped")
 
     return jsonify({"status": "ok"})
 
 @app.route("/ping", methods=["GET"])
 def ping():
+    print("ping")
     return jsonify({"status": "alive"})
 
 if __name__ == "__main__":

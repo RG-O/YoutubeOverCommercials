@@ -1,4 +1,9 @@
 
+//TODO: put all in here
+const utility = {
+
+}
+
 var isFirefox = false; //******************** remember to also update in background.js, overlay.js, and mic-settings-for-double-clap.js //TODO: can I pass this value somehow?
 
 //utility variables
@@ -82,6 +87,11 @@ var doubleClapDetectorIFrameContainer;
 var clapPort;
 var hasInitiatedConnectionToWebSocket = false;
 
+//TODO: put all in here
+const preference = {
+
+}
+
 //user set preferences (either directly or indirectly)
 var overlayVideoType;
 var ytPlaylistID;
@@ -131,8 +141,6 @@ function setOverlayVideo() {
     if (insertLocation.nodeName == 'HTML') {
         insertLocation = document.getElementsByTagName('body')[0];
     }
-
-    addOverlayFade(insertLocation);
 
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
@@ -219,9 +227,15 @@ function removeOverlayVideo() {
 
 
 //adding an overlay to darken the main/background video during commercials if user has chosen to do so
-function addOverlayFade(insertLocation) {
+function addOverlayFade() {
 
     if (mainVideoFade > 0) {
+
+        //TODO: add check to make sure user is still in full screen and if not to break and resut isFirstRun
+        let insertLocation = document.fullscreenElement;
+        if (insertLocation.nodeName == 'HTML') {
+            insertLocation = document.getElementsByTagName('body')[0];
+        }
 
         overlayScreen = document.createElement('div');
 
@@ -328,8 +342,11 @@ function initialRun() {
 
     removeNotFullscreenAlerts();
 
-    if (!isAudioOnlyOverlay && overlayVideoType !== 'custom-plugin-overlay') {
-        setOverlayVideo();
+    if (!isAudioOnlyOverlay) {
+        if (overlayVideoType !== 'custom-plugin-overlay') {
+            setOverlayVideo();
+        }
+        addOverlayFade();
     }
 
     let pluginOverlayFirstChangeDelay = 0;
@@ -338,7 +355,7 @@ function initialRun() {
         document.addEventListener('fullscreenchange', fullscreenChanged);
         potentiallyIntrusiveSetup();
         //giving time between init and change state
-        pluginOverlayFirstChangeDelay = 3000;
+        pluginOverlayFirstChangeDelay = 2000;
     }
 
     if (isPluginOverlayMode) {
@@ -408,71 +425,67 @@ function potentiallyIntrusiveSetup() {
 
 function pluginOverlayInitiation() {
     if (pluginOverlayFramework === 'api') {
-        //TODO: create new function that this and below can share to call
-        const payload = {
-            type: "init",
-            timestamp: Date.now(),
-            data: { TODO: "Send all prefs here" },
-        };
-
-        chrome.runtime.sendMessage({
-            action: "call_custom_plugin_overlay_api",
-            pluginOverlayAPIURL: pluginOverlayAPIURL,
-            payload: payload,
-        }, function (response) {
-            console.log(response);
-            if (!response.wasSuccessfulCall) {
-                addMessageAlertToMainVideo("Issue connecting to your custom plugin API. See console for more info.");
-                console.log(response.error);
-            } else if (isDebugMode) {
-                console.log(response.pluginOverlayAPIResponse);
-            }
-        });
-
-        window.addEventListener('beforeunload', pluginOverlayEnd);
+        callPluginOverlayAPI("init");
     } else {
         console.log('TODO: Add websocket connection here.');
+        //TODO: assuming the initiation will be a little different
     }
+
+    window.addEventListener('beforeunload', pluginOverlayEnd);
 }
 
 
 function pluginOverlayEnd() {
+    callPluginOverlay("end");
+}
+
+
+function sendPluginOverlayFullscreenState() {
+    callPluginOverlay("browser_fullscreen_state_change");
+}
+
+
+function changePluginOverlayCommercialState() {
+    callPluginOverlay("commercial_state_change");
+}
+
+function callPluginOverlay(type) {
     if (pluginOverlayFramework === 'api') {
-        //TODO: create new function that this and below can share to call
-        const payload = {
-            type: "end",
-            timestamp: Date.now(),
-            data: { },
-        };
-
-        chrome.runtime.sendMessage({
-            action: "call_custom_plugin_overlay_api",
-            pluginOverlayAPIURL: pluginOverlayAPIURL,
-            payload: payload,
-        }, function (response) {
-            console.log(response);
-            if (!response.wasSuccessfulCall) {
-                addMessageAlertToMainVideo("Issue connecting to your custom plugin API. See console for more info.");
-                console.log(response.error);
-            } else if (isDebugMode) {
-                console.log(response.pluginOverlayAPIResponse);
-            }
-        });
-
-        window.addEventListener('beforeunload', pluginOverlayEnd);
+        callPluginOverlayAPI(type)
     } else {
-        console.log('TODO: Add websocket connection here.');
+        callPluginOverlayWS(type)
     }
 }
 
 
-function changePluginOverlayCommercialState(isCommercialState) {
+function callPluginOverlayAPI(type) {
+    //TODO: remove this and use above
+    const utility = {
+        TODO: "TODO: have this be all"
+    }
+
+    //TODO: remove this and use above
+    const preference = {
+        videoOverlayWidth: videoOverlayWidth,
+        videoOverlayHeight: videoOverlayHeight,
+        overlayVideoLocationHorizontal: overlayVideoLocationHorizontal,
+        overlayVideoLocationVertical: overlayVideoLocationVertical,
+        isPiPMode: isPiPMode,
+        pipLocationHorizontal: pipLocationHorizontal,
+        pipLocationVertical: pipLocationVertical,
+        pipHeight: pipHeight,
+        pipWidth: pipWidth,
+        shouldOverlayVideoSizeAndLocationAutoSet: shouldOverlayVideoSizeAndLocationAutoSet,
+    }
+
     const payload = {
-        type: "state_change",
+        type: type,
         timestamp: Date.now(),
         data: {
             isCommercialState: isCommercialState,
-            TODO: "Send all prefs here",
+            isFullscreen: !!document.fullscreenElement,
+            utility: utility,
+            preference: preference,
         },
     };
 
@@ -481,14 +494,25 @@ function changePluginOverlayCommercialState(isCommercialState) {
         pluginOverlayAPIURL: pluginOverlayAPIURL,
         payload: payload,
     }, function (response) {
-        console.log(response);
         if (!response.wasSuccessfulCall) {
-            addMessageAlertToMainVideo("Issue connecting to your custom plugin API. See console for more info.");
-            console.log(response.error);
+            //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
+            addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
+
+            console.log(response);
+
+            //TODO, add this to addMessageAlertToMainVideo
+            setTimeout(() => {
+                removeElementsByClass('ytoc-main-video-message-alert');
+            }, 7000);
         } else if (isDebugMode) {
-            console.log(response.pluginOverlayAPIResponse);
+            console.log(response);
         }
     });
+}
+
+
+function callPluginOverlayWS(payload) {
+    console.log('TODO: Add websocket call here.');
 }
 
 
@@ -602,21 +626,27 @@ function endCommercialMode() {
 
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
 
-        if (isPluginOverlayMode) {
-            changePluginOverlayCommercialState(isCommercialState);
-        }
-
     } else {
 
-        chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
+        if (overlayVideoType !== 'custom-plugin-overlay') {
 
-        if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
-            enterPiPMode();
-        } else {
-            hideOverlayVideo();
+            chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
+
+            if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
+                enterPiPMode();
+            } else {
+                hideOverlayVideo();
+            }
+
         }
 
         hideOverlayFade();
+
+    }
+
+    if (isPluginOverlayMode || overlayVideoType === 'custom-plugin-overlay') {
+
+        changePluginOverlayCommercialState(isCommercialState);
 
     }
 
@@ -653,21 +683,27 @@ function startCommercialMode() {
 
             chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
 
-            if (isPluginOverlayMode) {
-                changePluginOverlayCommercialState(isCommercialState);
-            }
-
         } else {
 
-            chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
+            if (overlayVideoType !== 'custom-plugin-overlay') {
+
+                chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
+
+                if (isPiPMode && isLiveOverlayVideo) {
+                    resetOverlayVideoSizeAndLocation();
+                }
+
+                showOverlayVideo();
+
+            }
 
             showOverlayFade();
 
-            if (isPiPMode && isLiveOverlayVideo) {
-                resetOverlayVideoSizeAndLocation();
-            }
+        }
 
-            showOverlayVideo();
+        if (isPluginOverlayMode || overlayVideoType === 'custom-plugin-overlay') {
+
+            changePluginOverlayCommercialState(isCommercialState);
 
         }
 
@@ -750,7 +786,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = true;
                             } else if (overlayVideoType === 'custom-plugin-overlay') {
-                                isAudioOnlyOverlay = true; //TODO: should I do this? is there a better way? //TODO: probably not because I want it to work with other modes? - maybe for the future
+                                isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false; //TODO: should I do this?
                                 isPluginOverlayMode = true; 
                             } else {
@@ -2542,6 +2578,12 @@ function fullscreenChanged() {
             chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
         }
 
+    }
+
+    if (isPluginOverlayMode || overlayVideoType === 'custom-plugin-overlay') {
+        setTimeout(() => {
+            sendPluginOverlayFullscreenState();
+        }, 1000);
     }
 
 }

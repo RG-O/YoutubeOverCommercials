@@ -536,7 +536,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 sendResponse({ pluginOverlayAPIResponse: pluginOverlayAPIResponse, wasSuccessfulCall: true });
             })
             .catch(error => {
-                console.error(error);
                 sendResponse({ wasSuccessfulCall: false, error: error });
             });
     }

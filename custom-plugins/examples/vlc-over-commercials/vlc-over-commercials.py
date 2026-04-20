@@ -11,7 +11,8 @@ def find_window_by_title(partial_title):
     def enum_handler(hwnd, result):
         if win32gui.IsWindowVisible(hwnd):
             title = win32gui.GetWindowText(hwnd)
-            if partial_title.lower() in title.lower():
+            if partial_title in title:
+                print(title)
                 result.append(hwnd)
 
     result = []
@@ -37,9 +38,11 @@ def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
     win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
     # Move and resize window
+
     win32gui.SetWindowPos(
         hwnd,
-        win32con.HWND_TOPMOST,  # Always on top #TODO: remove?
+        win32con.HWND_TOPMOST,  # Giving TOPMOST status so it shows over top of fullscreen browser
+        #win32con.HWND_TOP,
         x,
         y,
         target_width,
@@ -47,8 +50,49 @@ def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
         win32con.SWP_NOACTIVATE, #TODO: bring other one back?
     )
 
+    time.sleep(0.05) #TODO: is this necessary?
+
+    # # instantly removing TOPMOST status so user can easily minimize it, but keeping it on top of the fullscreen browser
+    # win32gui.SetWindowPos(
+    #     hwnd,
+    #     #win32con.HWND_TOPMOST,  # Always on top #TODO: remove?
+    #     #win32con.HWND_TOP,
+    #     win32con.HWND_NOTOPMOST, 
+    #     x,
+    #     y,
+    #     target_width,
+    #     target_height,
+    #     win32con.SWP_NOACTIVATE, #TODO: bring other one back?
+    # )
+
     # pyautogui.press("playpause")
 
+def remove_topmost(hwnd, width_percent=90, height_percent=75):
+    # Get screen resolution
+    screen_width = win32api.GetSystemMetrics(0)
+    screen_height = win32api.GetSystemMetrics(1)
+
+    # Calculate target size
+    target_width = int(screen_width * (width_percent / 100))
+    target_height = int(screen_height * (height_percent / 100))
+
+    # Calculate centered position
+    x = (screen_width - target_width) // 2
+    y = (screen_height - target_height) // 2
+
+    # removing TOPMOST status so user can easily minimize it, but keeping it on top of the fullscreen browser
+    win32gui.SetWindowPos(
+        hwnd,
+        #win32con.HWND_TOPMOST,  # Always on top #TODO: remove?
+        #win32con.HWND_TOP,
+        #win32con.HWND_NOTOPMOST, 
+        win32con.HWND_BOTTOM,
+        x,
+        y,
+        target_width,
+        target_height,
+        win32con.SWP_NOACTIVATE, #TODO: bring other one back?
+    )
 
 def minimize_window(hwnd):
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
@@ -138,25 +182,21 @@ def send_ctrl_h(hwnd):
 #     else:
 #         print("Window not found.")
 
-
+def send_spacebar(hwnd):
+    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down
+    time.sleep(0.05)
+    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
 
 
 app = Flask(__name__)
 
 
-@app.route("/init", methods=["POST"])
-def init():
-    data = request.json
-
-    print(data)
-
-    return jsonify({"status": "ok"})
-
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
     data = request.json
+    request_type = data["type"]
 
-    if data["type"] == "state_change":
+    if request_type == "commercial_state_change":
         is_commercial = data["data"]["isCommercialState"]
 
         if is_commercial:
@@ -166,28 +206,47 @@ def custom_plugin_overlay():
             hwnd = find_window_by_title(window_title)
             center_and_resize_window(hwnd, width_percent=90, height_percent=85)
             time.sleep(0.5)
-            win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down #TODO: move to function
-            time.sleep(0.05)
-            win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
+            send_spacebar(hwnd)
+            return jsonify({"status": "ok"})
         else:
             #TODO: somhow globally define hwnd
             window_title = "VLC"  # Change this to your target window
             hwnd = find_window_by_title(window_title)
+            send_spacebar(hwnd)
             time.sleep(0.5)
-            win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down #TODO: move to function
-            time.sleep(0.05)
-            win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
             win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
             print("STOP overlay")
-    elif data["type"] == "init":
+    elif request_type == "browser_fullscreen_state_change":
+        is_fullscreen = data["data"]["isFullscreen"]
+
+        window_title = "VLC"  # Change this to your target window
+        hwnd = find_window_by_title(window_title)
+
+        if is_fullscreen:
+            print("User entered fullscreen on browser")
+            make_borderless(hwnd)
+        else:
+            print("User exited fullscreen on browser")
+            remove_topmost(hwnd, width_percent=90, height_percent=85)
+            restore_borders(hwnd)
+    elif request_type == "init":
+        window_title = "VLC"  # Change this to your target window
+        hwnd = find_window_by_title(window_title)
+        make_borderless(hwnd)
+        print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
+        print(data)
+    elif request_type == "end":
         #TODO: somhow globally define hwnd
         window_title = "VLC"  # Change this to your target window
         hwnd = find_window_by_title(window_title)
-        make_borderless(hwnd) #TODO: do this only once
-        print(data)
-
+        remove_topmost(hwnd, width_percent=90, height_percent=75)
+        restore_borders(hwnd)
+        print("Extension Stopped")
 
     return jsonify({"status": "ok"})
+
+
+    
 
 @app.route("/ping", methods=["GET"])
 def ping():
