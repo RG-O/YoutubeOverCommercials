@@ -19,7 +19,7 @@ def find_window_by_title(partial_title):
     return result[0] if result else None
 
 
-def center_and_resize_window(hwnd, width_percent=50, height_percent=50):
+def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
     # Get screen resolution
     screen_width = win32api.GetSystemMetrics(0)
     screen_height = win32api.GetSystemMetrics(1)
@@ -164,7 +164,7 @@ def custom_plugin_overlay():
             #TODO: somhow globally define hwnd
             window_title = "VLC"  # Change this to your target window
             hwnd = find_window_by_title(window_title)
-            center_and_resize_window(hwnd, width_percent=40, height_percent=40)
+            center_and_resize_window(hwnd, width_percent=90, height_percent=85)
             time.sleep(0.5)
             win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down #TODO: move to function
             time.sleep(0.05)

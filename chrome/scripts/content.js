@@ -117,7 +117,7 @@ var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
-var isPluginOverlayMode = true; //777
+var isPluginOverlayMode = false; //777
 var pluginOverlayFramework = 'api'; //777
 var pluginOverlayAPIURL = 'http://localhost:64144'; //777
 //TODO: Add user preference for spotify to have audio come in gradually
