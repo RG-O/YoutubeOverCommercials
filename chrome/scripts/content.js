@@ -504,6 +504,13 @@ function callPluginOverlayAPI(type) {
             setTimeout(() => {
                 removeElementsByClass('ytoc-main-video-message-alert');
             }, 7000);
+        } else if (response.pluginOverlayAPIResponse.status === "error" && response.pluginOverlayAPIResponse.error) {
+            addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.error);
+
+            //TODO, add this to addMessageAlertToMainVideo
+            setTimeout(() => {
+                removeElementsByClass('ytoc-main-video-message-alert');
+            }, 7000);
         } else if (isDebugMode) {
             console.log(response);
         }

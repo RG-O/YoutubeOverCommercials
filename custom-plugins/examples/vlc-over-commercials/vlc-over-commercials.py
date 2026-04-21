@@ -232,6 +232,8 @@ def custom_plugin_overlay():
     elif request_type == "init":
         window_title = "VLC"  # Change this to your target window
         hwnd = find_window_by_title(window_title)
+        if hwnd is None:
+            return jsonify({"status": "error", "error": "No VLC window found."})
         make_borderless(hwnd)
         print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
         print(data)
