@@ -4,7 +4,7 @@ import websockets
 import json
 import time
 
-PORT = 8765
+PORT = 64145
 
 clients = set()
 
@@ -24,50 +24,95 @@ async def handle_client(websocket):
         print("Client disconnected")
 
 async def handle_message(ws, msg):
-    if msg["type"] == "init":
-        prefs = msg["data"]["preferences"]
-        print("Received preferences")
+    print(msg)
+
+    message_type = msg["type"]
+
+    if message_type == "init":
+        print(msg)
 
         # Send initial message
         await send_status(ws, "Connected", "Ready")
 
         # Start detection loop
-        asyncio.create_task(detection_loop(ws))
+        asyncio.create_task(demo_loop(ws))
 
-    elif msg["type"] == "manual_override":
-        print("Manual override:", msg["data"]["isCommercial"])
+    elif message_type == "commercial_state_change":
+        is_commercial = msg["data"]["isCommercialState"]
+        commercial_state_trigger = msg["data"]["utilities"]["triggerOfLastCommercialStateChange"]
 
-async def detection_loop(ws):
+        if commercial_state_trigger != "plugin":
+            print("Confirmed commercial state changed in extension. is_commercial = ", is_commercial, ", commercial_state_trigger = ", commercial_state_trigger)
+        else:
+            print("Commercial state changed by extension. is_commercial = ", is_commercial, ", commercial_state_trigger = ", commercial_state_trigger)
+
+    elif message_type == "browser_fullscreen_state_change":
+        is_fullscreen = msg["data"]["isFullscreen"]
+
+        print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
+
+async def demo_loop(ws):
     is_commercial = False
 
-    while True:
-        await asyncio.sleep(2)
+    while not ws.close_code is not None:
+        await asyncio.sleep(7)
 
         # Example toggle logic
         is_commercial = not is_commercial
 
+        display = "Commercial" if is_commercial else "Content"
+        debug = "Toggled for demo"
+
+        print("sending extension commercial_state_change. isCommercial = ", is_commercial)
+
+        await send_commercial_state_change(ws, is_commercial, display, debug)
+
+async def send_commercial_state_change(ws, is_commercial, display, debug):
+    try:
         await ws.send(json.dumps({
-            "type": "state_update",
+            "type": "commercial_state_change",
             "timestamp": time.time(),
             "data": {
                 "isCommercial": is_commercial
             },
             "meta": {
-                "display": "Commercial" if is_commercial else "Content",
-                "debug": "Toggled for demo"
+                "display": display,
+                "debug": debug
             }
         }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_commercial_state_change stopped: client disconnected")
+
+# This can be used to disable or enable any auto commercial detection that the browser extension is doing
+async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_blocked, display, debug):
+    try:
+        await ws.send(json.dumps({
+            "type": "auto_commercial_blocked_state_change",
+            "timestamp": time.time(),
+            "data": {
+                "isAutoCommercialBlocked": is_auto_commercial_blocked
+            },
+            "meta": {
+                "display": display,
+                "debug": debug
+            }
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_auto_commercial_blocked_state_change stopped: client disconnected")
 
 async def send_status(ws, display, debug):
-    await ws.send(json.dumps({
-        "type": "status",
-        "timestamp": time.time(),
-        "data": {},
-        "meta": {
-            "display": display,
-            "debug": debug
-        }
-    }))
+    try:
+        await ws.send(json.dumps({
+            "type": "status",
+            "timestamp": time.time(),
+            "data": {},
+            "meta": {
+                "display": display,
+                "debug": debug
+            }
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_status send stopped: client disconnected")
 
 async def main():
     async with websockets.serve(handle_client, "localhost", PORT):

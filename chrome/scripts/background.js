@@ -234,14 +234,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             { frameId: 0 }, //note: always injecting in top frame to avoid any iframe sandbox permission restrictions
         );
 
-    } else if (message.action === "chrome-close-clap-detector-iframe") {
-
-        chrome.tabs.sendMessage(
-            sender.tab.id,
-            { action: "close_clap_detector_iframe" },
-            { frameId: 0 },
-        );
-
     } else if (message.action === "firefox-inject-clap-detector") {
 
         chrome.scripting.executeScript({
@@ -265,6 +257,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } else if (message.action === "chrome-listen-microphone") {
 
         chromeListenToMicrophone();
+
+    } else if (message.action === "chrome-connect-to-ws-plugins") {
+
+        chromeConnectToPluginCommercialTriggerWS(message.payload);
 
     }
 });
@@ -347,6 +343,21 @@ async function chromeListenToMicrophone() {
     chrome.runtime.sendMessage({
         target: 'offscreen',
         action: 'start-listening-microphone',
+    });
+}
+
+
+async function chromeConnectToPluginCommercialTriggerWS(payload) {
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA'],
+        'Communicating with WebSockets to use extension with plugins',
+    );
+
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'connect-to-ws-plugins',
+        payload: payload,
     });
 }
 
@@ -462,6 +473,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                         chrome.tabs.update(result.mainVideoTabID, { active: true });
                         chrome.tabs.sendMessage(result.mainVideoTabID, { action: "show_resume_fullscreen_message" });
+
+                    }
+
+                });
+
+            }
+
+        });
+
+    } else if (message.action === "forward_message_from_plugin_ws") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, {
+                            action: "message_from_plugin_ws",
+                            payload: message.payload,
+                            source: message.source,
+                        });
 
                     }
 

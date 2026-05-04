@@ -10,7 +10,7 @@ var audioSource;
 var audioAnalyzer;
 var audioDataArray;
 var isAudioConnected = false;
-
+var pluginWSScript;
 
 chrome.runtime.onMessage.addListener(function (message) {
     if (message.target == 'offscreen') {
@@ -42,6 +42,8 @@ chrome.runtime.onMessage.addListener(function (message) {
                 audioSource.connect(audioContext.destination);
                 isAudioConnected = true;
             }
+        } else if (message.action == 'connect-to-ws-plugins') {
+            launchPluginWSScript(message.payload);
         } else if (message.action == 'close') {
             window.close();
         }
@@ -110,6 +112,22 @@ function insertDoubleClapDetectorScript() {
         script.src = "/scripts/double-clap-detector.js";
         document.body.appendChild(script);
     }, 100);
+}
+
+
+function launchPluginWSScript(payload) {
+    //TODO: figure out if overlay or trigger or both
+    if (!pluginWSScript) {
+        pluginWSScript = document.createElement('script');
+        pluginWSScript.src = "/scripts/plugin-ws-client.js";
+        //pluginWSScript.type = "module";
+        document.body.appendChild(pluginWSScript);
+        pluginWSScript.addEventListener('load', function () {
+            ws.initDetection(payload);
+        });
+    } else {
+        ws.initDetection(payload);
+    }
 }
 
 

@@ -319,7 +319,7 @@ document.getElementById("save-button").onclick = function () {
         let overlayHostName;
         if (optionsForm.overlayVideoType.value === "other-video") {
             let otherVideoURLObj = new URL(optionsForm.otherVideoURL.value);
-            if (otherVideoURLObj.pathname.toLowerCase().endsWith('.mp4')) {
+            if (otherVideoURLObj.pathname.toLowerCase().endsWith('.mp4') || otherVideoURLObj.pathname.toLowerCase().endsWith('.mkv')) {
                 //set the overlayHostName to the extension id because if the url is an mp4, it will be inserted onto an extension page
                 overlayHostName = window.location.host; //getting extension id from the extension popup
             } else {

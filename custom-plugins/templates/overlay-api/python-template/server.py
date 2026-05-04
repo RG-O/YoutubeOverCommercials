@@ -16,7 +16,8 @@ def custom_plugin_overlay():
             print("Commercial State Started")
         else:
             print("Commercial State Ended")
-    if request_type == "browser_fullscreen_state_change":
+
+    elif request_type == "browser_fullscreen_state_change":
         is_fullscreen = data["data"]["isFullscreen"]
 
         if is_fullscreen:
@@ -25,9 +26,11 @@ def custom_plugin_overlay():
         else:
             print("User exited fullscreen on browser")
             # Note: commercial_state_change: is_commercial = false usually gets sent directly before this if user exited fullscreen during commercial
+
     elif request_type == "init":
         print("Extension Initiated")
         print(data)
+
     elif request_type == "end":
         print("Extension Stopped")
 

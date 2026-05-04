@@ -1,6 +1,6 @@
 
 //TODO: put all in here
-const utility = {
+const utilities = {
 
 }
 
@@ -46,6 +46,10 @@ var audioLevelThresholdLine;
 var windowWidth;
 var windowHeight;
 var selectedPixelGridLocation;
+var triggerOfLastCommercialStateChange = 'none';
+var pluginCommercialTriggerIndicatorContainer;
+var pluginCommercialTriggerIndicator;
+var pluginCommercialTriggerDebugOverlay;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -85,10 +89,9 @@ const CLAP_HISTORY_MS = 2000;
 var clapIndicatorResetTimer = null;
 var doubleClapDetectorIFrameContainer;
 var clapPort;
-var hasInitiatedConnectionToWebSocket = false;
 
 //TODO: put all in here
-const preference = {
+const preferences = {
 
 }
 
@@ -130,6 +133,9 @@ var isDoubleClapOnlyReturnMode;
 var isPluginOverlayMode = false; //777
 var pluginOverlayFramework = 'api'; //777
 var pluginOverlayAPIURL = 'http://localhost:64144'; //777
+var isPluginCommercialTriggerMode = true; //777
+var pluginCommercialTriggerWSURL = 'ws://localhost:64145'; //777
+var isAnyPluginMode = false; //777
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -360,7 +366,7 @@ function initialRun() {
 
     if (isPluginOverlayMode) {
         setTimeout(() => {
-            changePluginOverlayCommercialState(isCommercialState);
+            sendPluginsCommercialState();
         }, pluginOverlayFirstChangeDelay);
     }
 
@@ -417,55 +423,56 @@ function potentiallyIntrusiveSetup() {
         }, spotifyDelay);
     }
 
+    if (isPluginCommercialTriggerMode) {
+        pluginCommercialTriggerInitiation();
+    }
+
     if (isPluginOverlayMode) {
-        pluginOverlayInitiation();
+        pluginOverlayInitiation(); //TODO: check for WS match up here?
     }
 }
 
 
-function pluginOverlayInitiation() {
-    if (pluginOverlayFramework === 'api') {
-        callPluginOverlayAPI("init");
-    } else {
-        console.log('TODO: Add websocket connection here.');
-        //TODO: assuming the initiation will be a little different
-    }
+function pluginCommercialTriggerInitiation() {
+    initiatePluginCommercialTriggerIndicator();
 
+    sendMessageToPlugins("init");
+
+    document.addEventListener('fullscreenchange', fullscreenChanged); //TODO: do this here?
+    window.addEventListener('beforeunload', closeChromeOffscreenDoc);
+}
+
+
+function pluginOverlayInitiation() {
+    sendMessageToPlugins("init");
     window.addEventListener('beforeunload', pluginOverlayEnd);
 }
 
 
 function pluginOverlayEnd() {
-    callPluginOverlay("end");
+    sendMessageToPlugins("end");
 }
 
 
-function sendPluginOverlayFullscreenState() {
-    callPluginOverlay("browser_fullscreen_state_change");
+function sendPluginsFullscreenState() {
+    sendMessageToPlugins("browser_fullscreen_state_change");
 }
 
 
-function changePluginOverlayCommercialState() {
-    callPluginOverlay("commercial_state_change");
-}
-
-function callPluginOverlay(type) {
-    if (pluginOverlayFramework === 'api') {
-        callPluginOverlayAPI(type)
-    } else {
-        callPluginOverlayWS(type)
-    }
+function sendPluginsCommercialState() {
+    sendMessageToPlugins("commercial_state_change");
 }
 
 
-function callPluginOverlayAPI(type) {
-    //TODO: remove this and use above
-    const utility = {
-        TODO: "TODO: have this be all"
+function sendMessageToPlugins(type) {
+    //TODO: remove this and use above //TODO: maybe don't send all utilities? just some?
+    const utilities = {
+        TODO: "TODO: have this be all",
+        triggerOfLastCommercialStateChange: triggerOfLastCommercialStateChange,
     }
 
     //TODO: remove this and use above
-    const preference = {
+    const preferences = {
         videoOverlayWidth: videoOverlayWidth,
         videoOverlayHeight: videoOverlayHeight,
         overlayVideoLocationHorizontal: overlayVideoLocationHorizontal,
@@ -476,6 +483,7 @@ function callPluginOverlayAPI(type) {
         pipHeight: pipHeight,
         pipWidth: pipWidth,
         shouldOverlayVideoSizeAndLocationAutoSet: shouldOverlayVideoSizeAndLocationAutoSet,
+        pluginCommercialTriggerWSURL: pluginCommercialTriggerWSURL,
     }
 
     const payload = {
@@ -484,35 +492,54 @@ function callPluginOverlayAPI(type) {
         data: {
             isCommercialState: isCommercialState,
             isFullscreen: !!document.fullscreenElement,
-            utility: utility,
-            preference: preference,
+            utilities: utilities,
+            preferences: preferences,
         },
+        meta: {},
     };
 
-    chrome.runtime.sendMessage({
-        action: "call_custom_plugin_overlay_api",
-        pluginOverlayAPIURL: pluginOverlayAPIURL,
-        payload: payload,
-    }, function (response) {
-        if (!response.wasSuccessfulCall) {
-            //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
-            addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
+    if (isPluginOverlayMode && pluginOverlayFramework === 'api') {
+        chrome.runtime.sendMessage({
+            action: "call_custom_plugin_overlay_api",
+            pluginOverlayAPIURL: pluginOverlayAPIURL,
+            payload: payload,
+        }, function (response) {
+            if (!response.wasSuccessfulCall) {
+                //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
+                addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
 
-            console.log(response);
+                //TODO, add this to addMessageAlertToMainVideo
+                setTimeout(() => {
+                    removeElementsByClass('ytoc-main-video-message-alert');
+                }, 7000);
+            } else if (isDebugMode) {
+                console.log(response);
+            }
 
-            //TODO, add this to addMessageAlertToMainVideo
-            setTimeout(() => {
-                removeElementsByClass('ytoc-main-video-message-alert');
-            }, 7000);
-        } else if (isDebugMode) {
-            console.log(response);
+            //TODO: add option to display specific error messages or information messages from python script on main video
+        });
+    }
+
+    //TODO: check value if still connected
+    if (isPluginCommercialTriggerMode || pluginOverlayFramework === 'ws') {
+        if (type === "init") {
+            if (isFirefox) {
+                //TODO: setup firefox
+            } else {
+                chrome.runtime.sendMessage({
+                    action: "chrome-connect-to-ws-plugins",
+                    payload: payload,
+                });
+            }
+        } else {
+            console.log(payload);
+            chrome.runtime.sendMessage({
+                target: "plugin-ws",
+                action: "send-message-to-plugins",
+                payload: payload,
+            });
         }
-    });
-}
-
-
-function callPluginOverlayWS(payload) {
-    console.log('TODO: Add websocket call here.');
+    }
 }
 
 
@@ -644,9 +671,9 @@ function endCommercialMode() {
 
     }
 
-    if (isPluginOverlayMode || overlayVideoType === 'custom-plugin-overlay') {
+    if (isAnyPluginMode) {
 
-        changePluginOverlayCommercialState(isCommercialState);
+        sendPluginsCommercialState();
 
     }
 
@@ -659,7 +686,8 @@ function endCommercialMode() {
 //switches to commercial state which means showing the overlay video and muting the main/background video
 function startCommercialMode() {
 
-    if ((commercialDetectionMode.indexOf('auto') >= 0 || commercialDetectionMode === 'manual-clap') && isAutoModeFirstCommercial) {
+    //TODO: create a new var signlaing 'manual-clap' or 'custom-plugin-trigger'
+    if ((commercialDetectionMode.indexOf('auto') >= 0 || commercialDetectionMode === 'manual-clap' || commercialDetectionMode === 'custom-plugin-trigger') && isAutoModeFirstCommercial) {
 
         //check again if in full screen in case user exited
         if (document.fullscreenElement) {
@@ -701,9 +729,9 @@ function startCommercialMode() {
 
         }
 
-        if (isPluginOverlayMode || overlayVideoType === 'custom-plugin-overlay') {
+        if (isAnyPluginMode) {
 
-            changePluginOverlayCommercialState(isCommercialState);
+            sendPluginsCommercialState();
 
         }
 
@@ -789,6 +817,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false; //TODO: should I do this?
                                 isPluginOverlayMode = true; 
+                                isAnyPluginMode = true;
                             } else {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false;
@@ -809,9 +838,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
                             }
                             commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
-                            //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings) //TODO: has it been long enough to be safe to delete?
-                            if (commercialDetectionMode === 'auto') {
-                                commercialDetectionMode = 'auto-pixel-normal';
+                            if (commercialDetectionMode === 'custom-plugin-trigger') {
+                                isPluginCommercialTriggerMode = true;
+                                isAnyPluginMode = true;
                             }
                             shouldOverlayVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
                             if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
@@ -856,11 +885,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                             if (overlayVideoLocationVertical == 'bottom' || shouldOverlayVideoSizeAndLocationAutoSet) {
                                 hideVerticleScrollbar();
                             }
-
-                            //if (!hasInitiatedConnectionToWebSocket) {
-                            //    connectToLocalWebSocket(); //777 //TODO: move to clap detector type locations or move to potentiallyIntrusiveSetup() and use that for all the auto modes and maybe rename it
-                            //    hasInitiatedConnectionToWebSocket = true
-                            //}
 
                             //setting up for pixel selection for auto mode or continuing run for manual
                             if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
@@ -911,13 +935,14 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                 }
 
-                            } else if (commercialDetectionMode == 'manual-clap') {
+                            } else if (commercialDetectionMode == 'manual-clap' || commercialDetectionMode == 'custom-plugin-trigger') {
 
                                 potentiallyIntrusiveSetup();
 
                             } else {
                                 //manual mode start
-                                
+
+                                triggerOfLastCommercialStateChange = 'manual-keyboard';
                                 initialRun();
 
                             }
@@ -940,6 +965,7 @@ chrome.runtime.onMessage.addListener(function (message) {
             abortPixelSelection();
         } else {
 
+            triggerOfLastCommercialStateChange = 'manual-keyboard';
             manualCommercialModeToggle();
 
         }
@@ -1398,6 +1424,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isDebugMode) { console.log('commercial detected'); }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         startCommercialMode();
 
                         if (overlayVideoType == 'spotify') {
@@ -1454,6 +1481,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                             }
                         }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         endCommercialMode();
 
                     }
@@ -1844,6 +1872,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                     if (!isCommercialState) {
                         if (isDebugMode) { console.log('commercial detected'); }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         startCommercialMode();
 
                         if (overlayVideoType === 'spotify') {
@@ -1895,6 +1924,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                             }
                         }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         endCommercialMode();
                     }
                     //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode. or does it need done at all?
@@ -2176,6 +2206,7 @@ function audioThresholdMonitor() {
 
                         if (isDebugMode) { console.log('commercial detected'); }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         startCommercialMode();
 
                         logoBox.textContent = logoBoxText;
@@ -2223,6 +2254,7 @@ function audioThresholdMonitor() {
                             }
                         }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         endCommercialMode();
 
                     }
@@ -2539,6 +2571,7 @@ function fullscreenChanged() {
 
         if (isCommercialState) {
             if (!isAudioOnlyOverlay) {
+                triggerOfLastCommercialStateChange = "fullscreen-exit";
                 endCommercialMode();
             } else {
                 //don't want to count while not actively checking when the commercials end 
@@ -2580,10 +2613,15 @@ function fullscreenChanged() {
 
     }
 
-    if (isPluginOverlayMode || overlayVideoType === 'custom-plugin-overlay') {
+    if (isAnyPluginMode) {
+        //giving slight delay on send if commercial so exit commercial and exit fullscreen aren't sent at same exact time
+        let sendDelay = isCommercialState ? 1000 : 0;
+
         setTimeout(() => {
-            sendPluginOverlayFullscreenState();
-        }, 1000);
+            sendPluginsFullscreenState();
+        }, sendDelay);
+    } else {
+        console.log(isAnyPluginMode);
     }
 
 }
@@ -2914,6 +2952,54 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
         } //else do not update preferences because this gets updated on first run anyway
 
+    } else if (message.action == 'message_from_plugin_ws') {
+
+        //ignore this message if not in necessary frame
+        if (!mainVideoCollection) {
+            return;
+        }
+
+        if (isPluginCommercialTriggerMode) {
+
+            if (message.payload.meta.display) {
+                if (pluginCommercialTriggerIndicator) {
+                    pluginCommercialTriggerIndicator.textContent = message.payload.meta.display;
+                }
+            }
+
+            if (message.payload.type === "commercial_state_change") {
+                if (typeof message.payload.data.isCommercial !== "undefined") {
+                    if (message.payload.data.isCommercial && !isCommercialState) {
+                        triggerOfLastCommercialStateChange = String(message.source);
+                        manualCommercialModeToggle();
+                    } else if (!message.payload.data.isCommercial && isCommercialState) {
+                        triggerOfLastCommercialStateChange = String(message.source);
+                        manualCommercialModeToggle();
+                    } else if (isDebugMode) {
+                        console.log("Commercial state plugin WS Sent was state that extension was already in.");
+                    }
+                } else {
+                    console.log("Error: Message type of commercial_state_change sent without data.isCommercial");
+                }
+            } else if (message.payload.type === "auto_commercial_blocked_state_change") {
+                if (typeof message.payload.data.isAutoCommercialBlocked !== "undefined") {
+                    if (message.payload.data.isAutoCommercialBlocked) {
+                        cooldownCountRemaining = 10000000; //TODO: figure out better way to do this
+                    } else {
+                        cooldownCountRemaining = 3; //TODO: figure out better way to do this
+                    }
+                } else {
+                    console.log("Error: Message type of auto_commercial_blocked_state_change sent without data.isAutoCommercialBlocked");
+                }
+            }
+
+            if (isDebugMode) {
+                pluginCommercialTriggerDebugOverlay.innerText = message.payload.meta.debug;
+                console.log(message.payload.meta.debug);
+            }
+
+        }
+
     }
 
 });
@@ -3172,6 +3258,7 @@ function doubleClapCommercialModeToggle() {
     if (isDoubleClapOnlyReturnMode && !isCommercialState) {
         setClapIndicator('\uD83C\uDFA4 \uD83D\uDEAB \uD83D\uDEAB', 1000); //microphone and two prohibited sign emojis
     } else {
+        triggerOfLastCommercialStateChange = 'manual-clap';
         manualCommercialModeToggle();
     }
 }
@@ -3320,7 +3407,7 @@ function initiateClapIndicator() {
 
     doubleClapIndicator = document.createElement('div');
     doubleClapIndicator.innerText = 'Loading clap detector...';
-    
+
     if (commercialDetectionMode === 'manual-clap') {
         let additionalWrapper = document.createElement('div');
         additionalWrapper.style.display = 'flex';
@@ -3344,7 +3431,7 @@ function initiateClapIndicator() {
     if (isDebugMode) {
         clapDebugOverlay = document.createElement('div');
         clapDebugOverlay.classList = 'double-clap-debug-overlay';
-        
+
         waveCtx = createCanvas('wave', 280, 80, clapDebugOverlay);
         attackCtx = createCanvas('attack', 280, 50, clapDebugOverlay);
         hfCtx = createCanvas('hf', 280, 50, clapDebugOverlay);
@@ -3362,6 +3449,79 @@ function initiateClapIndicator() {
     }
 
     insertLocation.insertBefore(doubleClapIndicatorContainer, null);
+}
+
+
+//TODO: have this and initiateClapIndicator share a helper function
+function initiatePluginCommercialTriggerIndicator() {
+    //TODO: add check to make sure user is still in fullscreen mode
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    //TODO: move to own function
+    pluginCommercialTriggerIndicatorContainer = document.createElement('div');
+    pluginCommercialTriggerIndicatorContainer.classList = 'double-clap-indicator-container';
+
+    let otherOverlayLocations = [
+        { horizontal: overlayVideoLocationHorizontal, vertical: overlayVideoLocationVertical },
+    ];
+    if (isPiPMode && isLiveOverlayVideo) {
+        otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
+    }
+    if (commercialDetectionMode === 'auto-audio') {
+        //TODO: figure out timing on this so I can use real values here
+        //otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
+        otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
+    }
+    if (isDoubleClapMode) {
+        //TODO: figure out using real values here
+        otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
+    }
+    const pluginCommercialTriggerIndicatorContainerLocation = getFreeCorner(otherOverlayLocations);
+
+    setOverlaySizeAndLocation(pluginCommercialTriggerIndicatorContainer, false, false, pluginCommercialTriggerIndicatorContainerLocation.horizontal, pluginCommercialTriggerIndicatorContainerLocation.vertical, "10px");
+
+    pluginCommercialTriggerIndicator = document.createElement('div');
+    pluginCommercialTriggerIndicator.innerText = 'Loading clap detector...';
+
+    if (commercialDetectionMode === 'manual-clap') {
+        let additionalWrapper = document.createElement('div');
+        additionalWrapper.style.display = 'flex';
+        additionalWrapper.style.gap = '5px';
+        pluginCommercialTriggerIndicatorContainer.appendChild(additionalWrapper);
+
+        additionalWrapper.appendChild(pluginCommercialTriggerIndicator);
+
+        logoBox = document.createElement('div');
+        logoBox.style.display = 'none';
+        if (pluginCommercialTriggerIndicatorContainerLocation.horizontal === 'right') {
+            additionalWrapper.insertBefore(logoBox, pluginCommercialTriggerIndicator);
+        } else {
+            additionalWrapper.appendChild(logoBox);
+        }
+        initialLogoBoxTextUpdate();
+    } else {
+        pluginCommercialTriggerIndicatorContainer.appendChild(pluginCommercialTriggerIndicator);
+    }
+
+    if (isDebugMode) {
+        pluginCommercialTriggerDebugOverlay = document.createElement('div');
+        pluginCommercialTriggerDebugOverlay.classList = 'double-clap-debug-overlay';
+
+        if (pluginCommercialTriggerIndicatorContainerLocation.horizontal === 'right') {
+            pluginCommercialTriggerIndicatorContainer.style.textAlign = 'right';
+        }
+
+        if (pluginCommercialTriggerIndicatorContainerLocation.vertical === 'bottom') {
+            pluginCommercialTriggerIndicatorContainer.insertBefore(pluginCommercialTriggerDebugOverlay, pluginCommercialTriggerIndicator);
+        } else {
+            pluginCommercialTriggerIndicatorContainer.appendChild(pluginCommercialTriggerDebugOverlay);
+        }
+    }
+
+    insertLocation.insertBefore(pluginCommercialTriggerIndicatorContainer, null);
 }
 
 
