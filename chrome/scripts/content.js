@@ -364,7 +364,7 @@ function initialRun() {
         pluginOverlayFirstChangeDelay = 2000;
     }
 
-    if (isPluginOverlayMode) {
+    if (isAnyPluginMode) {
         setTimeout(() => {
             sendPluginsCommercialState();
         }, pluginOverlayFirstChangeDelay);
