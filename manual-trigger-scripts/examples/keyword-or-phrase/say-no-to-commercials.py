@@ -274,20 +274,20 @@ async def demo_loop(ws):
         await send_commercial_state_change(ws, is_commercial, display, debug)
 
 async def send_commercial_state_change(ws, is_commercial, display, debug):
-    try:
-        await ws.send(json.dumps({
-            "type": "commercial_state_change",
-            "timestamp": time.time(),
-            "data": {
-                "isCommercial": is_commercial
-            },
-            "meta": {
-                "display": display,
-                "debug": debug
-            }
-        }))
-    except websockets.exceptions.ConnectionClosed:
-        print("send_commercial_state_change stopped: client disconnected")
+    #try:
+    await ws.send(json.dumps({
+        "type": "commercial_state_change",
+        "timestamp": time.time(),
+        "data": {
+            "isCommercial": is_commercial
+        },
+        "meta": {
+            "display": display,
+            "debug": debug
+        }
+    }))
+    #except websockets.exceptions.ConnectionClosed:
+    #    print("send_commercial_state_change stopped: client disconnected")
 
 # This can be used to disable or enable any auto commercial detection that the browser extension is doing
 async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_blocked, display, debug):

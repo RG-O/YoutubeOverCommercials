@@ -3489,7 +3489,7 @@ function initiatePluginCommercialTriggerIndicator() {
     setOverlaySizeAndLocation(pluginCommercialTriggerIndicatorContainer, false, false, pluginCommercialTriggerIndicatorContainerLocation.horizontal, pluginCommercialTriggerIndicatorContainerLocation.vertical, "10px");
 
     pluginCommercialTriggerIndicator = document.createElement('div');
-    pluginCommercialTriggerIndicator.innerText = 'Loading clap detector...';
+    pluginCommercialTriggerIndicator.innerText = 'Loading plugin...';
 
     if (commercialDetectionMode === 'manual-clap') {
         let additionalWrapper = document.createElement('div');
