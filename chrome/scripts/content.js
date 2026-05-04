@@ -508,17 +508,24 @@ function sendMessageToPlugins(type) {
                 //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
                 addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
 
-                //TODO, add this to addMessageAlertToMainVideo
-                setTimeout(() => {
-                    removeElementsByClass('ytoc-main-video-message-alert');
-                }, 7000);
-            } else if (isDebugMode) {
-                console.log(response);
-            }
+            console.log(response);
 
-            //TODO: add option to display specific error messages or information messages from python script on main video
-        });
-    }
+            //TODO, add this to addMessageAlertToMainVideo
+            setTimeout(() => {
+                removeElementsByClass('ytoc-main-video-message-alert');
+            }, 7000);
+        } else if (response.pluginOverlayAPIResponse.status === "error" && response.pluginOverlayAPIResponse.error) {
+            addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.error);
+
+            //TODO, add this to addMessageAlertToMainVideo
+            setTimeout(() => {
+                removeElementsByClass('ytoc-main-video-message-alert');
+            }, 7000);
+        } else if (isDebugMode) {
+            console.log(response);
+        }
+    });
+}
 
     //TODO: check value if still connected
     if (isPluginCommercialTriggerMode || pluginOverlayFramework === 'ws') {
