@@ -497,6 +497,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                             action: "message_from_plugin_ws",
                             payload: message.payload,
                             source: message.source,
+                            sender: message.sender,
+                            connectionState: message.connectionState,
+                            connectionMessage: message.connectionMessage,
                         });
 
                     }

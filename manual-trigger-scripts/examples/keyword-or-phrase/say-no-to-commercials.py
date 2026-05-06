@@ -1,6 +1,4 @@
 import asyncio
-from tracemalloc import start
-from asyncio.windows_events import NULL
 import websockets
 import json
 import time
@@ -8,7 +6,6 @@ import queue
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer
 import os
-
 
 PORT = 64145
 
@@ -21,7 +18,6 @@ clients = set()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model/vosk-model-small-en-us-0.15")
 
-# Phrases to detect
 TARGET_PHRASES = {
     "banana": {
         "action": "content",
@@ -33,178 +29,115 @@ TARGET_PHRASES = {
     }
 }
 
-COOLDOWN = 1.0  # seconds between triggers
+COOLDOWN = 1.0
 
 # --------------------------------------------------
-# WebSocket server
+# Global control state
 # --------------------------------------------------
 
-# connected_clients = set()
-
-# async def handler(websocket):
-#     connected_clients.add(websocket)
-#     print("Extension connected")
-#     try:
-#         await websocket.wait_closed()
-#     finally:
-#         connected_clients.remove(websocket)
-#         print("Extension disconnected")
-
-# async def send_event(event):
-#     if connected_clients:
-#         message = json.dumps(event)
-#         await asyncio.gather(*(ws.send(message) for ws in connected_clients))
+listening_task = None
+listening_active = asyncio.Event()
 
 # --------------------------------------------------
-# Audio setup
+# Helpers
 # --------------------------------------------------
 
 audio_queue = queue.Queue()
 
 def get_all_emojis_for_action(action):
     return " ".join(
-        config["emoji"] 
+        config["emoji"]
         for config in TARGET_PHRASES.values()
         if config.get("action") == action
     )
 
-
 def audio_callback(indata, frames, time_info, status):
-    """Called continuously by sounddevice to collect microphone audio"""
     if status:
         print("Audio status:", status)
     audio_queue.put(bytes(indata))
 
 # --------------------------------------------------
-# Main voice loop
+# Voice loop
 # --------------------------------------------------
 
 async def listen_loop(ws):
-    global last_trigger_time
+    try:
+        if not os.path.exists(MODEL_PATH):
+            print("Model not found:", MODEL_PATH)
+            return
 
-    if not os.path.exists(MODEL_PATH):
-        print("Model not found at:", MODEL_PATH)
-        return
+        print("Loading Vosk model...")
+        model = Model(MODEL_PATH)
 
-    print("Loading Vosk model...")
-    model = Model(MODEL_PATH)
+        recognizer = KaldiRecognizer(model, 16000)
 
-    recognizer = KaldiRecognizer(model, 16000)
-
-    print("Listening for voice commands...")
-
-    last_trigger_time = 0
-    last_partial_text = ""
-
-    # Start microphone stream
-    with sd.RawInputStream(
-        samplerate=16000,
-        blocksize=8000,
-        dtype="int16",
-        channels=1,
-        callback=audio_callback
-    ):
+        last_trigger_time = 0
+        last_partial_text = ""
 
         while True:
-            data = audio_queue.get()
-            now = time.time()
+            await listening_active.wait()
+            print("Listening started")
 
-            if recognizer.AcceptWaveform(data):
-                # Final result (you can ignore or keep for debugging)
-                result = json.loads(recognizer.Result())
-                text = result.get("text", "").lower().strip()
-                if text:
-                    print(f"[FINAL] {text}")
+            with sd.RawInputStream(
+                samplerate=16000,
+                blocksize=4000,
+                dtype="int16",
+                channels=1,
+                callback=audio_callback
+            ):
+                while listening_active.is_set():
+                    data = audio_queue.get()
+                    now = time.time()
 
-            else:
-                # Partial (REAL-TIME)
-                partial = json.loads(recognizer.PartialResult())
-                text = partial.get("partial", "").lower().strip()
+                    if recognizer.AcceptWaveform(data):
+                        result = json.loads(recognizer.Result())
+                        text = result.get("text", "").lower().strip()
+                        if text:
+                            print("[FINAL]", text)
 
-                if text and text != last_partial_text:
-                    print(f"[PARTIAL] {text}")
-                    last_partial_text = text
+                    else:
+                        partial = json.loads(recognizer.PartialResult())
+                        text = partial.get("partial", "").lower().strip()
 
-                    #TODO: set this to only do it in debug mode #TODO: have some sort of queue so messages sent at the same time don't mess eachother up
-                    # await send_status(ws, None, text)
+                        if text and text != last_partial_text:
+                            print("[PARTIAL]", text)
+                            last_partial_text = text
 
-                    # Check for trigger words immediately
-                    for phrase, config in TARGET_PHRASES.items():
-                        if phrase in text:
-                            if now - last_trigger_time > COOLDOWN:
-                                print(f"TRIGGERED: {config["action"]}")
+                            await send_status(ws, None, text)
 
-                                # await send_event({
-                                #     "type": "gesture",
-                                #     "gesture": mapped_name,
-                                #     "timestamp": now,
-                                #     "source": "voice"
-                                # })
+                            for phrase, config in TARGET_PHRASES.items():
+                                if phrase in text:
+                                    if now - last_trigger_time > COOLDOWN:
+                                        print("TRIGGERED:", config["action"])
 
-                                is_commercial = False
+                                        is_commercial = config["action"] == "commercial"
 
-                                if config["action"] == "commercial":
-                                    is_commercial = True
+                                        display = "\uD83D\uDDE3 \u2705"
 
-                                print("sending is_commercial as")
-                                print(is_commercial)
+                                        await send_commercial_state_change(
+                                            ws,
+                                            is_commercial,
+                                            display,
+                                            "Keyword Detected"
+                                        )
 
-                                display = "\uD83D\uDDE3 \u2705"
+                                        last_trigger_time = now
 
-                                # await ws.send(json.dumps({
-                                #     "type": "state_update",
-                                #     "timestamp": time.time(),
-                                #     "data": {
-                                #         "isCommercial": is_commercial
-                                #     },
-                                #     "meta": {
-                                #         "display": display,
-                                #         "debug": "Toggled for demo"
-                                #     }
-                                # }))
+                    await asyncio.sleep(0)
 
-                                await send_commercial_state_change(ws, is_commercial, display, "Keyword Detected")
+            print("Listening stopped")
 
-                                # new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("content")
-
-                                # if is_commercial:
-                                #     new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial")
-
-                                # #delayed_update_display_with_emojis(ws, new_display, "update display")
-                                # await asyncio.sleep(1) #TODO: do this here? can I run this asyncronusly?
-                                # await send_status(ws, new_display, "update display")
-
-                                last_trigger_time = now
-
-            await asyncio.sleep(0)
+    except asyncio.CancelledError:
+        print("listen_loop shutting down")
+        raise
 
 # --------------------------------------------------
-# Main
+# WebSocket handling
 # --------------------------------------------------
-
-# async def main():
-#     server = await websockets.serve(handler, "localhost", 8765)
-#     print("WebSocket server running on ws://localhost:8765")
-
-#     await listen_loop()
-
-#     server.close()
-#     await server.wait_closed()
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
-
-
-
-
-
-async def delayed_update_display_with_emojis(ws, display, debug):
-    await asyncio.sleep(1)
-    await send_status(ws, display, debug)
-
-
 
 async def handle_client(websocket):
+    global listening_task
+
     print("Client connected")
     clients.add(websocket)
 
@@ -215,96 +148,75 @@ async def handle_client(websocket):
 
     except websockets.exceptions.ConnectionClosed:
         pass
+
     finally:
         clients.remove(websocket)
+
+        # Stop listening ONLY if no clients remain
+        if len(clients) == 0:
+            print("Stopping listener (no clients)")
+            listening_active.clear()
+
+            if listening_task:
+                listening_task.cancel()
+                try:
+                    await listening_task
+                except asyncio.CancelledError:
+                    print("Listening task cancelled")
+
+                listening_task = None
+
         print("Client disconnected")
 
+# --------------------------------------------------
+# Message handler
+# --------------------------------------------------
+
 async def handle_message(ws, msg):
-    print(msg)
+    global listening_task
 
     message_type = msg["type"]
 
     if message_type == "init":
-        print(msg)
+        await send_status(
+            ws,
+            "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial"),
+            "Ready"
+        )
 
-        # Send initial message
-        await send_status(ws, "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial"), "Ready")
+        listening_active.set()
 
-        # Start detection loop
-        #asyncio.create_task(demo_loop(ws))
-        asyncio.create_task(listen_loop(ws))
+        if not listening_task:
+            print("Starting listening task")
+            listening_task = asyncio.create_task(listen_loop(ws))
 
     elif message_type == "commercial_state_change":
         is_commercial = msg["data"]["isCommercialState"]
-        commercial_state_trigger = msg["data"]["utilities"]["triggerOfLastCommercialStateChange"]
 
-        #TODO: delete this note?
-        
         new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial")
 
         if is_commercial:
             new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("content")
 
-        #delayed_update_display_with_emojis(ws, new_display, "update display")
-        #await asyncio.sleep(1) #TODO: do this here? can I run this asyncronusly?
         await send_status(ws, new_display, "update display")
-        # Note: Commercial state triggers coming from this plugin should be suppressed from comming back around, but the will if two plugins are being used at once
-        if commercial_state_trigger != "plugin":
-            print("Commercial state changed in extension. is_commercial = ", is_commercial, ", commercial_state_trigger = ", commercial_state_trigger)
 
     elif message_type == "browser_fullscreen_state_change":
-        is_fullscreen = msg["data"]["isFullscreen"]
+        print("Fullscreen:", msg["data"]["isFullscreen"])
 
-        print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
-
-async def demo_loop(ws):
-    is_commercial = False
-
-    while not ws.close_code is not None:
-        await asyncio.sleep(7)
-
-        # Example toggle logic
-        is_commercial = not is_commercial
-
-        display = "Commercial" if is_commercial else "Content"
-        debug = "Toggled for demo"
-
-        print("sending extension commercial_state_change. isCommercial = ", is_commercial)
-
-        await send_commercial_state_change(ws, is_commercial, display, debug)
+# --------------------------------------------------
+# Send helpers
+# --------------------------------------------------
 
 async def send_commercial_state_change(ws, is_commercial, display, debug):
-    #try:
-    await ws.send(json.dumps({
-        "type": "commercial_state_change",
-        "timestamp": time.time(),
-        "data": {
-            "isCommercial": is_commercial
-        },
-        "meta": {
-            "display": display,
-            "debug": debug
-        }
-    }))
-    #except websockets.exceptions.ConnectionClosed:
-    #    print("send_commercial_state_change stopped: client disconnected")
-
-# This can be used to disable or enable any auto commercial detection that the browser extension is doing
-async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_blocked, display, debug):
     try:
         await ws.send(json.dumps({
-            "type": "auto_commercial_blocked_state_change",
+            "type": "commercial_state_change",
             "timestamp": time.time(),
-            "data": {
-                "isAutoCommercialBlocked": is_auto_commercial_blocked
-            },
-            "meta": {
-                "display": display,
-                "debug": debug
-            }
+            "data": {"isCommercial": is_commercial},
+            "meta": {"display": display, "debug": debug}
         }))
     except websockets.exceptions.ConnectionClosed:
-        print("send_auto_commercial_blocked_state_change stopped: client disconnected")
+        print("send_commercial_state_change failed: disconnected")
 
 async def send_status(ws, display, debug):
     try:
@@ -312,13 +224,14 @@ async def send_status(ws, display, debug):
             "type": "status",
             "timestamp": time.time(),
             "data": {},
-            "meta": {
-                "display": display,
-                "debug": debug
-            }
+            "meta": {"display": display, "debug": debug}
         }))
     except websockets.exceptions.ConnectionClosed:
-        print("send_status send stopped: client disconnected")
+        print("send_commercial_state_change failed: disconnected")
+
+# --------------------------------------------------
+# Main
+# --------------------------------------------------
 
 async def main():
     async with websockets.serve(handle_client, "localhost", PORT):

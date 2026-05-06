@@ -77,7 +77,14 @@ const ws = {
         detectionWS = new WSClient(payload.data.preferences.pluginCommercialTriggerWSURL, "Detection");
 
         detectionWS.onOpen = () => {
-            console.log("Detection plugin connected"); //777
+            chrome.runtime.sendMessage({
+                action: "forward_message_from_plugin_ws",
+                payload: null,
+                source: "plugin",
+                sender: "trigger-plugin",
+                connectionState: "started",
+                connectionMessage: "Plugin connected",
+            });
             detectionWS.send(payload);
         };
 
@@ -85,14 +92,35 @@ const ws = {
 
         detectionWS.onClose = ({ wasConnected }) => {
             if (!wasConnected) {
-                console.log("Detection plugin failed to connect"); //TODO: send message to content
+                chrome.runtime.sendMessage({
+                    action: "forward_message_from_plugin_ws",
+                    payload: null,
+                    source: "plugin",
+                    sender: "trigger-plugin",
+                    connectionState: "failed",
+                    connectionMessage: "Failed to connect to plugin",
+                });
             } else {
-                console.log("Detection plugin disconnected"); //TODO: send message to content
+                chrome.runtime.sendMessage({
+                    action: "forward_message_from_plugin_ws",
+                    payload: null,
+                    source: "plugin",
+                    sender: "trigger-plugin",
+                    connectionState: "disconnected",
+                    connectionMessage: "Plugin disconnected",
+                });
             }
         };
 
         detectionWS.onReconnect = () => {
-            console.log("Reconnecting to detection plugin..."); //TODO: send message to content
+            chrome.runtime.sendMessage({
+                action: "forward_message_from_plugin_ws",
+                payload: null,
+                source: "plugin",
+                sender: "trigger-plugin",
+                connectionState: "reconnecting",
+                connectionMessage: "Attempting to reconnect to plugin...",
+            });
         };
 
         detectionWS.connect();
@@ -105,12 +133,22 @@ const ws = {
                 action: "forward_message_from_plugin_ws",
                 payload: msg,
                 source: "plugin",
+                sender: "trigger-plugin",
+                connectionState: "connected",
+                connectionMessage: "Connected",
             });
         }
     },
     sendToDetection(payload) {
         if (!detectionWS || !detectionWS.connected) {
-            console.warn("Detection WS not connected");
+            chrome.runtime.sendMessage({
+                action: "forward_message_from_plugin_ws",
+                payload: null,
+                source: "plugin",
+                sender: "trigger-plugin",
+                connectionState: "failed",
+                connectionMessage: "Failed to send message to plugin",
+            });
             return;
         }
 

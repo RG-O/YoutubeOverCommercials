@@ -2964,6 +2964,18 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             return;
         }
 
+        if (isDebugMode) console.log(message);
+
+        if (message.connectionState !== "connected") {
+            if (message.sender === "trigger-plugin" && isPluginCommercialTriggerMode) {
+                if (pluginCommercialTriggerIndicator) {
+                    pluginCommercialTriggerIndicator.textContent = message.connectionMessage;
+                }
+            } //TODO: add overlay and both
+
+            return;
+        }
+
         if (isPluginCommercialTriggerMode) {
 
             if (message.payload.meta.display) {
