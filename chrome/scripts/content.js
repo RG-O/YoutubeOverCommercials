@@ -537,7 +537,6 @@ function sendMessageToPlugins(type) {
                 });
             }
         } else {
-            console.log(payload);
             chrome.runtime.sendMessage({
                 target: "plugin-ws",
                 action: "send-message-to-plugins",
@@ -3011,7 +3010,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             }
 
             if (isDebugMode) {
-                pluginCommercialTriggerDebugOverlay.innerText = message.payload.meta.debug;
+                if (message.payload.meta.debug.startsWith("data:image/")) {
+                    let debugImage = document.createElement('image');
+                    debugImage.src = message.payload.meta.debug;
+                    pluginCommercialTriggerDebugOverlay.appendChild(debugImage);
+                } else {
+                    pluginCommercialTriggerDebugOverlay.innerText = message.payload.meta.debug;
+                }
                 console.log(message.payload.meta.debug);
             }
 

@@ -20,29 +20,30 @@ MODEL_PATH = os.path.join(BASE_DIR, "model/vosk-model-small-en-us-0.15")
 
 TARGET_PHRASES = {
     "banana": {
-        "action": "content",
+        "action": "content", 
         "emoji": "\uD83C\uDF4C",
-    },
+        },
     "tomato": {
-        "action": "commercial",
+        "action": "commercial", 
         "emoji": "\uD83C\uDF45"
-    }
+        }
 }
 
-COOLDOWN = 1.0
+COOLDOWN = 3.0
 
 # --------------------------------------------------
-# Global control state
+# Global state
 # --------------------------------------------------
 
 listening_task = None
 listening_active = asyncio.Event()
+audio_queue = queue.Queue()
+
+current_is_commercial = None
 
 # --------------------------------------------------
 # Helpers
 # --------------------------------------------------
-
-audio_queue = queue.Queue()
 
 def get_all_emojis_for_action(action):
     return " ".join(
@@ -55,6 +56,74 @@ def audio_callback(indata, frames, time_info, status):
     if status:
         print("Audio status:", status)
     audio_queue.put(bytes(indata))
+
+def find_trigger_config(text):
+    words = text.split()
+    for phrase, config in TARGET_PHRASES.items():
+        if phrase in words:
+            return phrase, config
+    return None, None
+
+async def handle_trigger(ws, phrase, config, now, last_trigger_time, source):
+    global current_is_commercial
+
+    if now - last_trigger_time <= COOLDOWN:
+        return last_trigger_time
+
+    # Determine desired state
+    new_is_commercial = config["action"] == "commercial"
+
+    # Only trigger if state would change
+    if current_is_commercial is not None and new_is_commercial == current_is_commercial:
+        print(f"IGNORED ({source}): already in desired state")
+        return last_trigger_time
+
+    print(f"TRIGGERED ({source}):", config["action"])
+
+    display = "\uD83D\uDDE3 \u2705"
+
+    await send_commercial_state_change(
+        ws,
+        new_is_commercial,
+        display,
+        f"Keyword Detected ({source})"
+    )
+
+    current_is_commercial = new_is_commercial
+
+    return now
+
+async def process_text(ws, text, now, last_trigger_time, source, last_partial_text):
+    if not text:
+        return last_trigger_time, last_partial_text
+
+    if source == "partial":
+        if text == last_partial_text:
+            return last_trigger_time, last_partial_text
+
+        print("[PARTIAL]", text)
+        last_partial_text = text
+
+        #await send_status(ws, None, text)
+
+    else:
+        print("[FINAL]", text)
+
+    await send_status(ws, None, source + ":" + text) #TODO: does this make sense here?
+
+    phrase, config = find_trigger_config(text)
+
+    if config:
+        last_trigger_time = await handle_trigger(
+            ws,
+            phrase,
+            config,
+            now,
+            last_trigger_time,
+            source
+        )
+
+    return last_trigger_time, last_partial_text
 
 # --------------------------------------------------
 # Voice loop
@@ -92,36 +161,18 @@ async def listen_loop(ws):
                     if recognizer.AcceptWaveform(data):
                         result = json.loads(recognizer.Result())
                         text = result.get("text", "").lower().strip()
-                        if text:
-                            print("[FINAL]", text)
+
+                        last_trigger_time, last_partial_text = await process_text(
+                            ws, text, now, last_trigger_time, "final", last_partial_text
+                        )
 
                     else:
                         partial = json.loads(recognizer.PartialResult())
                         text = partial.get("partial", "").lower().strip()
 
-                        if text and text != last_partial_text:
-                            print("[PARTIAL]", text)
-                            last_partial_text = text
-
-                            await send_status(ws, None, text)
-
-                            for phrase, config in TARGET_PHRASES.items():
-                                if phrase in text:
-                                    if now - last_trigger_time > COOLDOWN:
-                                        print("TRIGGERED:", config["action"])
-
-                                        is_commercial = config["action"] == "commercial"
-
-                                        display = "\uD83D\uDDE3 \u2705"
-
-                                        await send_commercial_state_change(
-                                            ws,
-                                            is_commercial,
-                                            display,
-                                            "Keyword Detected"
-                                        )
-
-                                        last_trigger_time = now
+                        last_trigger_time, last_partial_text = await process_text(
+                            ws, text, now, last_trigger_time, "partial", last_partial_text
+                        )
 
                     await asyncio.sleep(0)
 
@@ -152,7 +203,6 @@ async def handle_client(websocket):
     finally:
         clients.remove(websocket)
 
-        # Stop listening ONLY if no clients remain
         if len(clients) == 0:
             print("Stopping listener (no clients)")
             listening_active.clear()
@@ -169,15 +219,18 @@ async def handle_client(websocket):
         print("Client disconnected")
 
 # --------------------------------------------------
-# Message handler
+# Message handling
 # --------------------------------------------------
 
 async def handle_message(ws, msg):
-    global listening_task
+    global listening_task, current_is_commercial
 
     message_type = msg["type"]
 
     if message_type == "init":
+        # Initialize global state if provided
+        current_is_commercial = msg.get("data", {}).get("isCommercialState")
+
         await send_status(
             ws,
             "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial"),
@@ -191,11 +244,11 @@ async def handle_message(ws, msg):
             listening_task = asyncio.create_task(listen_loop(ws))
 
     elif message_type == "commercial_state_change":
-        is_commercial = msg["data"]["isCommercialState"]
+        current_is_commercial = msg["data"]["isCommercialState"]
 
         new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial")
 
-        if is_commercial:
+        if current_is_commercial:
             new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("content")
 
         await send_status(ws, new_display, "update display")
@@ -216,7 +269,7 @@ async def send_commercial_state_change(ws, is_commercial, display, debug):
             "meta": {"display": display, "debug": debug}
         }))
     except websockets.exceptions.ConnectionClosed:
-        print("send_commercial_state_change failed: disconnected")
+        print("send_commercial_state_change failed")
 
 async def send_status(ws, display, debug):
     try:
@@ -227,7 +280,7 @@ async def send_status(ws, display, debug):
             "meta": {"display": display, "debug": debug}
         }))
     except websockets.exceptions.ConnectionClosed:
-        print("send_commercial_state_change failed: disconnected")
+        pass
 
 # --------------------------------------------------
 # Main
