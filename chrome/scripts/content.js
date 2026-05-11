@@ -3011,7 +3011,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             if (isDebugMode) {
                 if (message.payload.meta.debug.startsWith("data:image/")) {
-                    let debugImage = document.createElement('image');
+                    //TODO: better way to do this?
+                    let previousDebugImage = pluginCommercialTriggerDebugOverlay.getElementsByTagName('img')[0];
+                    if (previousDebugImage) previousDebugImage.remove();
+                    pluginCommercialTriggerDebugOverlay.innerText = "";
+
+                    let debugImage = document.createElement('img');
                     debugImage.src = message.payload.meta.debug;
                     pluginCommercialTriggerDebugOverlay.appendChild(debugImage);
                 } else {

@@ -1,4 +1,5 @@
 import asyncio
+from asyncio.coroutines import _is_debug_mode
 import websockets
 import json
 import time
@@ -33,8 +34,8 @@ CAMERA_INDEX = 0
 #   1 = one thumbs up triggers
 #   2 = two thumbs ups required to trigger
 REQUIRED_GESTURE_COUNTS = {
-    "Thumb_Up": 1,
-    "Thumb_Down": 1
+    "Thumb_Up": 2,
+    "Thumb_Down": 2
 }
 
 # Gesture config
@@ -94,43 +95,50 @@ def passes_threshold(confidence, duration):
             return True
     return False
 
-def frame_to_base64(frame):
-    # frame_copy = frame.copy()
-    # success, buffer = cv2.imencode(".jpg", frame_copy)
+def frame_to_base64(frame, max_width=300, max_height=300):
 
-    success, buffer = cv2.imencode(".jpg", frame)
+    if frame is None:
+        return None
 
-    # debug_path = os.path.join(BASE_DIR, "debug_original.jpg")
+    # Make a safe contiguous copy
+    frame = frame.copy()
 
-    # cv2.imwrite(debug_path, frame)
+    height, width = frame.shape[:2]
 
-    # print(debug_path)
+    # Calculate scale factor while preserving aspect ratio
+    scale = min(
+        max_width / width,
+        max_height / height,
+        1.0  # prevents upscaling
+    )
 
-    # frame_copy = frame.copy()
+    new_width = int(width * scale)
+    new_height = int(height * scale)
 
-    # debug_copy_path = os.path.join(BASE_DIR, "debug_copy.jpg")
+    # Resize if needed
+    if scale < 1.0:
+        frame = cv2.resize(
+            frame,
+            (new_width, new_height),
+            interpolation=cv2.INTER_AREA
+        )
 
-    # cv2.imwrite(debug_copy_path, frame_copy)
-
-    # if frame is None:
-    #     print("ERROR: frame is None")
-
-    # print(frame.shape)
+    # Encode JPEG
+    success, buffer = cv2.imencode(
+        ".jpg",
+        frame,
+        [cv2.IMWRITE_JPEG_QUALITY, 95]
+    )
 
     if not success:
         return None
 
-
-    #image = Image.open(io.BytesIO(buffer))
-    # encodingbuffer = io.BytesIO()
-    # image.save(encodingbuffer, format="JPEG")
-    # base64_data = base64.b64encode(encodingbuffer.getvalue()).decode('utf-8')
-
-    base64_data = base64.b64encode(buffer.tobytes()).decode("utf-8")
-    print(base64_data)
+    base64_data = base64.b64encode(
+        buffer.tobytes()
+    ).decode("utf-8")
 
     return f"data:image/jpeg;base64,{base64_data}"
-    #return "data:image/jpg;base64," + base64.b64encode(buffer.getvalue()).decode()
+
 
 # --------------------------------------------------
 # Trigger handling
@@ -173,13 +181,6 @@ async def handle_trigger(
 
     if DEBUG_MODE:
         debug_text = frame_to_base64(frame)
-
-        # raw_base64 = debug_text.split(",", 1)[1]
-
-        # decoded = base64.b64decode(raw_base64)
-
-        # with open("test.jpg", "wb") as f:
-        #     f.write(decoded)
 
     await send_commercial_state_change(
         ws,
@@ -243,6 +244,10 @@ async def process_gesture_group(
                     f"count={current_count}"
                 )
 
+            # Reset so this gesture can trigger again next time it is shown
+            state["start_time"] = now
+            state["triggered"] = False
+
         return
 
     # Average confidence across matching hands
@@ -265,6 +270,8 @@ async def process_gesture_group(
     # Visibility logging
     if not state["visible"]:
         state["visible"] = True
+        state["start_time"] = now
+        state["triggered"] = False
 
         print(
             f"VISIBLE GROUP: {gesture_name} "
@@ -276,6 +283,7 @@ async def process_gesture_group(
 
     # Already triggered
     if state["triggered"]:
+        print("state already triggered")
         return
 
     # Cooldown
@@ -558,6 +566,9 @@ async def handle_message(ws, msg):
                 "\u270B " +
                 get_all_emojis_for_action("content")
             )
+
+        if DEBUG_MODE:
+            await asyncio.sleep(3) #give time for image to display
 
         await send_status(
             ws,
