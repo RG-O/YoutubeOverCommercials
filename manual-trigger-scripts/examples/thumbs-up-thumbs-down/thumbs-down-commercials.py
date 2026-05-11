@@ -1,5 +1,4 @@
 import asyncio
-from asyncio.coroutines import _is_debug_mode
 import websockets
 import json
 import time
@@ -11,9 +10,6 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import mediapipe as mp
 
-from PIL import Image
-import io
-
 # --------------------------------------------------
 # Configuration
 # --------------------------------------------------
@@ -23,22 +19,14 @@ PORT = 64145
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "gesture_recognizer.task")
 
-# Enable webcam preview window and screenshot sending
-DEBUG_MODE = True
-
-# Camera index
+is_debug_mode = False
 CAMERA_INDEX = 0
 
-# Number of matching gestures required simultaneously
-# Example:
-#   1 = one thumbs up triggers
-#   2 = two thumbs ups required to trigger
 REQUIRED_GESTURE_COUNTS = {
     "Thumb_Up": 2,
     "Thumb_Down": 2
 }
 
-# Gesture config
 TARGET_GESTURES = {
     "Thumb_Up": {
         "action": "content",
@@ -50,16 +38,22 @@ TARGET_GESTURES = {
     }
 }
 
-# Confidence and duration thresholds
-# (confidence, required duration seconds)
+GREEN_SQUARE = "\uD83D\uDFE9"
+CHECK_BUTTON = "\u2705"
+HAND_PREFIX = ""
+DEBUG_TRIGGER_DISPLAY_DURATION = 2.0
+
 THRESHOLDS = [
-    (0.95, 0.5),
-    (0.80, 1.0),
-    (0.55, 1.5),
+    (0.90, 0.1),
+    (0.80, 0.3),
+    (0.57, 0.8),
 ]
 
 VISIBILITY_THRESHOLD = 0.50
 COOLDOWN = 1.0
+
+SNAPSHOT_MAX_WIDTH = 400
+SNAPSHOT_MAX_HEIGHT = 400
 
 # --------------------------------------------------
 # Global state
@@ -71,20 +65,143 @@ camera_task = None
 camera_active = asyncio.Event()
 
 current_is_commercial = None
+last_status_display = None
 
-# Tracks gesture timing/group state
 gesture_group_states = {}
 
+any_trigger_display_until = time.time()
+
 # --------------------------------------------------
-# Helpers
+# Display helpers
 # --------------------------------------------------
 
-def get_all_emojis_for_action(action):
-    return " ".join(
-        config["emoji"]
-        for config in TARGET_GESTURES.values()
-        if config.get("action") == action
+def get_gesture_for_action(action):
+    for gesture_name, config in TARGET_GESTURES.items():
+        if config["action"] == action:
+            return gesture_name
+    return None
+
+def get_expected_action():
+    # If currently commercial, expect content action.
+    # If currently content or unknown, expect commercial action.
+    if current_is_commercial is True:
+        return "content"
+    return "commercial"
+
+def get_expected_gesture_name():
+    return get_gesture_for_action(get_expected_action())
+
+def build_gesture_display(gesture_name, detected_count=0, triggered=False):
+    config = TARGET_GESTURES[gesture_name]
+    required_count = REQUIRED_GESTURE_COUNTS.get(gesture_name, 1)
+
+    detected_count = max(0, min(detected_count, required_count))
+
+    if triggered:
+        slots = [CHECK_BUTTON] * required_count
+    else:
+        slots = (
+            [GREEN_SQUARE] * detected_count +
+            [config["emoji"]] * (required_count - detected_count)
+        )
+
+    return HAND_PREFIX + " " + " ".join(slots)
+
+async def send_expected_resting_status(ws, debug="Ready"):
+    expected_gesture = get_expected_gesture_name()
+
+    if not expected_gesture:
+        return
+
+    display = build_gesture_display(
+        expected_gesture,
+        detected_count=0,
+        triggered=False
     )
+
+    await send_status_if_changed(ws, display, debug)
+
+async def send_progress_status(ws, gesture_name, detected_count):
+    display = build_gesture_display(
+        gesture_name,
+        detected_count=detected_count,
+        triggered=False
+    )
+
+    await send_status_if_changed(
+        ws,
+        display,
+        f"Detected {detected_count} of {REQUIRED_GESTURE_COUNTS.get(gesture_name, 1)} required {gesture_name}"
+    )
+
+async def send_trigger_status(ws, gesture_name):
+    display = build_gesture_display(
+        gesture_name,
+        detected_count=REQUIRED_GESTURE_COUNTS.get(gesture_name, 1),
+        triggered=True
+    )
+
+    await send_status_if_changed(
+        ws,
+        display,
+        f"{gesture_name} trigger confirmed"
+    )
+
+async def send_status_if_changed(ws, display, debug):
+    global last_status_display
+
+    if display == last_status_display:
+        return
+
+    last_status_display = display
+    await send_status(ws, display, debug)
+
+# --------------------------------------------------
+# Image helpers
+# --------------------------------------------------
+
+def frame_to_base64(frame, max_width=SNAPSHOT_MAX_WIDTH, max_height=SNAPSHOT_MAX_HEIGHT):
+    if frame is None:
+        return None
+
+    frame = frame.copy()
+
+    height, width = frame.shape[:2]
+
+    scale = min(
+        max_width / width,
+        max_height / height,
+        1.0
+    )
+
+    new_width = int(width * scale)
+    new_height = int(height * scale)
+
+    if scale < 1.0:
+        frame = cv2.resize(
+            frame,
+            (new_width, new_height),
+            interpolation=cv2.INTER_AREA
+        )
+
+    success, buffer = cv2.imencode(
+        ".jpg",
+        frame,
+        [cv2.IMWRITE_JPEG_QUALITY, 98]
+    )
+
+    if not success or buffer is None:
+        return None
+
+    base64_data = base64.b64encode(
+        buffer.tobytes()
+    ).decode("utf-8")
+
+    return f"data:image/jpeg;base64,{base64_data}"
+
+# --------------------------------------------------
+# Gesture helpers
+# --------------------------------------------------
 
 def find_gesture_config(gesture_name):
     return TARGET_GESTURES.get(gesture_name)
@@ -95,77 +212,18 @@ def passes_threshold(confidence, duration):
             return True
     return False
 
-def frame_to_base64(frame, max_width=300, max_height=300):
-
-    if frame is None:
-        return None
-
-    # Make a safe contiguous copy
-    frame = frame.copy()
-
-    height, width = frame.shape[:2]
-
-    # Calculate scale factor while preserving aspect ratio
-    scale = min(
-        max_width / width,
-        max_height / height,
-        1.0  # prevents upscaling
-    )
-
-    new_width = int(width * scale)
-    new_height = int(height * scale)
-
-    # Resize if needed
-    if scale < 1.0:
-        frame = cv2.resize(
-            frame,
-            (new_width, new_height),
-            interpolation=cv2.INTER_AREA
-        )
-
-    # Encode JPEG
-    success, buffer = cv2.imencode(
-        ".jpg",
-        frame,
-        [cv2.IMWRITE_JPEG_QUALITY, 95]
-    )
-
-    if not success:
-        return None
-
-    base64_data = base64.b64encode(
-        buffer.tobytes()
-    ).decode("utf-8")
-
-    return f"data:image/jpeg;base64,{base64_data}"
-
-
 # --------------------------------------------------
 # Trigger handling
 # --------------------------------------------------
 
-async def handle_trigger(
-    ws,
-    gesture_name,
-    config,
-    confidence,
-    duration,
-    frame
-):
+async def handle_trigger(ws, gesture_name, config, confidence, duration, frame):
     global current_is_commercial
 
     new_is_commercial = config["action"] == "commercial"
 
-    # Ignore if already in desired state
-    if (
-        current_is_commercial is not None and
-        current_is_commercial == new_is_commercial
-    ):
-        print(
-            f"IGNORED: {gesture_name} "
-            f"(already in desired state)"
-        )
-        return
+    if current_is_commercial is not None and current_is_commercial == new_is_commercial:
+        print(f"IGNORED: {gesture_name} already matches current state")
+        return False
 
     print(
         f"TRIGGERED: {gesture_name} | "
@@ -175,99 +233,103 @@ async def handle_trigger(
 
     current_is_commercial = new_is_commercial
 
-    display = f"\u270B {config['emoji']}"
-
     debug_text = f"{gesture_name} detected"
 
-    if DEBUG_MODE:
+    if is_debug_mode:
         debug_text = frame_to_base64(frame)
+
+    trigger_display = build_gesture_display(
+        gesture_name,
+        detected_count=REQUIRED_GESTURE_COUNTS.get(gesture_name, 1),
+        triggered=True
+    )
 
     await send_commercial_state_change(
         ws,
         new_is_commercial,
-        display,
+        trigger_display,
         debug_text,
     )
+
+    #await send_trigger_status(ws, gesture_name)
+
+    return True
 
 # --------------------------------------------------
 # Gesture processing
 # --------------------------------------------------
 
-async def process_gesture_group(
-    ws,
-    gesture_name,
-    hands,
-    now,
-    frame
-):
-    """
-    Handles:
-    - simultaneous hand requirements
-    - timing
-    - confidence thresholds
-    """
-
+async def process_gesture_group(ws, gesture_name, hands, now, frame):
+    global any_trigger_display_until
     config = find_gesture_config(gesture_name)
 
     if not config:
         return
 
-    required_count = REQUIRED_GESTURE_COUNTS.get(
-        gesture_name,
-        1
-    )
+    expected_gesture = get_expected_gesture_name()
 
-    matching_hands = []
+    # Only show progress and trigger for the gesture that would change state.
+    if gesture_name != expected_gesture:
+        return
 
-    for hand in hands:
-        if hand["gesture_name"] != gesture_name:
-            continue
+    required_count = REQUIRED_GESTURE_COUNTS.get(gesture_name, 1)
 
-        if hand["confidence"] < VISIBILITY_THRESHOLD:
-            continue
-
-        matching_hands.append(hand)
+    matching_hands = [
+        hand for hand in hands
+        if hand["gesture_name"] == gesture_name
+        and hand["confidence"] >= VISIBILITY_THRESHOLD
+    ]
 
     current_count = len(matching_hands)
 
-    # Not enough simultaneous gestures
-    if current_count < required_count:
-
-        if gesture_name in gesture_group_states:
-            state = gesture_group_states[gesture_name]
-
-            if state["visible"]:
-                state["visible"] = False
-
-                print(
-                    f"HIDDEN GROUP: {gesture_name} "
-                    f"count={current_count}"
-                )
-
-            # Reset so this gesture can trigger again next time it is shown
-            state["start_time"] = now
-            state["triggered"] = False
-
-        return
-
-    # Average confidence across matching hands
-    avg_confidence = (
-        sum(h["confidence"] for h in matching_hands)
-        / current_count
-    )
-
-    # Create group state if missing
     if gesture_name not in gesture_group_states:
         gesture_group_states[gesture_name] = {
             "start_time": now,
             "triggered": False,
             "visible": False,
-            "last_trigger_time": 0
+            "last_trigger_time": 0,
+            "last_count": 0,
         }
 
     state = gesture_group_states[gesture_name]
 
-    # Visibility logging
+    if current_count < required_count:
+        if state["visible"]:
+            print(f"HIDDEN GROUP: {gesture_name} count={current_count}")
+
+        state["visible"] = False
+        state["start_time"] = now
+        state["triggered"] = False
+        state["last_count"] = current_count
+
+        if current_count > 0:
+
+            await send_progress_status(
+                ws,
+                gesture_name,
+                current_count
+            )
+
+        else:
+
+            # Keep showing trigger checkmarks briefly
+            if (
+                is_debug_mode and
+                now < any_trigger_display_until
+            ):
+                return
+
+            await send_expected_resting_status(
+                ws,
+                "Waiting for gesture"
+            )
+
+        return
+
+    avg_confidence = sum(
+        hand["confidence"] for hand in matching_hands
+    ) / current_count
+
     if not state["visible"]:
         state["visible"] = True
         state["start_time"] = now
@@ -279,21 +341,20 @@ async def process_gesture_group(
             f"confidence={avg_confidence:.2f}"
         )
 
+    if state["last_count"] != current_count:
+        await send_progress_status(ws, gesture_name, current_count)
+        state["last_count"] = current_count
+
     duration = now - state["start_time"]
 
-    # Already triggered
     if state["triggered"]:
-        print("state already triggered")
         return
 
-    # Cooldown
     if now - state["last_trigger_time"] < COOLDOWN:
         return
 
-    # Threshold passed
     if passes_threshold(avg_confidence, duration):
-
-        await handle_trigger(
+        did_trigger = await handle_trigger(
             ws,
             gesture_name,
             config,
@@ -302,15 +363,16 @@ async def process_gesture_group(
             frame
         )
 
-        state["triggered"] = True
-        state["last_trigger_time"] = now
+        if did_trigger:
+            state["triggered"] = True
+            state["last_trigger_time"] = now
+            any_trigger_display_until = (now + DEBUG_TRIGGER_DISPLAY_DURATION)
 
 # --------------------------------------------------
 # Camera loop
 # --------------------------------------------------
 
 async def camera_loop(ws):
-
     try:
         if not os.path.exists(MODEL_PATH):
             print("Model not found:", MODEL_PATH)
@@ -327,10 +389,7 @@ async def camera_loop(ws):
             num_hands=4
         )
 
-        recognizer = (
-            vision.GestureRecognizer
-            .create_from_options(options)
-        )
+        recognizer = vision.GestureRecognizer.create_from_options(options)
 
         cap = cv2.VideoCapture(CAMERA_INDEX)
 
@@ -340,15 +399,9 @@ async def camera_loop(ws):
 
         print("Camera started")
 
-        await send_status(
-            ws,
-            "\u270B " +
-            get_all_emojis_for_action("commercial"),
-            "Ready"
-        )
+        await send_expected_resting_status(ws, "Ready")
 
         while True:
-
             await camera_active.wait()
 
             success, frame = cap.read()
@@ -357,7 +410,6 @@ async def camera_loop(ws):
                 await asyncio.sleep(0.01)
                 continue
 
-            # Mirror webcam
             frame = cv2.flip(frame, 1)
 
             rgb_frame = cv2.cvtColor(
@@ -373,17 +425,10 @@ async def camera_loop(ws):
             result = recognizer.recognize(mp_image)
 
             now = time.time()
-
             detected_hands = []
 
-            # --------------------------------------------------
-            # Parse hands
-            # --------------------------------------------------
-
             if result.gestures:
-
                 for hand_index, gesture_list in enumerate(result.gestures):
-
                     if not gesture_list:
                         continue
 
@@ -392,7 +437,6 @@ async def camera_loop(ws):
                     gesture_name = top_gesture.category_name
                     confidence = top_gesture.score
 
-                    # Get landmarks for drawing
                     landmarks = result.hand_landmarks[hand_index]
 
                     xs = [lm.x for lm in landmarks]
@@ -402,12 +446,10 @@ async def camera_loop(ws):
 
                     x1 = int(min(xs) * w)
                     y1 = int(min(ys) * h)
-
                     x2 = int(max(xs) * w)
                     y2 = int(max(ys) * h)
 
-                    # Draw debug rectangle
-                    if DEBUG_MODE:
+                    if is_debug_mode:
                         cv2.rectangle(
                             frame,
                             (x1, y1),
@@ -419,7 +461,7 @@ async def camera_loop(ws):
                         cv2.putText(
                             frame,
                             f"{gesture_name} {confidence:.2f}",
-                            (x1, y1 - 10),
+                            (x1, max(y1 - 10, 20)),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
                             (0, 255, 0),
@@ -431,31 +473,23 @@ async def camera_loop(ws):
                         "confidence": confidence
                     })
 
-            # --------------------------------------------------
-            # Process gesture groups
-            # --------------------------------------------------
+            expected_gesture = get_expected_gesture_name()
 
-            for gesture_name in TARGET_GESTURES.keys():
-
+            if expected_gesture:
                 await process_gesture_group(
                     ws,
-                    gesture_name,
+                    expected_gesture,
                     detected_hands,
                     now,
                     frame
                 )
 
-            # --------------------------------------------------
-            # Debug webcam preview
-            # --------------------------------------------------
-
-            if DEBUG_MODE:
+            if is_debug_mode:
                 cv2.imshow(
                     "MediaPipe Gesture Debug",
                     frame
                 )
 
-                # ESC closes window
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
 
@@ -490,13 +524,11 @@ async def handle_client(websocket):
         clients.remove(websocket)
 
         if len(clients) == 0:
-
             print("Stopping camera")
 
             camera_active.clear()
 
             if camera_task:
-
                 camera_task.cancel()
 
                 try:
@@ -513,22 +545,22 @@ async def handle_client(websocket):
 # --------------------------------------------------
 
 async def handle_message(ws, msg):
-
     global camera_task
     global current_is_commercial
+    global last_status_display
+    global is_debug_mode
 
     message_type = msg["type"]
 
-    # --------------------------------------------------
-    # Init
-    # --------------------------------------------------
-
     if message_type == "init":
-
+        is_debug_mode = msg["data"]["preferences"]["isDebugMode"]
+        
         current_is_commercial = (
             msg.get("data", {})
             .get("isCommercialState")
         )
+
+        last_status_display = None
 
         await send_status(
             ws,
@@ -539,42 +571,28 @@ async def handle_message(ws, msg):
         camera_active.set()
 
         if not camera_task:
-
             print("Starting camera task")
-
             camera_task = asyncio.create_task(
                 camera_loop(ws)
             )
 
-    # --------------------------------------------------
-    # Commercial state updates
-    # --------------------------------------------------
-
     elif message_type == "commercial_state_change":
+        current_is_commercial = msg["data"]["isCommercialState"]
 
-        current_is_commercial = (
-            msg["data"]["isCommercialState"]
-        )
+        last_status_display = None
 
-        display = (
-            "\u270B " +
-            get_all_emojis_for_action("commercial")
-        )
+        if is_debug_mode:
+            print("waiting to send Commercial state updated")
+            await asyncio.sleep(3)
 
-        if current_is_commercial:
-            display = (
-                "\u270B " +
-                get_all_emojis_for_action("content")
-            )
-
-        if DEBUG_MODE:
-            await asyncio.sleep(3) #give time for image to display
-
-        await send_status(
+        print("sending Commercial state updated")
+        await send_expected_resting_status(
             ws,
-            display,
-            "update display"
+            "Commercial state updated"
         )
+
+    elif message_type == "browser_fullscreen_state_change":
+        print("Fullscreen:", msg["data"]["isFullscreen"])
 
 # --------------------------------------------------
 # Send helpers
@@ -602,11 +620,7 @@ async def send_commercial_state_change(
     except websockets.exceptions.ConnectionClosed:
         print("send_commercial_state_change failed")
 
-async def send_status(
-    ws,
-    display,
-    debug
-):
+async def send_status(ws, display, debug):
     try:
         await ws.send(json.dumps({
             "type": "status",
@@ -626,15 +640,12 @@ async def send_status(
 # --------------------------------------------------
 
 async def main():
-
     async with websockets.serve(
         handle_client,
         "localhost",
         PORT
     ):
-
         print(f"Server running on ws://localhost:{PORT}")
-
         await asyncio.Future()
 
 asyncio.run(main())

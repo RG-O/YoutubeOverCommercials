@@ -484,6 +484,7 @@ function sendMessageToPlugins(type) {
         pipWidth: pipWidth,
         shouldOverlayVideoSizeAndLocationAutoSet: shouldOverlayVideoSizeAndLocationAutoSet,
         pluginCommercialTriggerWSURL: pluginCommercialTriggerWSURL,
+        isDebugMode: isDebugMode,
     }
 
     const payload = {
