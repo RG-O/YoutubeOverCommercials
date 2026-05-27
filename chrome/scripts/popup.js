@@ -15,6 +15,8 @@ var commercialDetectionMode;
 var shouldShuffleYTPlaylist;
 var isDebugMode;
 var isDoubleClapMode;
+var isPluginOverlayMode;
+var isPluginCommercialTriggerMode;
 
 //TODO: I now have such a crazy amount of user set values that are stored/retrieved all over the place, is there a way to create a singular location to manage them?
 //grab all user set values
@@ -59,6 +61,8 @@ chrome.storage.sync.get([
     'isDoubleClapMode',
     'clapSensitivity',
     'isDoubleClapOnlyReturnMode',
+    'isPluginOverlayMode',
+    'isPluginCommercialTriggerMode',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -102,6 +106,8 @@ chrome.storage.sync.get([
     optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 40;
     optionsForm.clapSensitivity.value = result.clapSensitivity ?? 40;
     optionsForm.isDoubleClapOnlyReturnMode.checked = result.isDoubleClapOnlyReturnMode ?? false;
+    optionsForm.isPluginOverlayMode.checked = result.isPluginOverlayMode ?? false;
+    optionsForm.isPluginCommercialTriggerMode.checked = result.isPluginCommercialTriggerMode ?? false;
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
@@ -280,6 +286,8 @@ chrome.storage.sync.get([
         shouldShuffleYTPlaylist = optionsForm.shouldShuffleYTPlaylist.checked;
         isDebugMode = optionsForm.isDebugMode.checked;
         isDoubleClapMode = optionsForm.isDoubleClapMode.checked;
+        isPluginOverlayMode = optionsForm.isPluginOverlayMode.checked;
+        isPluginCommercialTriggerMode = optionsForm.isPluginCommercialTriggerMode.checked;
     });
 
 });
@@ -368,6 +376,8 @@ document.getElementById("save-button").onclick = function () {
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
+            isPluginOverlayMode: optionsForm.isPluginOverlayMode.checked,
+            isPluginCommercialTriggerMode: optionsForm.isPluginCommercialTriggerMode.checked,
         }, function () {
 
             let shouldDirectToMicConfig = false;
@@ -399,7 +409,9 @@ document.getElementById("save-button").onclick = function () {
                 commercialDetectionMode !== optionsForm.commercialDetectionMode.value ||
                 shouldShuffleYTPlaylist !== optionsForm.shouldShuffleYTPlaylist.checked ||
                 isDebugMode !== optionsForm.isDebugMode.checked ||
-                isDoubleClapMode !== optionsForm.isDoubleClapMode.checked
+                isDoubleClapMode !== optionsForm.isDoubleClapMode.checked ||
+                isPluginOverlayMode !== optionsForm.isPluginOverlayMode.checked ||
+                isPluginCommercialTriggerMode !== optionsForm.isPluginCommercialTriggerMode.checked
             ) {
                 shouldShowRefreshMessage = true;
             }
@@ -793,6 +805,8 @@ function saveProfile(shouldSaveWithID) {
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
+            isPluginOverlayMode: optionsForm.isPluginOverlayMode.checked,
+            isPluginCommercialTriggerMode: optionsForm.isPluginCommercialTriggerMode.checked,
         };
 
         chrome.storage.sync.set({ profiles }, () => {
@@ -854,6 +868,8 @@ function applyProfile() {
             if (typeof profiles[selectedProfile].isDoubleClapMode !== 'undefined') { optionsForm.isDoubleClapMode.checked = profiles[selectedProfile].isDoubleClapMode; }
             if (typeof profiles[selectedProfile].clapSensitivity !== 'undefined') { optionsForm.clapSensitivity.value = profiles[selectedProfile].clapSensitivity; }
             if (typeof profiles[selectedProfile].isDoubleClapOnlyReturnMode !== 'undefined') { optionsForm.isDoubleClapOnlyReturnMode.checked = profiles[selectedProfile].isDoubleClapOnlyReturnMode; }
+            if (typeof profiles[selectedProfile].isPluginOverlayMode !== 'undefined') { optionsForm.isPluginOverlayMode.checked = profiles[selectedProfile].isPluginOverlayMode; }
+            if (typeof profiles[selectedProfile].isPluginCommercialTriggerMode !== 'undefined') { optionsForm.isPluginCommercialTriggerMode.checked = profiles[selectedProfile].isPluginCommercialTriggerMode; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();

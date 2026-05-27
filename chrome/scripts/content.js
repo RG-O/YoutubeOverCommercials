@@ -130,12 +130,12 @@ var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
-var isPluginOverlayMode = false; //777
+var isPluginOverlayMode;
 var pluginOverlayFramework = 'api'; //777
 var pluginOverlayAPIURL = 'http://localhost:64144'; //777
-var isPluginCommercialTriggerMode = true; //777
+var isPluginCommercialTriggerMode;
 var pluginCommercialTriggerWSURL = 'ws://localhost:64145'; //777
-var isAnyPluginMode = false; //777
+var isAnyPluginMode;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -808,10 +808,13 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'isDoubleClapMode',
                             'clapSensitivity',
                             'isDoubleClapOnlyReturnMode',
+                            'isPluginOverlayMode',
+                            'isPluginCommercialTriggerMode',
                         ], (result) => {
 
                             //set them to default if not set by user yet
                             overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+                            isPluginOverlayMode = result.isPluginOverlayMode ?? false;
                             if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
                                 isAudioOnlyOverlay = true;
                                 isLiveOverlayVideo = false;
@@ -843,6 +846,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
                             }
                             commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+                            isPluginCommercialTriggerMode = result.isPluginCommercialTriggerMode ?? false;
                             if (commercialDetectionMode === 'custom-plugin-trigger') {
                                 isPluginCommercialTriggerMode = true;
                                 isAnyPluginMode = true;
@@ -2815,6 +2819,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 //'isDoubleClapMode',
                 'clapSensitivity',
                 'isDoubleClapOnlyReturnMode',
+                //'isPluginOverlayMode',
+                //'isPluginCommercialTriggerMode',
             ], (result) => {
 
                 //set them to default if not set by user yet

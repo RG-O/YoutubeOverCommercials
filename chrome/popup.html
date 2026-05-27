@@ -109,7 +109,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-custom-plugin-trigger" name="commercialDetectionMode" value="custom-plugin-trigger">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Custom Plugin</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">TODO: Description here.</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">TODO: Description here.</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
             <div id="custom-plugin-trigger-loading" class="loading-spinner"></div>
@@ -243,7 +243,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-custom-plugin-overlay" name="overlayVideoType" value="custom-plugin-overlay">
-            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Custom Plugin</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">TODO: add description here.</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">TODO: add description here.</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-overlay" class="id-field-wrapper settings-box">
             <div class="id-field-label">
@@ -262,11 +262,11 @@
 
 
 
-        <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Advanced Settings</button>
+        <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Additional Settings</button>
         <div class="advanced">
-            <h2>ADVANCED SETTINGS</h2>
+            <h2>ADDITIONAL SETTINGS</h2>
 
-            <h3>OVERLAY VIDEO/AUDIO</h3>
+            <h3>OVERLAY OPTIONS</h3>
 
             <div class="general-field auto-dimensions-field-wrapper">
                 <label class="checkbox-label" for="shouldOverlayVideoSizeAndLocationAutoSet">Auto-Set Overlay Video Size and Location</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Pixel Color commercial detection modes only. Automatically sets the overlay video to max width and height without covering selected pixel.</span></span>
@@ -340,7 +340,7 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
+                <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
                 <input type="checkbox" name="isPiPMode" id="isPiPMode">
             </div>
 
@@ -376,8 +376,12 @@
 
             </div>
 
+            <div class="general-field">
+                <label class="checkbox-label" for="isPluginOverlayMode">Always Call Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the out of the box overlay option set above, you can toggle this on to use a plugin overlay at the same time.</span></span><span class="badge badge-advanced">Advanced</span>
+                <input type="checkbox" name="isPluginOverlayMode" id="isPluginOverlayMode">
+            </div>
 
-            <h3>PRIMARY VIDEO/AUDIO</h3>
+            <h3>PRIMARY STREAM</h3>
 
             <div class="general-field">
                 Dimming During Commercials (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">How much percentage to dim primary/background video while overlay video is on top.</span></span>
@@ -395,7 +399,7 @@
             </div>
 
 
-            <h3>AUTOMATIC COMMERCIAL DETECTION</h3>
+            <h3>COMMERCIAL DETECTION</h3>
 
             <div class="general-field">
                 Mismatch Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
@@ -412,6 +416,16 @@
                 <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="3" max="88">
             </div>
 
+            <!--TODO: Add color difference demo and slide scale-->
+
+            <!--<table class="general-field color-difference-demo-table">
+                <tr>
+                    <td class="color-difference-cell-red-shift">DIFFERENCE</td>
+                    <td class="color-difference-cell-green-shift">DIFFERENCE</td>
+                    <td class="color-difference-cell-blue-shift">DIFFERENCE</td>
+                </tr>
+            </table>-->
+
             <div class="general-field">
                 Override Cooldown Time (sec):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
                 <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1">
@@ -421,14 +435,6 @@
                 Audio Level Threshold (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Audio Commercial Detection Mode Only. Level that audio needs to be under before declaring a commercial break.</span></span>
                 <input type="number" name="audioLevelThreshold" id="audioLevelThreshold" min="1" max="100">
             </div>
-
-            <div class="general-field">
-                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays various diagnostic information on screen all the time and adds additional logging to the background.</span></span>
-                <input type="checkbox" name="isDebugMode" id="isDebugMode">
-            </div>
-
-
-            <h3>MANUAL OPERATIONS</h3>
 
             <div class="general-field">
                 <label class="checkbox-label">Always Allow Keyboard Shortcut</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter what mode of commercial detection being used, this extension always allows hitting the extension keyboard shortcut to manually switch back and forth from overlays being played over commercials at any point. This cannot be disabled.</span></span>
@@ -468,6 +474,16 @@
                     <label class="checkbox-label" for="isDoubleClapOnlyReturnMode">Disable Claps While Not Commercial</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter how perfectly you set your clap sensitivity, false positive double claps can still happen. Accidentally covering up your live game with a YouTube video can be really annoying. Use this setting so that double claps only bring you back to the action and not out of it.</span></span>
                     <input type="checkbox" name="isDoubleClapOnlyReturnMode" id="isDoubleClapOnlyReturnMode">
                 </div>
+            </div>
+
+            <div class="general-field">
+                <label class="checkbox-label" for="isPluginCommercialTriggerMode">Always Allow Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the out of the box commercial detection option set above, you can toggle this on to use a custom plugin trigger at the same time.</span></span><span class="badge badge-advanced">Advanced</span>
+                <input type="checkbox" name="isPluginCommercialTriggerMode" id="isPluginCommercialTriggerMode">
+            </div>
+
+            <div class="general-field">
+                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays various diagnostic information on screen all the time and adds additional logging to the background.</span></span>
+                <input type="checkbox" name="isDebugMode" id="isDebugMode">
             </div>
 
 

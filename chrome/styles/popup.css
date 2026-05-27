@@ -433,6 +433,30 @@ datalist {
     width: 100%;
 }
 
+.color-difference-demo-table {
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    background-color: rgb(18, 56, 77);
+    font-weight: 700;
+}
+
+    .color-difference-demo-table td {
+        text-align: center;
+    }
+
+    .color-difference-demo-table .color-difference-cell-red-shift {
+        color: rgb(34, 56, 77);
+    }
+
+    .color-difference-demo-table .color-difference-cell-green-shift {
+        color: rgb(18, 72, 77);
+    }
+
+    .color-difference-demo-table .color-difference-cell-blue-shift {
+        color: rgb(18, 56, 61);
+    }
+
 /*----- pixel-select-instructions.html specific styling below -----*/
 .overlay-video {
     position: fixed;
