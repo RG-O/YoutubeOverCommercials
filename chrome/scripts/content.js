@@ -1173,7 +1173,7 @@ function setBlockersAndPixelSelectionInstructions() {
         htmlElement.addEventListener('click', blockHandler, true);
     }
 
-    if (isPiPMode && isLiveOverlayVideo) {
+    if (isPiPMode && isLiveOverlayVideo && overlayVideoType !== 'custom-plugin-overlay') {
 
         pipBlocker = document.createElement('div');
         pipBlocker.className = "ytoc-overlay-instructions";
@@ -1201,7 +1201,14 @@ function setBlockersAndPixelSelectionInstructions() {
     insertLocationFullscreenElm.insertBefore(overlayInstructions, null);
     overlayInstructions.style.visibility = "visible";
     //overlayInstructions.style.setProperty("border", "3px red solid", "important");
-    setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+
+    //setting instructions small in the middle when only plugin overlay is used since it shouldn't block any pixels
+    if (overlayVideoType === 'custom-plugin-overlay') {
+        setOverlaySizeAndLocation(overlayInstructions, 40, 40, "middle", "middle", "0");
+    } else {
+        setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+    }
+    
 
     let iFrame = document.createElement('iframe');
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
@@ -3067,7 +3074,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             }
 
             //stop bugging user after a few failures
-            if (totalFailedOverlayWSConnectAttempts <= 3) {
+            if (totalFailedOverlayWSConnectAttempts <= 2) {
                 removeElementsByClass('ytoc-main-video-message-alert');
                 addMessageAlertToMainVideo(messageToDisplay);
 

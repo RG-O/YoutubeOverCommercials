@@ -7,12 +7,15 @@ import time
 import win32gui
 import win32con
 import win32api
+import win32process
+
+from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
 
 PORT = 64146
 
 clients = set()
 
-window_title = "Mozilla Firefox"
+window_title = "Picture"
 
 def find_window_by_title(partial_title):
     def enum_handler(hwnd, result):
@@ -26,6 +29,31 @@ def find_window_by_title(partial_title):
     win32gui.EnumWindows(enum_handler, result)
     return result[0] if result else None
 
+def mute_application_of_window(hwnd, mute=True):
+    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+
+    found_audio = False
+
+    # Find audio session for PID
+    sessions = AudioUtilities.GetAllSessions()
+
+    for session in sessions:
+        if session.Process and session.Process.pid == pid:
+            volume = session._ctl.QueryInterface(ISimpleAudioVolume)
+            volume.SetMute(1 if mute else 0, None)
+
+            process_name = session.Process.name()
+
+            print(
+                f'{"Muted" if mute else "Unmuted"} '
+                f'window "{win32gui.GetWindowText(hwnd)}" '
+                f'({process_name})'
+            )
+
+            found_audio = True
+
+    if not found_audio:
+        print("No active audio session found for that window.")
 
 def position_and_resize_window(
     hwnd,
@@ -34,6 +62,7 @@ def position_and_resize_window(
     vertical="middle",   # "top", "middle", "bottom"
     horizontal="middle"  # "left", "middle", "right"
 ):
+    print("hwnd = ", hwnd, ", ", "width_percent = ", width_percent, ", ", "height_percent = ", height_percent, ", ", "vertical = ", vertical, ", ", "horizontal = ", horizontal, ", ")
     # Get screen resolution
     screen_width = win32api.GetSystemMetrics(0)
     screen_height = win32api.GetSystemMetrics(1)
@@ -41,6 +70,8 @@ def position_and_resize_window(
     # Calculate target size
     target_width = int(screen_width * (width_percent / 100))
     target_height = int(screen_height * (height_percent / 100))
+
+    print("screen_width = ", screen_width, ", ", "screen_height = ", screen_height, ", ", "target_width = ", target_width, ", ", "target_height = ", target_height)
 
     # Calculate horizontal position
     if horizontal == "left":
@@ -57,6 +88,8 @@ def position_and_resize_window(
         y = screen_height - target_height
     else:  # "middle"
         y = (screen_height - target_height) // 2
+
+    print("x = ", x, ", ", "y = ", y)
 
     # Restore/show window without activating it
     # win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
@@ -75,20 +108,6 @@ def position_and_resize_window(
 
     time.sleep(0.05) #TODO: is this necessary?
 
-    # # instantly removing TOPMOST status so user can easily minimize it, but keeping it on top of the fullscreen browser
-    # win32gui.SetWindowPos(
-    #     hwnd,
-    #     #win32con.HWND_TOPMOST,  # Always on top #TODO: remove?
-    #     #win32con.HWND_TOP,
-    #     win32con.HWND_NOTOPMOST, 
-    #     x,
-    #     y,
-    #     target_width,
-    #     target_height,
-    #     win32con.SWP_NOACTIVATE, #TODO: bring other one back?
-    # )
-
-    # pyautogui.press("playpause")
 
 def remove_topmost(hwnd, width_percent=90, height_percent=75):
     # Get screen resolution
@@ -171,46 +190,6 @@ def restore_borders(hwnd):
     )
 
 
-def send_ctrl_h(hwnd):
-    # Press CTRL down
-    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_CONTROL, 0)
-
-    # Press H down
-    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, ord('H'), 0)
-
-    time.sleep(0.05)
-
-    # Release H
-    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, ord('H'), 0)
-
-    # Release CTRL
-    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_CONTROL, 0)
-
-
-# if __name__ == "__main__":
-#     time.sleep(1)
-
-#     window_title = "VLC"  # Change this to your target window
-
-#     hwnd = find_window_by_title(window_title)
-
-#     if hwnd:
-#         position_and_resize_window(hwnd, width_percent=40, height_percent=40)
-#         time.sleep(0.5)
-#         make_borderless(hwnd) #TODO: do this only once
-#         win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down #TODO: move to function
-#         win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
-#         send_ctrl_h(hwnd) #TODO: make work
-#         print("Window positioned successfully.")
-#     else:
-#         print("Window not found.")
-
-def send_spacebar(hwnd):
-    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down
-    time.sleep(0.05)
-    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
-
-
 async def handle_client(websocket):
     print("Client connected")
     clients.add(websocket)
@@ -239,65 +218,70 @@ async def handle_message(ws, msg):
     overlay_video_location_vertical = preferences["overlayVideoLocationVertical"]
     is_pip_mode = preferences["isPiPMode"]
     pip_location_horizontal = preferences["pipLocationHorizontal"]
-    pip_location_vertical = preferences["pipLocationHorizontal"]
+    pip_location_vertical = preferences["pipLocationVertical"]
     pip_height = float(preferences["pipHeight"])
     pip_width = float(preferences["pipWidth"])
 
+    hwnd = find_window_by_title(window_title)
+    if hwnd is None:
+        await send_status(ws, "Window not found", "Window not found")
+    else:
+        if message_type == "init":
+            print(msg)
 
-    if message_type == "init":
-        print(msg)
-
-        hwnd = find_window_by_title(window_title)
-        if hwnd is None:
-            await send_status(ws, "Window not found", "Window not found")
-        make_borderless(hwnd)
-        print("Extension Initiated.")
-
-        # Optionally send status to present it to user
-        # await send_status(ws, "Connected", "Ready")
-
-    elif message_type == "commercial_state_change":
-        is_commercial = msg["data"]["isCommercialState"]
-
-        if is_commercial:
-            print("START overlay")
-            hwnd = find_window_by_title(window_title)
-            position_and_resize_window(hwnd, width_percent=overlay_video_width, height_percent=overlay_video_height, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
-            # time.sleep(0.5)
-            # send_spacebar(hwnd)
-        else:
-            hwnd = find_window_by_title(window_title)
-            if is_pip_mode:
-                # send_spacebar(hwnd)
-                # time.sleep(0.5)
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-            else:
-                position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
-            
-            print("STOP overlay")
-
-    elif message_type == "browser_fullscreen_state_change":
-        is_fullscreen = msg["data"]["isFullscreen"]
-
-        hwnd = find_window_by_title(window_title)
-
-        if is_fullscreen:
-            print("User entered fullscreen on browser")
             make_borderless(hwnd)
-        else:
-            print("User exited fullscreen on browser")
-            remove_topmost(hwnd, width_percent=90, height_percent=85)
+
+            if is_pip_mode:
+                position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+
+            mute_application_of_window(hwnd, mute=True)
+
+            print("Extension Initiated.")
+
+        elif message_type == "commercial_state_change":
+            is_commercial = msg["data"]["isCommercialState"]
+
+            if is_commercial:
+                print("START overlay")
+                position_and_resize_window(hwnd, width_percent=overlay_video_width, height_percent=overlay_video_height, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
+                mute_application_of_window(hwnd, mute=False)
+            else:
+                hwnd = find_window_by_title(window_title)
+                mute_application_of_window(hwnd, mute=True)
+                if is_pip_mode:
+                    position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+                else:
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            
+                print("STOP overlay")
+
+        elif message_type == "browser_fullscreen_state_change":
+            is_fullscreen = msg["data"]["isFullscreen"]
+
+            hwnd = find_window_by_title(window_title)
+
+            if is_fullscreen:
+                print("User entered fullscreen on browser")
+                mute_application_of_window(hwnd, mute=True)
+                make_borderless(hwnd)
+                if is_pip_mode:
+                    position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+            else:
+                print("User exited fullscreen on browser")
+                mute_application_of_window(hwnd, mute=False)
+                remove_topmost(hwnd, width_percent=90, height_percent=85)
+                restore_borders(hwnd)
+
+            print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
+
+        elif message_type == "end": #TODO: is this needed or can I go by disconnect?
+            print("Extension Stopped")
+
+            mute_application_of_window(hwnd, mute=False)
+            hwnd = find_window_by_title(window_title)
+            remove_topmost(hwnd, width_percent=90, height_percent=75)
             restore_borders(hwnd)
-
-        print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
-
-    elif message_type == "end": #TODO: is this needed or can I go by disconnect?
-        print("Extension Stopped")
-
-        hwnd = find_window_by_title(window_title)
-        remove_topmost(hwnd, width_percent=90, height_percent=75)
-        restore_borders(hwnd)
-        print("Extension Stopped")
+            print("Extension Stopped")
 
 async def send_status(ws, display, debug):
     try:
