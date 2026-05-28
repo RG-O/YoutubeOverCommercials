@@ -46,6 +46,7 @@ def open_vlc_with_specific_file(file_path):
 
     subprocess.Popen([
         vlc_path,
+        #file_path, #todo: better or worse to open this way?
 
         # Main UI/interface: no normal VLC window controls
         #"--intf", "dummy",
@@ -55,6 +56,8 @@ def open_vlc_with_specific_file(file_path):
         # Still enable HTTP remote control
         "--extraintf", "http",
         "--http-password", "1234",
+
+        #"--qt-continue=2", # resume last watched location automatically instead of prompting
 
         # Optional quality-of-life flags
         "--no-video-title-show",
@@ -259,7 +262,7 @@ def custom_plugin_overlay():
             center_and_resize_window(hwnd, width_percent=90, height_percent=85)
             if is_vlc_http_api_control_mode:
                 time.sleep(0.25)
-                requests.get("http://localhost:8080/requests/status.json?command=pl_play", auth=vlc_http_api_auth)
+                requests.get("http://localhost:8080/requests/status.json?command=pl_play", auth=vlc_http_api_auth) #todo: use force play pause instead?
             else:
                 time.sleep(0.5)
                 send_spacebar(hwnd)
