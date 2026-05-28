@@ -50,6 +50,8 @@ var triggerOfLastCommercialStateChange = 'none';
 var pluginCommercialTriggerIndicatorContainer;
 var pluginCommercialTriggerIndicator;
 var pluginCommercialTriggerDebugOverlay;
+var totalFailedCommercialTriggerWSConnectAttempts = 0;
+var totalFailedOverlayWSConnectAttempts = 0;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -131,9 +133,11 @@ var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
 var isPluginOverlayMode;
-var pluginOverlayFramework = 'api'; //777
+var pluginOverlayFramework = 'ws'; //777
 var pluginOverlayAPIURL = 'http://localhost:64144'; //777
+var pluginOverlayWSURL = 'ws://localhost:64146'; //777
 var isPluginCommercialTriggerMode;
+var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
 var pluginCommercialTriggerWSURL = 'ws://localhost:64145'; //777
 var isAnyPluginMode;
 //TODO: Add user preference for spotify to have audio come in gradually
@@ -483,7 +487,14 @@ function sendMessageToPlugins(type) {
         pipHeight: pipHeight,
         pipWidth: pipWidth,
         shouldOverlayVideoSizeAndLocationAutoSet: shouldOverlayVideoSizeAndLocationAutoSet,
+        isPluginOverlayMode: isPluginOverlayMode,
+        pluginOverlayFramework: pluginOverlayFramework,
+        pluginOverlayAPIURL: pluginOverlayAPIURL,
+        pluginOverlayWSURL: pluginOverlayWSURL,
+        isPluginCommercialTriggerMode: isPluginCommercialTriggerMode,
+        pluginCommercialTriggerFramework: pluginCommercialTriggerFramework,
         pluginCommercialTriggerWSURL: pluginCommercialTriggerWSURL,
+        isAnyPluginMode: isAnyPluginMode,
         isDebugMode: isDebugMode,
     }
 
@@ -513,8 +524,8 @@ function sendMessageToPlugins(type) {
                 setTimeout(() => {
                     removeElementsByClass('ytoc-main-video-message-alert');
                 }, 7000);
-            } else if (response.pluginOverlayAPIResponse.status === "error" && response.pluginOverlayAPIResponse.error) {
-                addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.error);
+            } else if (response.pluginOverlayAPIResponse.status !== "ok" && response.pluginOverlayAPIResponse.message) {
+                addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.message);
 
                 //TODO, add this to addMessageAlertToMainVideo
                 setTimeout(() => {
@@ -2972,17 +2983,19 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
         if (isDebugMode) console.log(message);
 
-        if (message.connectionState !== "connected") {
-            if (message.sender === "trigger-plugin" && isPluginCommercialTriggerMode) {
-                if (pluginCommercialTriggerIndicator) {
+        if (message.sender === "trigger-plugin" || message.sender === "both-plugin") {
+
+            if (message.connectionState !== "connected") {
+                if (message.connectionState === "failed") {
+                    totalFailedCommercialTriggerWSConnectAttempts++;
+                }
+                if (pluginCommercialTriggerIndicator && totalFailedCommercialTriggerWSConnectAttempts <= 3) {
                     pluginCommercialTriggerIndicator.textContent = message.connectionMessage;
                 }
-            } //TODO: add overlay and both
-
-            return;
-        }
-
-        if (isPluginCommercialTriggerMode) {
+                return;
+            } else {
+                totalFailedCommercialTriggerWSConnectAttempts = 0;
+            }
 
             if (message.payload.meta.display) {
                 if (pluginCommercialTriggerIndicator) {
@@ -3029,6 +3042,42 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 } else {
                     pluginCommercialTriggerDebugOverlay.innerText = message.payload.meta.debug;
                 }
+                console.log(message.payload.meta.debug);
+            }
+
+        } else if (message.sender === "overlay-plugin") {
+
+            let messageToDisplay = "Blank message from overlay plugin.";
+            let messageDisplayTime = 6000;
+
+            if (message.connectionState !== "connected") {
+                messageToDisplay = message.connectionMessage;
+                if (message.connectionState === "started") {
+                    totalFailedOverlayWSConnectAttempts = 0;
+                    messageDisplayTime = 2000;
+                }
+                if (message.connectionState === "failed") {
+                    totalFailedOverlayWSConnectAttempts++;
+                }
+            } else {
+                totalFailedOverlayWSConnectAttempts = 0;
+                if (message.payload.meta.display) {
+                    messageToDisplay = message.payload.meta.display;
+                }
+            }
+
+            //stop bugging user after a few failures
+            if (totalFailedOverlayWSConnectAttempts <= 3) {
+                removeElementsByClass('ytoc-main-video-message-alert');
+                addMessageAlertToMainVideo(messageToDisplay);
+
+                //TODO, add this to addMessageAlertToMainVideo
+                setTimeout(() => {
+                    removeElementsByClass('ytoc-main-video-message-alert');
+                }, messageDisplayTime);
+            }
+
+            if (isDebugMode && message.payload.meta.debug) {
                 console.log(message.payload.meta.debug);
             }
 

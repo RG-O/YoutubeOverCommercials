@@ -35,8 +35,9 @@ def custom_plugin_overlay():
         print("Extension Stopped")
 
     return jsonify({"status": "ok"})
-    # If error you would like to display over main video on browser:
-    # return jsonify({"status": "error", "error": "Error message goes here."})
+    # If error or info you would like to display over main video on browser:
+    # return jsonify({"status": "error", "message": "Error message goes here."})
+    # return jsonify({"status": "info", "message": "Informational message goes here."})
 
 @app.route("/ping", methods=["GET"])
 def ping():

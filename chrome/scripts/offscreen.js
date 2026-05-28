@@ -123,11 +123,9 @@ function launchPluginWSScript(payload) {
         //pluginWSScript.type = "module";
         document.body.appendChild(pluginWSScript);
         pluginWSScript.addEventListener('load', function () {
-            ws.initDetection(payload);
+            ws.initWSPlugins(payload);
         });
-    } else {
-        ws.initDetection(payload);
-    }
+    } //else do nothing because I start all the WSs on load
 }
 
 
