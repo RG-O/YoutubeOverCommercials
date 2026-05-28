@@ -4,8 +4,16 @@ import win32con
 import win32api
 import pyautogui
 import time
+import requests
+import os
+import subprocess
 
 from flask import Flask, request, jsonify
+
+is_vlc_http_api_control_mode = True
+vlc_http_api_auth = ("", "1234")
+my_file_path = "file:///C:/Users/user/Downloads/video.mp4"
+
 
 def find_window_by_title(partial_title):
     def enum_handler(hwnd, result):
@@ -19,6 +27,46 @@ def find_window_by_title(partial_title):
     win32gui.EnumWindows(enum_handler, result)
     return result[0] if result else None
 
+def find_vlc_exe():
+    possible_paths = [
+        r"C:\Program Files\VideoLAN\VLC\vlc.exe",
+        r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
+    ]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+
+    print("Could not find vlc.exe in Program Files or Program Files (x86).")
+
+def open_vlc_with_specific_file(file_path):
+    global vlc_http_api_auth
+
+    vlc_path = find_vlc_exe()
+
+    subprocess.Popen([
+        vlc_path,
+
+        # Main UI/interface: no normal VLC window controls
+        #"--intf", "dummy",
+        "--qt-start-minimized",
+        "--qt-minimal-view",
+
+        # Still enable HTTP remote control
+        "--extraintf", "http",
+        "--http-password", "1234",
+
+        # Optional quality-of-life flags
+        "--no-video-title-show",
+        "--no-qt-privacy-ask",
+        "--no-qt-error-dialogs",
+    ])
+
+    requests.get(
+        "http://localhost:8080/requests/status.json",
+        params={"command": "in_play", "input": file_path},
+        auth=vlc_http_api_auth
+    )
 
 def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
     # Get screen resolution
@@ -50,7 +98,7 @@ def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
         win32con.SWP_NOACTIVATE, #TODO: bring other one back?
     )
 
-    time.sleep(0.05) #TODO: is this necessary?
+    #time.sleep(0.05) #TODO: is this necessary?
 
     # # instantly removing TOPMOST status so user can easily minimize it, but keeping it on top of the fullscreen browser
     # win32gui.SetWindowPos(
@@ -193,6 +241,10 @@ app = Flask(__name__)
 
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
+    global is_vlc_http_api_control_mode
+    global vlc_http_api_auth
+    global my_file_path
+
     data = request.json
     request_type = data["type"]
 
@@ -205,15 +257,23 @@ def custom_plugin_overlay():
             window_title = "VLC"  # Change this to your target window
             hwnd = find_window_by_title(window_title)
             center_and_resize_window(hwnd, width_percent=90, height_percent=85)
-            time.sleep(0.5)
-            send_spacebar(hwnd)
+            if is_vlc_http_api_control_mode:
+                time.sleep(0.25)
+                requests.get("http://localhost:8080/requests/status.json?command=pl_play", auth=vlc_http_api_auth)
+            else:
+                time.sleep(0.5)
+                send_spacebar(hwnd)
             return jsonify({"status": "ok"})
         else:
             #TODO: somhow globally define hwnd
             window_title = "VLC"  # Change this to your target window
             hwnd = find_window_by_title(window_title)
-            send_spacebar(hwnd)
-            time.sleep(0.5)
+            if is_vlc_http_api_control_mode:
+                requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
+                time.sleep(0.25)
+            else:
+                send_spacebar(hwnd)
+                time.sleep(1)
             win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
             print("STOP overlay")
     elif request_type == "browser_fullscreen_state_change":
@@ -230,6 +290,11 @@ def custom_plugin_overlay():
             remove_topmost(hwnd, width_percent=90, height_percent=85)
             restore_borders(hwnd)
     elif request_type == "init":
+        if is_vlc_http_api_control_mode:
+            open_vlc_with_specific_file(my_file_path)
+            time.sleep(5) #todo: better way to wait?
+            requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
+
         window_title = "VLC"  # Change this to your target window
         hwnd = find_window_by_title(window_title)
         if hwnd is None:
@@ -243,6 +308,9 @@ def custom_plugin_overlay():
         hwnd = find_window_by_title(window_title)
         remove_topmost(hwnd, width_percent=90, height_percent=75)
         restore_borders(hwnd)
+
+        if is_vlc_http_api_control_mode:
+            requests.get("http://localhost:8080/requests/status.json?command=quit", auth=vlc_http_api_auth) #todo: should use pl_stop?
         print("Extension Stopped")
 
     return jsonify({"status": "ok"})

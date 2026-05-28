@@ -133,7 +133,7 @@ var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
 var isPluginOverlayMode;
-var pluginOverlayFramework = 'ws'; //777
+var pluginOverlayFramework = 'api'; //777
 var pluginOverlayAPIURL = 'http://localhost:64144'; //777
 var pluginOverlayWSURL = 'ws://localhost:64146'; //777
 var isPluginCommercialTriggerMode;
