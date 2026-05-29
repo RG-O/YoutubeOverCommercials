@@ -4,3 +4,4 @@
 /chrome/.vs
 *.task
 model/
+custom-plugins/examples/vlc-over-commercials/vlc_resume_times.json
