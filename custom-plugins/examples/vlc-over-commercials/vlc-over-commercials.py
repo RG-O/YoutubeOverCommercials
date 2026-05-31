@@ -231,7 +231,14 @@ def get_saved_resume_time(video_path):
     except Exception:
         return 0
 
-def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
+def position_and_resize_window(
+    hwnd,
+    width_percent=90,
+    height_percent=75,
+    vertical="middle",   # "top", "middle", "bottom"
+    horizontal="middle"  # "left", "middle", "right"
+):
+    print("hwnd = ", hwnd, ", ", "width_percent = ", width_percent, ", ", "height_percent = ", height_percent, ", ", "vertical = ", vertical, ", ", "horizontal = ", horizontal, ", ")
     # Get screen resolution
     screen_width = win32api.GetSystemMetrics(0)
     screen_height = win32api.GetSystemMetrics(1)
@@ -240,25 +247,39 @@ def center_and_resize_window(hwnd, width_percent=90, height_percent=75):
     target_width = int(screen_width * (width_percent / 100))
     target_height = int(screen_height * (height_percent / 100))
 
-    # Calculate centered position
-    x = (screen_width - target_width) // 2
-    y = (screen_height - target_height) // 2
+    print("screen_width = ", screen_width, ", ", "screen_height = ", screen_height, ", ", "target_width = ", target_width, ", ", "target_height = ", target_height)
 
-    # Restore window if minimized/maximized
+    # Calculate horizontal position
+    if horizontal == "left":
+        x = 0
+    elif horizontal == "right":
+        x = screen_width - target_width
+    else:  # "middle"
+        x = (screen_width - target_width) // 2
+
+    # Calculate vertical position
+    if vertical == "top":
+        y = 0
+    elif vertical == "bottom":
+        y = screen_height - target_height
+    else:  # "middle"
+        y = (screen_height - target_height) // 2
+
+    print("x = ", x, ", ", "y = ", y)
+
+    # Restore/show window without activating it
     # win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
     win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
     # Move and resize window
-
     win32gui.SetWindowPos(
         hwnd,
-        win32con.HWND_TOPMOST,  # Giving TOPMOST status so it shows over top of fullscreen browser
-        #win32con.HWND_TOP,
+        win32con.HWND_TOPMOST,  # Keeps window above fullscreen apps
         x,
         y,
         target_width,
         target_height,
-        win32con.SWP_NOACTIVATE, #TODO: bring other one back?
+        win32con.SWP_NOACTIVATE,
     )
 
     #time.sleep(0.05) #TODO: is this necessary?
@@ -419,7 +440,7 @@ def custom_plugin_overlay():
 
             if have_demensions_changed:
                 optimized_width_percentage, optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=overlay_video_width_percentage, max_height_percent=overlay_video_height_percentage)
-            center_and_resize_window(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage)
+            position_and_resize_window(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
             if is_vlc_http_api_control_mode:
                 time.sleep(0.5)
                 requests.get("http://localhost:8080/requests/status.json?command=pl_play", auth=vlc_http_api_auth) #todo: use force play pause instead?
