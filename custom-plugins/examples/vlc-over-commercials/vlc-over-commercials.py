@@ -490,6 +490,8 @@ def custom_plugin_overlay():
             )
             time.sleep(2) #todo: better way to wait or not have to wait at all?
             requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
+            time.sleep(0.2)
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE) #TODO: maybe do have everything show at the beginging and do this?
 
         window_title = "VLC"  # Change this to your target window
         hwnd = find_window_by_title(window_title)
