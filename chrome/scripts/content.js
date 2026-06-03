@@ -2972,6 +2972,14 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                     }
 
+                    //TODO: clean up this and directly above as this update logic is getting pretty complicated
+                    if (!result.shouldOverlayVideoSizeAndLocationAutoSet && isPluginOverlayMode) {
+                        overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                        overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                        videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                        videoOverlayHeight = result.videoOverlayHeight ?? 75;
+                    }
+
                 }
 
                 //removeElementsByClass('ytoc-main-video-message-alert');

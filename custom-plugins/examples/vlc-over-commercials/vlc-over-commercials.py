@@ -73,19 +73,20 @@ def open_vlc_with_specific_file(file_path):
         "--extraintf", "http",
         "--http-password", "1234",
 
-        "--qt-continue=1", # 2 will resume last watched location automatically? 1 will prompt?
+        "--qt-continue=2", # 2 will resume last watched location automatically? 1 will prompt?
 
         # Optional quality-of-life flags
         "--qt-notification=0",   # Never show media change popup
         "--no-video-title-show",
         "--no-qt-privacy-ask",
         "--no-qt-error-dialogs",
+        "--no-qt-updates-notif",
 
         "--no-one-instance", #needed to be able to close later? maybe it doesn't help?
         "--no-one-instance-when-started-from-file", #needed to be able to close later? maybe it doesn't help?
 
         #"--qt-pause-minimized=1", #pause when minimized. or maybe just "--qt-pause-minimized"
-        #"--loop", #don't use this causes it to not start minimized
+        "--loop", #doing this helps get resume last watched actually work
     ])
 
     requests.get(
@@ -136,6 +137,33 @@ def get_vlc_video_dimensions():
 
             if width and height:
                 return int(width), int(height)
+
+def wait_for_vlc_playing(timeout=60):
+    start = time.time()
+
+    last_displayed = None
+
+    while time.time() - start < timeout:
+        # TODO: move this two its own function and have fancy timeouts and failure states
+        response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth) #TODO: wait/retry if not succesful?
+        status = response.json()
+
+        if status["state"] != "playing":
+            print("playing false")
+            time.sleep(0.2)
+            continue
+
+        displayed = status.get("stats", {}).get("displayedpictures", 0)
+
+        if last_displayed is not None and displayed > last_displayed:
+            return True
+
+        print("displayed > last_displayed false")
+        last_displayed = displayed
+
+        time.sleep(0.2)
+
+    return False
 
 def calculate_largest_aspect_fit(max_width_percent=90, max_height_percent=75):
     screen_width = win32api.GetSystemMetrics(0)
@@ -442,7 +470,7 @@ def custom_plugin_overlay():
                 optimized_width_percentage, optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=overlay_video_width_percentage, max_height_percent=overlay_video_height_percentage)
             position_and_resize_window(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
             if is_vlc_http_api_control_mode:
-                time.sleep(0.5)
+                time.sleep(0.2)
                 requests.get("http://localhost:8080/requests/status.json?command=pl_play", auth=vlc_http_api_auth) #todo: use force play pause instead?
             else:
                 time.sleep(0.5)
@@ -456,7 +484,7 @@ def custom_plugin_overlay():
             hwnd = find_window_by_title(window_title)
             if is_vlc_http_api_control_mode:
                 requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
-                time.sleep(0.2)
+                #time.sleep(0.2)
             else:
                 send_spacebar(hwnd)
                 time.sleep(1)
@@ -481,26 +509,38 @@ def custom_plugin_overlay():
         if is_vlc_http_api_control_mode:
             open_vlc_with_specific_file(my_file_path)
             #requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
-            time.sleep(4) #todo: better way to wait or not have to wait at all?
-            resume_seconds = get_saved_resume_time(my_file_path)
-            requests.get(
-                "http://localhost:8080/requests/status.json",
-                params={"command": "seek", "val": resume_seconds},
-                auth=vlc_http_api_auth
-            )
-            time.sleep(2) #todo: better way to wait or not have to wait at all?
+            time.sleep(1) #todo: better way to wait or not have to wait at all?
+            print("waiting for playing")
+            wait_for_vlc_playing()
+            print("done waiting for playing")
             window_title = "VLC"  # Change this to your target window
-            hwnd = find_window_by_title(window_title) #TODO: move this up a little?
+            hwnd = find_window_by_title(window_title)
+            if hwnd is None:
+                return jsonify({"status": "error", "error": "No VLC window found."}) #TODO: update message
+            make_borderless(hwnd)
+            print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
+
+            time.sleep(0.2)
+
+            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early
+            time.sleep(0.2) #todo: better way to wait or not have to wait at all?
+            # resume_seconds = get_saved_resume_time(my_file_path)
+            # requests.get(
+            #     "http://localhost:8080/requests/status.json",
+            #     params={"command": "seek", "val": resume_seconds},
+            #     auth=vlc_http_api_auth
+            # )
+            #time.sleep(2) #todo: better way to wait or not have to wait at all?
+            
             requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
             time.sleep(0.2)
             win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE) #TODO: maybe do have everything show at the beginging and do this?
+            time.sleep(0.2)
+            position_and_resize_window(hwnd, width_percent=10, height_percent=10)
+            time.sleep(0.2)
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
-        window_title = "VLC"  # Change this to your target window
-        hwnd = find_window_by_title(window_title)
-        if hwnd is None:
-            return jsonify({"status": "error", "error": "No VLC window found."})
-        make_borderless(hwnd)
-        print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
+        
         print(data)
 
     elif request_type == "end":
