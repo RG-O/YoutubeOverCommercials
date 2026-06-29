@@ -63,6 +63,10 @@ chrome.storage.sync.get([
     'isDoubleClapOnlyReturnMode',
     'isPluginOverlayMode',
     'isPluginCommercialTriggerMode',
+    'pluginOverlayFramework',
+    'pluginOverlayAPIURL',
+    'pluginOverlayWSURL',
+    'pluginCommercialTriggerWSURL',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -108,6 +112,10 @@ chrome.storage.sync.get([
     optionsForm.isDoubleClapOnlyReturnMode.checked = result.isDoubleClapOnlyReturnMode ?? false;
     optionsForm.isPluginOverlayMode.checked = result.isPluginOverlayMode ?? false;
     optionsForm.isPluginCommercialTriggerMode.checked = result.isPluginCommercialTriggerMode ?? false;
+    optionsForm.pluginOverlayFramework.value = result.pluginOverlayFramework ?? 'api';
+    optionsForm.pluginOverlayAPIURL.value = result.pluginOverlayAPIURL ?? 'http://localhost:64144';
+    optionsForm.pluginOverlayWSURL.value = result.pluginOverlayWSURL ?? 'ws://localhost:64146';
+    optionsForm.pluginCommercialTriggerWSURL.value = result.pluginCommercialTriggerWSURL ?? 'ws://localhost:64145';
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
@@ -141,6 +149,11 @@ chrome.storage.sync.get([
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
         videoTypeRadios[i].addEventListener('change', toggleWithIDProfileSaveButtonVisability);
         videoTypeRadios[i].addEventListener('change', updateSaveProfileButtonsText);
+    }
+
+    const pluginOverlayFrameworkRadios = document.forms["optionsForm"].elements["pluginOverlayFramework"];
+    for (let i = 0, max = pluginOverlayFrameworkRadios.length; i < max; i++) {
+        pluginOverlayFrameworkRadios[i].addEventListener('change', updatePluginOverlayFramework);
     }
 
     setTextFieldsToSelectAll();
@@ -378,6 +391,10 @@ document.getElementById("save-button").onclick = function () {
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
             isPluginOverlayMode: optionsForm.isPluginOverlayMode.checked,
             isPluginCommercialTriggerMode: optionsForm.isPluginCommercialTriggerMode.checked,
+            pluginOverlayFramework: optionsForm.pluginOverlayFramework.value,
+            pluginOverlayAPIURL: optionsForm.pluginOverlayAPIURL.value,
+            pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
+            pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value,
         }, function () {
 
             let shouldDirectToMicConfig = false;
@@ -715,6 +732,7 @@ function runAllToggles() {
     enableSaveButton();
     setClapSensitivityRangeField();
     toggleDoubleClapUI();
+    updatePluginOverlayFramework();
 }
 
 
@@ -1052,4 +1070,15 @@ function enableSaveButton() {
     if (optionsForm.commercialDetectionMode.value !== 'auto-pixel-advanced-logo') {
         document.getElementById('save-button').disabled = false;
     } //else enabled by function above with successful ping
+}
+
+
+function updatePluginOverlayFramework() {
+    const apiSelected = document.getElementById("pluginOverlayFramework-api").checked;
+
+    document.getElementById("pluginOverlayAPIURL").disabled = !apiSelected;
+    document.getElementById("pull-button-pluginOverlayAPIURL").disabled = !apiSelected;
+
+    document.getElementById("pluginOverlayWSURL").disabled = apiSelected;
+    document.getElementById("pull-button-pluginOverlayWSURL").disabled = apiSelected;
 }

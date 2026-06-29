@@ -112,6 +112,18 @@
             <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">TODO: Description here.</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
+            <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
+                <div class="id-field-label">
+                    <label>WebSocket URL:</label>
+                </div>
+                <div class="id-input-row">
+                    <input type="text" name="pluginCommercialTriggerWSURL" id="pluginCommercialTriggerWSURL">
+                    <button id="pull-button-pluginCommercialTriggerWSURL" class="pull-id-button">
+                        &#128260;
+                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                    </button>
+                </div>
+            </div>
             <div id="custom-plugin-trigger-loading" class="loading-spinner"></div>
             <div id="custom-plugin-trigger-additional-setup" class="mode-how-to settings-box" style="display: none;">
                 <b>ADDITIONAL SETUP REQUIRED</b><br />
@@ -247,13 +259,24 @@
         </div>
         <div id="custom-plugin-overlay" class="id-field-wrapper settings-box">
             <div class="id-field-label">
-                <label>TODO - add radios for api or ws</label>
+                <label>API or WebSocket and URL:</label>
             </div>
-            <div class="id-input-row">
+            <div class="id-input-row" style="margin-bottom: 5px;">
+                <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
+                <label for="pluginOverlayFramework-api">API</label>
                 <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL">
                 <button id="pull-button-pluginOverlayAPIURL" class="pull-id-button">
-                    Test
-                    <span class="pull-id-tooltip">Ping API.</span>
+                    &#128260;
+                    <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                </button>
+            </div>
+            <div class="id-input-row">
+                <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
+                <label for="pluginOverlayFramework-ws">WS</label>
+                <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL">
+                <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">
+                    &#128260;
+                    <span class="pull-id-tooltip">Refresh plugin manifest.</span>
                 </button>
             </div>
         </div>

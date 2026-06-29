@@ -52,6 +52,7 @@ var pluginCommercialTriggerIndicator;
 var pluginCommercialTriggerDebugOverlay;
 var totalFailedCommercialTriggerWSConnectAttempts = 0;
 var totalFailedOverlayWSConnectAttempts = 0;
+var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -133,12 +134,11 @@ var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
 var isPluginOverlayMode;
-var pluginOverlayFramework = 'api'; //777
-var pluginOverlayAPIURL = 'http://localhost:64144'; //777
-var pluginOverlayWSURL = 'ws://localhost:64146'; //777
+var pluginOverlayFramework;
+var pluginOverlayAPIURL;
+var pluginOverlayWSURL;
 var isPluginCommercialTriggerMode;
-var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
-var pluginCommercialTriggerWSURL = 'ws://localhost:64145'; //777
+var pluginCommercialTriggerWSURL;
 var isAnyPluginMode;
 //TODO: Add user preference for spotify to have audio come in gradually
 
@@ -821,6 +821,10 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'isDoubleClapOnlyReturnMode',
                             'isPluginOverlayMode',
                             'isPluginCommercialTriggerMode',
+                            'pluginOverlayFramework',
+                            'pluginOverlayAPIURL',
+                            'pluginOverlayWSURL',
+                            'pluginCommercialTriggerWSURL',
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -836,7 +840,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false; //TODO: should I do this?
                                 isPluginOverlayMode = true; 
-                                isAnyPluginMode = true;
                             } else {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false;
@@ -860,8 +863,14 @@ chrome.runtime.onMessage.addListener(function (message) {
                             isPluginCommercialTriggerMode = result.isPluginCommercialTriggerMode ?? false;
                             if (commercialDetectionMode === 'custom-plugin-trigger') {
                                 isPluginCommercialTriggerMode = true;
+                            }
+                            if (isPluginOverlayMode || isPluginCommercialTriggerMode) {
                                 isAnyPluginMode = true;
                             }
+                            pluginOverlayFramework = result.pluginOverlayFramework ?? 'api';
+                            pluginOverlayAPIURL = result.pluginOverlayAPIURL ?? 'http://localhost:64144';
+                            pluginOverlayWSURL = result.pluginOverlayWSURL ?? 'ws://localhost:64146';
+                            pluginCommercialTriggerWSURL = result.pluginCommercialTriggerWSURL ?? 'ws://localhost:64145';
                             shouldOverlayVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
                             if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
                                 shouldOverlayVideoSizeAndLocationAutoSet = false;
@@ -2839,6 +2848,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 'isDoubleClapOnlyReturnMode',
                 //'isPluginOverlayMode',
                 //'isPluginCommercialTriggerMode',
+                //'pluginOverlayFramework',
+                //'pluginOverlayAPIURL',
+                //'pluginOverlayWSURL',
+                //'pluginCommercialTriggerWSURL',
             ], (result) => {
 
                 //set them to default if not set by user yet

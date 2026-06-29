@@ -63,6 +63,10 @@ button {
     cursor: pointer;
 }
 
+    button:disabled {
+        cursor: not-allowed;
+    }
+
 .button-hidden {
     display: none;
 }
@@ -80,11 +84,15 @@ button {
     background: rgb(18, 56, 77, 0.1);
 }
 
+.plugin-url-wrapper {
+    background: rgb(18, 56, 77, 0.1);
+}
+
 .id-field-label {
     margin-bottom: 5px;
 }
 
-.id-field-wrapper input {
+.id-field-wrapper input, .plugin-url-wrapper input {
     width: 100%;
     -moz-box-sizing: border-box;
     -webkit-box-sizing: border-box;
@@ -119,9 +127,9 @@ button {
     z-index: 999;
 }
 
-.pull-id-button:hover .pull-id-tooltip {
-    visibility: visible;
-}
+    .pull-id-button:hover:not([disabled]) .pull-id-tooltip {
+        visibility: visible;
+    }
 
 .auto-dimensions-field-wrapper {
     display: block;

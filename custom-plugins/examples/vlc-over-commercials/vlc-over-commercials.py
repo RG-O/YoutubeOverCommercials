@@ -554,11 +554,11 @@ def custom_plugin_overlay():
         if is_vlc_http_api_control_mode:
             save_video_resume_time(my_file_path)
             requests.get("http://localhost:8080/requests/status.json?command=pl_stop", auth=vlc_http_api_auth) #todo: should use quit?
-            close_window_by_hwnd(hwnd) 
-            #TODO: do I use this instead?
-            # if vlc_process and vlc_process.poll() is None:
-            #     vlc_process.terminate()
-            #     print("vlc_process.terminate()")
+            close_window_by_hwnd(hwnd)
+            #TODO: do I use this instead? or both?
+            if vlc_process and vlc_process.poll() is None:
+                vlc_process.terminate()
+                print("vlc_process.terminate()")
             #TODO: close and capture stop time?
 
         print("Extension Stopped")
