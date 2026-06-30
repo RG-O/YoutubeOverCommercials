@@ -4,7 +4,19 @@ var profiles = {};
 var gridCells;
 var pipGridCells;
 var hasPreviouslyInstalledCompanionApp;
+var isCompanionAppCallSuccess = true;
 var hasGrantedMicAccess = false;
+var hasPreviouslyInstalledPluginTrigger;
+var hasPreviouslyInstalledPluginOverlay;
+var isPluginTriggerCallSuccess = true;
+var isPluginOverlayCallSuccess = true;
+var hasAlreadyCalledPluginOverlyaManifestViaAPI = false;
+var pluginTriggerManifest;
+var pluginOverlayManifest;
+var pluginSharedManifest;
+var pluginTriggerPreferences;
+var pluginOverlayPreferences;
+var pluginSharedPreferences;
 
 //variables that currently cannot be updated after initiation of the extension. declaring them here to see if user updates them to see if I should tell them to refresh.
 var overlayVideoType; //note: this variable can sorta change
@@ -67,6 +79,11 @@ chrome.storage.sync.get([
     'pluginOverlayAPIURL',
     'pluginOverlayWSURL',
     'pluginCommercialTriggerWSURL',
+    'hasPreviouslyInstalledPluginTrigger',
+    'hasPreviouslyInstalledPluginOverlay',
+    'pluginTriggerPreferences',
+    'pluginOverlayPreferences',
+    'pluginSharedPreferences',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -131,6 +148,11 @@ chrome.storage.sync.get([
     const firstCommercialTimerDate = result.firstCommercialTimerDate || today;
     const lastCommercialTimerDate = result.lastCommercialTimerDate || today;
     hasPreviouslyInstalledCompanionApp = result.hasPreviouslyInstalledCompanionApp ?? false;
+    hasPreviouslyInstalledPluginTrigger = result.hasPreviouslyInstalledPluginTrigger ?? false;
+    hasPreviouslyInstalledPluginOverlay = result.hasPreviouslyInstalledPluginOverlay ?? false;
+    pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+    pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+    pluginSharedPreferences = result.pluginSharedPreferences ?? {};
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -139,6 +161,7 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleAutoDimensionsFieldVisability);
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
         modeRadios[i].addEventListener('change', pingCompanionApp);
+        modeRadios[i].addEventListener('change', getPluginTriggerManifest);
         modeRadios[i].addEventListener('change', enableSaveButton);
         modeRadios[i].addEventListener('change', toggleDoubleClapUI);
     }
@@ -149,11 +172,14 @@ chrome.storage.sync.get([
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
         videoTypeRadios[i].addEventListener('change', toggleWithIDProfileSaveButtonVisability);
         videoTypeRadios[i].addEventListener('change', updateSaveProfileButtonsText);
+        videoTypeRadios[i].addEventListener('change', getPluginOverlyaManifest);
+        videoTypeRadios[i].addEventListener('change', enableSaveButton);
     }
 
     const pluginOverlayFrameworkRadios = document.forms["optionsForm"].elements["pluginOverlayFramework"];
     for (let i = 0, max = pluginOverlayFrameworkRadios.length; i < max; i++) {
         pluginOverlayFrameworkRadios[i].addEventListener('change', updatePluginOverlayFramework);
+        pluginOverlayFrameworkRadios[i].addEventListener('change', getPluginOverlyaManifest);
     }
 
     setTextFieldsToSelectAll();
@@ -352,6 +378,25 @@ document.getElementById("save-button").onclick = function () {
             overlayHostName = 'www.youtube.com';
         }
 
+        //TODO: add isPluginOverlayMode check to here
+        if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' && pluginOverlayManifest) {
+            const preferences = {};
+            const pluginOverlayManifestContainerElm = document.getElementById('custom-plugin-overlay-manifest-container');
+
+            pluginOverlayManifestContainerElm.querySelectorAll("[data-key]").forEach(input => {
+                if (input.type === "checkbox") {
+                    preferences[input.dataset.key] = input.checked;
+                } else {
+                    preferences[input.dataset.key] = input.value;
+                }
+            });
+
+            pluginOverlayPreferences = {
+                id: pluginOverlayManifest.id,
+                preferences: preferences,
+            }
+        }
+
         //save the values to the users chrome profile, close the extension window, and then give them message telling them they might need to refresh
         chrome.storage.sync.set({
             overlayVideoType: optionsForm.overlayVideoType.value,
@@ -395,6 +440,9 @@ document.getElementById("save-button").onclick = function () {
             pluginOverlayAPIURL: optionsForm.pluginOverlayAPIURL.value,
             pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
             pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value,
+            pluginTriggerPreferences: pluginTriggerPreferences,
+            pluginOverlayPreferences: pluginOverlayPreferences,
+            pluginSharedPreferences: pluginSharedPreferences,
         }, function () {
 
             let shouldDirectToMicConfig = false;
@@ -733,6 +781,7 @@ function runAllToggles() {
     setClapSensitivityRangeField();
     toggleDoubleClapUI();
     updatePluginOverlayFramework();
+    getPluginManifests();
 }
 
 
@@ -1010,6 +1059,7 @@ function grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, t
 
 function pingCompanionApp() {
     if (optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo') {
+        isCompanionAppCallSuccess = false;
         document.getElementById('companion-app-loading').style.display = 'block';
         document.getElementById('save-button').disabled = true;
         document.getElementById('companion-app-ping-error').style.display = 'none'; //here for when retriggered from error
@@ -1029,6 +1079,7 @@ function pingCompanionApp() {
 
 
 function displayPingCompanionAppSuccess(version) {
+    isCompanionAppCallSuccess = true;
     document.getElementById('companion-app-loading').style.display = 'none';
     document.getElementById('companion-app-additional-setup').style.display = 'none';
     document.getElementById('companion-app-ping-error').style.display = 'none';
@@ -1036,7 +1087,7 @@ function displayPingCompanionAppSuccess(version) {
     document.getElementById('companion-app-ping-success').textContent = `Verified Advanced Logo Analyzer companion app version ${version} (latest) is running properly on this machine.`;
     document.getElementById('companion-app-ping-success').style.display = 'block';
     document.getElementById('companion-app-instructions').style.display = 'block';
-    document.getElementById('save-button').disabled = false;
+    enableSaveButton();
 
     if (!hasPreviouslyInstalledCompanionApp) {
         //setting values to recommended settings for this mode //TODO: better way for UX for this?
@@ -1051,6 +1102,7 @@ function displayPingCompanionAppSuccess(version) {
 
 
 function displayPingCompanionAppError() {
+    isCompanionAppCallSuccess = false;
     //TODO: maybe let users save with warning instead of blocking them
     document.getElementById('companion-app-loading').style.display = 'none';
     document.getElementById('companion-app-ping-success').style.display = 'none';
@@ -1066,10 +1118,116 @@ function displayPingCompanionAppError() {
 }
 
 
+function getPluginManifests() {
+    if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay') {
+        getPluginOverlyaManifest();
+    }
+
+    if (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger') {
+        getPluginTriggerManifest();
+    }
+}
+
+
+function getPluginOverlyaManifest() {
+    if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay') {
+        isPluginOverlayCallSuccess = false;
+        document.getElementById('save-button').disabled = true;
+        document.getElementById('custom-plugin-overlay-loading').style.display = 'block';
+        document.getElementById('custom-plugin-overlay-manifest-error').style.display = 'none'; //here for when retriggered from error
+
+        if (optionsForm.pluginOverlayFramework.value === 'api' && !hasAlreadyCalledPluginOverlyaManifestViaAPI) {
+            hasAlreadyCalledPluginOverlyaManifestViaAPI = true;
+            getPluginOverlyaManifestViaAPI();
+        } else {
+            //do something
+        }
+    }
+}
+
+
+function getPluginOverlyaManifestViaAPI() {
+    fetch(optionsForm.pluginOverlayAPIURL.value + "/plugin-manifest")
+        .then(response => response.json())
+        .then((response) => {
+            displayPluginOverlyaManifestSuccess(response);
+        })
+        .catch((error) => {
+            console.log(error);
+            displayPluginOverlyaManifestError();
+        });
+}
+
+
+function displayPluginOverlyaManifestSuccess(manifest) {
+    pluginOverlayManifest = manifest;
+
+    isPluginOverlayCallSuccess = true;
+    document.getElementById('custom-plugin-overlay-loading').style.display = 'none';
+    document.getElementById('custom-plugin-overlay-additional-setup').style.display = 'none';
+    document.getElementById('custom-plugin-overlay-manifest-error').style.display = 'none';
+    document.getElementById('custom-plugin-overlay-instructions').style.display = 'block';
+    enableSaveButton();
+
+    const pluginOverlayManifestContainerElm = document.getElementById('custom-plugin-overlay-manifest-container');
+    pluginOverlayManifestContainerElm.style.display = 'block';
+
+    //clearing preferences if different plugin used last time.
+    pluginOverlayPreferences = (pluginOverlayPreferences.id === pluginOverlayManifest.id) ? pluginOverlayPreferences : {};
+    renderPluginPreferences(pluginOverlayManifestContainerElm, pluginOverlayManifest, pluginOverlayPreferences);
+
+    if (!hasPreviouslyInstalledPluginOverlay) {
+        //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledPluginOverlay = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledPluginOverlay: hasPreviouslyInstalledPluginOverlay });
+    }
+}
+
+
+function displayPluginOverlyaManifestError() {
+    isPluginOverlayCallSuccess = false;
+    //TODO: maybe let users save with warning instead of blocking them
+    document.getElementById('custom-plugin-overlay-loading').style.display = 'none';
+    document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
+    document.getElementById('custom-plugin-overlay-instructions').style.display = 'none';
+
+    if (hasPreviouslyInstalledPluginOverlay) {
+        document.getElementById('custom-plugin-overlay-manifest-error').style.display = 'block';
+        //document.getElementById('custom-plugin-overlay-additional-setup').style.display = 'none'; //777
+        document.getElementById('custom-plugin-overlay-additional-setup').style.display = 'block'; //777
+    } else {
+        document.getElementById('custom-plugin-overlay-manifest-error').style.display = 'none';
+        document.getElementById('custom-plugin-overlay-additional-setup').style.display = 'block';
+    }
+}
+
+
+function getPluginTriggerManifest() {
+    if (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger') {
+        getPluginTriggerManifestViaWS();
+    }
+}
+
+
+function getPluginTriggerManifestViaWS() {
+
+}
+
+
+function canEnableSaveButton() {
+    return isCompanionAppCallSuccess && isPluginTriggerCallSuccess && isPluginOverlayCallSuccess;
+}
+
+
+function doesMakeExternalCall() {
+    return optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo' || optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.overlayVideoType.value === 'custom-plugin-overlay';
+}
+
+
 function enableSaveButton() {
-    if (optionsForm.commercialDetectionMode.value !== 'auto-pixel-advanced-logo') {
+    if (!doesMakeExternalCall() || canEnableSaveButton()) {
         document.getElementById('save-button').disabled = false;
-    } //else enabled by function above with successful ping
+    }
 }
 
 
@@ -1081,4 +1239,115 @@ function updatePluginOverlayFramework() {
 
     document.getElementById("pluginOverlayWSURL").disabled = apiSelected;
     document.getElementById("pull-button-pluginOverlayWSURL").disabled = apiSelected;
+}
+
+
+function renderPluginPreferences(container, manifest, preferences = {}) {
+    //TODO: rename various variables
+    const savedValues = preferences.preferences ?? {};
+
+    if (manifest.secondaryColor) {
+        const { r, g, b } = hexToRgb(manifest.secondaryColor);
+        if (!isLightColor(r, g, b)) {
+            container.style.color = '#000' //white
+        }
+    }
+    container.style.backgroundColor = manifest.secondaryColor ?? "#dadcdc"; //greyblue
+
+    const title = container.querySelector("#plugin-title");
+    title.textContent = manifest.name;
+    title.style.color = manifest.primaryColor ?? "#fff"; //black
+
+    const version = container.querySelector("#plugin-version");
+    version.textContent = manifest.version;
+
+    const description = container.querySelector("#plugin-description");
+    if (manifest.description) {
+        description.textContent = manifest.description;
+    } else {
+        description.remove();
+    }
+
+    const settings = container.querySelector("#plugin-settings");
+    if (manifest.preferences) {
+        const settingsHeader = container.querySelector("#plugin-settings-header");
+        settingsHeader.textContent = manifest.name + " Settings:"
+
+        manifest.preferences.forEach(field => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "general-field";
+
+            const label = document.createElement("label");
+            label.textContent = field.label;
+
+            let input;
+
+            switch (field.type) {
+                case "text":
+                case "number":
+                    input = document.createElement("input");
+                    input.type = field.type;
+                    input.value = savedValues[field.key] ?? field.default ?? "";
+                    break;
+
+                case "checkbox":
+                    input = document.createElement("input");
+                    input.type = "checkbox";
+                    input.checked = savedValues[field.key] ?? field.default ?? false;
+                    break;
+
+                case "select":
+                    input = document.createElement("select");
+                    field.options.forEach(opt => {
+                        const o = document.createElement("option");
+                        o.value = opt.value;
+                        o.textContent = opt.label;
+                        input.appendChild(o);
+                    });
+                    input.value = savedValues[field.key] ?? field.default;
+                    break;
+
+                case "textarea":
+                    input = document.createElement("textarea");
+                    input.value = savedValues[field.key] ?? field.default ?? "";
+                    break;
+
+                //TODO: add dropdown
+            }
+
+            input.dataset.key = field.key;
+
+            wrapper.appendChild(label);
+            if (field.description) {
+                const description = document.createElement("div");
+                description.className = "note";
+                description.textContent = field.description;
+                wrapper.appendChild(description);
+            }
+            wrapper.appendChild(input);
+            settings.appendChild(wrapper);
+        });
+    } else {
+        settings.remove();
+    }
+}
+
+
+function hexToRgb(hex) {
+    hex = hex.replace(/^#/, "");
+
+    if (hex.length === 3) {
+        hex = hex.split("").map(c => c + c).join("");
+    }
+
+    return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16)
+    };
+}
+
+
+function isLightColor(r, g, b) {
+    return (r * 0.299 + g * 0.587 + b * 0.114) > 150
 }

@@ -507,6 +507,7 @@ def custom_plugin_overlay():
 
     elif request_type == "init":
         if is_vlc_http_api_control_mode:
+            my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
             open_vlc_with_specific_file(my_file_path)
             #requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
             time.sleep(1) #todo: better way to wait or not have to wait at all?
@@ -565,8 +566,26 @@ def custom_plugin_overlay():
 
     return jsonify({"status": "ok"})
 
-
-    
+@app.route("/plugin-manifest", methods=["GET"])
+def plugin_manifest():
+    return jsonify({
+        "name": "VLC Over Commercials",
+        "id": "vlc-over-commercials",
+        "version": "1.0.0",
+        "description": "This plugin will automatically play VLC over commercials. Have latest version of VLC installed and closed before initiating.", #TODO: Update this.
+        "primaryColor": "#E85E00",
+        "secondaryColor": "#f2c7aa",
+        "capabilities": ["overlay"],
+        "preferences": [
+            {
+                "key": "url",
+                "label": "Video URL",
+                "description": "This can be a stream URL or a local file URL (E.g. file:///C:/Users/user/Downloads/video.mp4)",
+                "type": "text",
+                "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
+            }
+        ]
+    })
 
 @app.route("/ping", methods=["GET"])
 def ping():

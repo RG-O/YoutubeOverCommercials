@@ -132,7 +132,7 @@
                 <br />
                 TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
             </div>
-            <div id="custom-plugin-trigger-ping-error" class="error-box settings-box" style="display: none;">
+            <div id="custom-plugin-trigger-manifest-error" class="error-box settings-box" style="display: none;">
                 <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
                 <div>
                     TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
@@ -155,7 +155,7 @@
             <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
             <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
         </div>
-        <div id="yt-playlist" class="id-field-wrapper settings-box">
+        <div id="yt-playlist" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Playlist ID:</label>
             </div>
@@ -172,7 +172,7 @@
             <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
             <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
         </div>
-        <div id="yt-video" class="id-field-wrapper settings-box">
+        <div id="yt-video" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Video ID:</label>
             </div>
@@ -189,7 +189,7 @@
             <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
             <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
         </div>
-        <div id="yt-live" class="id-field-wrapper settings-box">
+        <div id="yt-live" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Live Video ID:</label>
             </div>
@@ -206,7 +206,7 @@
             <input type="radio" id="overlayVideoType-spotify" name="overlayVideoType" value="spotify">
             <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
         </div>
-        <div id="spotify" class="id-field-wrapper settings-box">
+        <div id="spotify" class="id-field-wrapper blue-settings-box settings-box">
             Will prompt you to select playlist from Spotify.<br />
             <span style="color: red;">Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.</span>
         </div>
@@ -215,7 +215,7 @@
             <input type="radio" id="overlayVideoType-other-tabs" name="overlayVideoType" value="other-tabs">
             <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 250px; top: -205px; left: -120px;">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
         </div>
-        <div id="other-tabs" class="id-field-wrapper settings-box">
+        <div id="other-tabs" class="id-field-wrapper blue-settings-box settings-box">
             Will mute/unmute audio playing from other tabs.
         </div>
 
@@ -223,7 +223,7 @@
             <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
             <label class="video-type-label" for="overlayVideoType-other-video">Any Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 240px; top: -160px; left: -110px;">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
-        <div id="other-video" class="id-field-wrapper settings-box">
+        <div id="other-video" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Page with Video or MP4 File URL:</label>
             </div>
@@ -240,7 +240,7 @@
             <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
             <label class="video-type-label" for="overlayVideoType-other-live">Any Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 280px; top: -270px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below! Doesn't work from all websites. Troubleshooting Tips: Overlay stream doesn't mute/unmute? - Try checking "Non-YT Video Troubleshoot" toggle in advanced settings, refreshing, and trying again. Overlay stream is zoomed out or not centered within its window? -  Try checking "Non-YT Video Zoom" toggle in advanced settings, refreshing, and trying again. Overlay stream doesn't load at all? - Try finding and installing an ignore x-frame options/header browser extension (at your own risk), refreshing, and trying again.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
-        <div id="other-live" class="id-field-wrapper settings-box">
+        <div id="other-live" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Page with Stream URL:</label>
             </div>
@@ -257,27 +257,57 @@
             <input type="radio" id="overlayVideoType-custom-plugin-overlay" name="overlayVideoType" value="custom-plugin-overlay">
             <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">TODO: add description here.</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
-        <div id="custom-plugin-overlay" class="id-field-wrapper settings-box">
-            <div class="id-field-label">
-                <label>API or WebSocket and URL:</label>
+        <div id="custom-plugin-overlay" class="id-field-wrapper">
+            <div class="blue-settings-box settings-box">
+                <div class="id-field-label">
+                    <label>API or WebSocket and URL:</label>
+                </div>
+                <div class="id-input-row" style="margin-bottom: 5px;">
+                    <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
+                    <label for="pluginOverlayFramework-api">API</label>
+                    <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL">
+                    <button id="pull-button-pluginOverlayAPIURL" class="pull-id-button">
+                        &#128260;
+                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                    </button>
+                </div>
+                <div class="id-input-row">
+                    <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
+                    <label for="pluginOverlayFramework-ws">WS</label>
+                    <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL">
+                    <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">
+                        &#128260;
+                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                    </button>
+                </div>
             </div>
-            <div class="id-input-row" style="margin-bottom: 5px;">
-                <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
-                <label for="pluginOverlayFramework-api">API</label>
-                <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL">
-                <button id="pull-button-pluginOverlayAPIURL" class="pull-id-button">
-                    &#128260;
-                    <span class="pull-id-tooltip">Refresh plugin manifest.</span>
-                </button>
+            <div id="custom-plugin-overlay-loading" class="loading-spinner"></div>
+            <div id="custom-plugin-overlay-additional-setup" class="mode-how-to settings-box" style="display: none;">
+                <b>ADDITIONAL SETUP REQUIRED</b><br />
+                <br />
+                TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
+                <br />
+                TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
             </div>
-            <div class="id-input-row">
-                <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
-                <label for="pluginOverlayFramework-ws">WS</label>
-                <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL">
-                <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">
-                    &#128260;
-                    <span class="pull-id-tooltip">Refresh plugin manifest.</span>
-                </button>
+            <div id="custom-plugin-overlay-manifest-error" class="error-box settings-box" style="display: none;">
+                <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
+                <div>
+                    TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                </div>
+            </div>
+            <div id="custom-plugin-overlay-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
+                <div class="plugin-title-container">
+                    <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
+                    <span id="plugin-version" class="note">Plugin Version</span>
+                </div>
+                <div id="plugin-description" class="plugin-description"></div>
+                <div id="plugin-settings" class="plugin-settings">
+                    <div class="plugin-settings-header"><b id="plugin-settings-header"></b></div>
+                </div>
+            </div>
+            <div id="custom-plugin-overlay-instructions" class="mode-how-to settings-box" style="display: none;">
+                <b>HOW TO USE:</b><br />
+                TODO: Update all of this. Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
             </div>
         </div>
 

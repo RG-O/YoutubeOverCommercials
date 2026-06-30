@@ -81,7 +81,6 @@ button {
 
 .id-field-wrapper {
     display: none;
-    background: rgb(18, 56, 77, 0.1);
 }
 
 .plugin-url-wrapper {
@@ -276,6 +275,10 @@ button {
     padding: 5px;
 }
 
+.blue-settings-box {
+    background: rgb(18, 56, 77, 0.1);
+}
+
 .success-box {
     background: rgb(0, 255, 0, 0.1);
 }
@@ -464,6 +467,26 @@ datalist {
     .color-difference-demo-table .color-difference-cell-blue-shift {
         color: rgb(18, 56, 61);
     }
+
+.plugin-manifest-container input {
+    float: none;
+    width: auto;
+}
+
+.plugin-title-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.plugin-description {
+    margin-bottom: 18px;
+}
+
+.plugin-settings-header {
+    margin-bottom: 9px;
+}
 
 /*----- pixel-select-instructions.html specific styling below -----*/
 .overlay-video {

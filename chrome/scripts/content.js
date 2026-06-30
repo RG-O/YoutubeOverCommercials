@@ -140,6 +140,9 @@ var pluginOverlayWSURL;
 var isPluginCommercialTriggerMode;
 var pluginCommercialTriggerWSURL;
 var isAnyPluginMode;
+var pluginTriggerPreferences;
+var pluginOverlayPreferences;
+var pluginSharedPreferences;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -496,6 +499,9 @@ function sendMessageToPlugins(type) {
         pluginCommercialTriggerWSURL: pluginCommercialTriggerWSURL,
         isAnyPluginMode: isAnyPluginMode,
         isDebugMode: isDebugMode,
+        pluginTriggerPreferences: pluginTriggerPreferences,
+        pluginOverlayPreferences: pluginOverlayPreferences,
+        pluginSharedPreferences: pluginSharedPreferences,
     }
 
     const payload = {
@@ -825,6 +831,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pluginOverlayAPIURL',
                             'pluginOverlayWSURL',
                             'pluginCommercialTriggerWSURL',
+                            'pluginTriggerPreferences',
+                            'pluginOverlayPreferences',
+                            'pluginSharedPreferences',
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -907,6 +916,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isDoubleClapOnlyReturnMode = false;
                             }
                             clapSensitivity = result.clapSensitivity ?? 40;
+                            pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+                            pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+                            pluginSharedPreferences = result.pluginSharedPreferences ?? {};
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -1366,7 +1378,7 @@ function captureOriginalPixelColor(selectedPixel) {
 
         logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
         //deciding whether to set text as white or black based on background color
-        if ((originalPixelColor.r * 0.299 + originalPixelColor.g * 0.587 + originalPixelColor.b * 0.114) > 150) {
+        if (isLightColor(originalPixelColor.r, originalPixelColor.g, originalPixelColor.b)) {
             logoBox.style.color = "rgba(0, 0, 0, 1)";
         } else {
             logoBox.style.color = "rgba(255, 255, 255, 1)";
@@ -1597,6 +1609,11 @@ function getPixelColor(coordinates) {
 
     });
 
+}
+
+
+function isLightColor(r, g, b) {
+    return (r * 0.299 + g * 0.587 + b * 0.114) > 150
 }
 
 
@@ -2852,6 +2869,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 //'pluginOverlayAPIURL',
                 //'pluginOverlayWSURL',
                 //'pluginCommercialTriggerWSURL',
+                'pluginTriggerPreferences',
+                'pluginOverlayPreferences',
+                'pluginSharedPreferences',
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -2879,6 +2899,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     isDoubleClapOnlyReturnMode = false;
                 }
                 clapSensitivity = result.clapSensitivity ?? 40;
+                pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+                pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+                pluginSharedPreferences = result.pluginSharedPreferences ?? {};
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';

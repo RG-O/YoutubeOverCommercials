@@ -39,6 +39,27 @@ def custom_plugin_overlay():
     # return jsonify({"status": "error", "message": "Error message goes here."})
     # return jsonify({"status": "info", "message": "Informational message goes here."})
 
+@app.route("/plugin-manifest", methods=["GET"])
+def plugin_manifest():
+    return jsonify({
+        "name": "My Overlay Plugin",
+        "id": "my-overlay-plugin", # Must be unique
+        "version": "1.0.0",
+        "description": "My overlay plugin description.", # Optional
+        "primaryColor": "#12384d", # Optional
+        "secondaryColor": "#dadcdc", # Optional
+        "capabilities": ["overlay"],
+        "preferences": [
+            {
+                "key": "volume",
+                "label": "Volume",
+                "description": "This sets the volume.", # Optional
+                "type": "number",
+                "default": 50, # Optional
+            } #TODO: add more example preferences to template
+        ] # Optional
+    })
+
 @app.route("/ping", methods=["GET"])
 def ping():
     print("ping")
