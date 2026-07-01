@@ -28,6 +28,10 @@ async def handle_message(ws, msg):
 
     message_type = msg["type"]
 
+    if message_type == "plugin_manifest":
+        print("Plugin Manifest Requested. Sending Manifest.")
+        await send_manifest(ws)
+
     if message_type == "init":
         print(msg)
 
@@ -45,9 +49,6 @@ async def handle_message(ws, msg):
 
         print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
 
-    elif message_type == "end": #TODO: is this needed or can I go by disconnect?
-        print("Extension Stopped")
-
 async def send_status(ws, display, debug):
     try:
         await ws.send(json.dumps({
@@ -56,8 +57,82 @@ async def send_status(ws, display, debug):
             "data": {},
             "meta": {
                 "display": display,
-                "debug": debug
-            }
+                "debug": debug,
+            },
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_status send stopped: client disconnected")
+
+async def send_manifest(ws):
+    try:
+        await ws.send(json.dumps({
+            "type": "plugin_manifest",
+            "timestamp": time.time(),
+            "data": {
+                "name": "My Overlay Plugin (WS)",
+                "id": "my-overlay-plugin-ws", # Must be unique
+                "version": "1.0.0",
+                "description": "My overlay plugin description.", # Optional
+                "primaryColor": "#12384d", # Optional
+                "secondaryColor": "#dadcdc", # Optional
+                "capabilities": ["overlay"],
+                "preferences": [
+                    {
+                        "key": "text-field-example",
+                        "label": "Text",
+                        "description": "Example of a text field.", # Optional
+                        "type": "text",
+                        "default": "Default Text", # Optional
+                    },
+                    {
+                        "key": "number-field-example",
+                        "label": "Number",
+                        "description": "Example of a number field.", # Optional
+                        "type": "number",
+                        "default": 50, # Optional
+                    },
+                    {
+                        "key": "checkbox-field-example",
+                        "label": "Checkbox",
+                        "description": "Example of a checkbox field.", # Optional
+                        "type": "checkbox",
+                        "default": False, # Optional
+                    },
+                    {
+                        "key": "dropdown-field-example",
+                        "label": "Dropdown",
+                        "description": "Example of a dropdown field.", # Optional
+                        "type": "select",
+                        "options": [
+                            { "label": "Value 1", "value": "value-1" },
+                            { "label": "Value 2", "value": "value-2" },
+                        ],
+                        "default": "value-1",
+                    },
+                    {
+                        "key": "radio-field-example",
+                        "label": "Radio",
+                        "description": "Example of a radio field.", # Optional
+                        "type": "radio",
+                        "options": [
+                            { "label": "Value 1", "value": "value-1" },
+                            { "label": "Value 2", "value": "value-2" },
+                        ],
+                        "default": "value-2",
+                    },
+                    {
+                        "key": "textarea-field-example",
+                        "label": "Text Area",
+                        "description": "Example of a text area field.", # Optional
+                        "type": "textarea",
+                        "default": "Default Text", # Optional
+                    },
+                ], # Optional
+            },
+            "meta": {
+                "display": "Sending Manifest",
+                "debug": "Sending Manifest",
+            },
         }))
     except websockets.exceptions.ConnectionClosed:
         print("send_status send stopped: client disconnected")

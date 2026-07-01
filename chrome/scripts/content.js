@@ -19,7 +19,8 @@ var selectedPixel = null;
 var isAutoModeFirstCommercial = true;
 var mismatchCount = 0;
 var matchCount = 0;
-var cooldownCountRemaining = 8; //set to 8 for an initial cooldown so video won't display right away
+var cooldownCountRemaining = 10; //set to 10 for an initial cooldown so video won't display right away
+var utilityCooldownTime = 10;
 var monitorIntervalID;
 var originalPixelColor;
 var windowDimensions;
@@ -53,6 +54,7 @@ var pluginCommercialTriggerDebugOverlay;
 var totalFailedCommercialTriggerWSConnectAttempts = 0;
 var totalFailedOverlayWSConnectAttempts = 0;
 var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
+var havePluginsBeenInitiated = false;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -442,22 +444,30 @@ function potentiallyIntrusiveSetup() {
 
 function pluginCommercialTriggerInitiation() {
     initiatePluginCommercialTriggerIndicator();
-
-    sendMessageToPlugins("init");
-
+    if (!havePluginsBeenInitiated) {
+        havePluginsBeenInitiated = true; //TODO: have this be smarter and know if either initiations were not successful
+        sendMessageToPlugins("init");
+    }
     document.addEventListener('fullscreenchange', fullscreenChanged); //TODO: do this here?
     window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 }
 
 
 function pluginOverlayInitiation() {
-    sendMessageToPlugins("init");
+    if (!havePluginsBeenInitiated) {
+        havePluginsBeenInitiated = true; //TODO: have this be smarter and know if either initiations were not successful
+        sendMessageToPlugins("init");
+    }
     window.addEventListener('beforeunload', pluginOverlayEnd);
 }
 
 
 function pluginOverlayEnd() {
-    sendMessageToPlugins("end");
+    if (pluginOverlayFramework === 'api') {
+        sendMessageToPlugins("end");
+    } else {
+        closeChromeOffscreenDoc();
+    }
 }
 
 
@@ -513,7 +523,9 @@ function sendMessageToPlugins(type) {
             utilities: utilities,
             preferences: preferences,
         },
-        meta: {},
+        meta: {
+            wsOpenedBy: 'content',
+        },
     };
 
     if (isPluginOverlayMode && pluginOverlayFramework === 'api') {
@@ -718,7 +730,7 @@ function startCommercialMode() {
 
             isAutoModeFirstCommercial = false;
             //setting cooldown time so video has a chance to play for the first time, also needed for overlay video audio to shift to other tab in auto-audio mode
-            cooldownCountRemaining = 8;
+            cooldownCountRemaining = utilityCooldownTime;
             initialRun();
 
         } else {
@@ -2069,7 +2081,7 @@ function shutdownAdvancedLogoAnalysis(message) {
     removeClickAndUIBlockers();
 
     //complete reset
-    cooldownCountRemaining = 8;
+    cooldownCountRemaining = utilityCooldownTime;
     advancedLogoMaskCollectionSamples = 0;
     selectedPixel = false;
     isAutoModeInitiated = false;
@@ -2720,7 +2732,7 @@ function resumeAutoMode() {
         startViewingTab(windowDimensions);
         //give a sec for tab viewing to start
         setTimeout(() => {
-            cooldownCountRemaining = 8; //give a chance for video UI to go away
+            cooldownCountRemaining = utilityCooldownTime; //give a chance for video UI to go away
             if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
                 isAdvancedLogoMonitorPaused = false;
                 advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);

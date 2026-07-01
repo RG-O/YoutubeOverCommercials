@@ -125,7 +125,9 @@ function launchPluginWSScript(payload) {
         pluginWSScript.addEventListener('load', function () {
             ws.initWSPlugins(payload);
         });
-    } //else do nothing because I start all the WSs on load
+    } else {
+        ws.initWSPlugins(payload);
+    }
 }
 
 

@@ -12,7 +12,7 @@ body {
     margin: 0;
 }
 
-form {
+form, .plugins-section {
     color: black;
     font-size: 16px;
     margin: 8px;
@@ -468,9 +468,23 @@ datalist {
         color: rgb(18, 56, 61);
     }
 
-.plugin-manifest-container input {
+.plugin-manifest-container input[type=text],
+.plugin-manifest-container input[type=number],
+.plugin-manifest-container select,
+.plugin-manifest-container textarea {
     float: none;
-    width: auto;
+    width: 100%;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+}
+
+.plugin-manifest-container input[type=checkbox] {
+    float: none;
+}
+
+.plugin-manifest-container .note {
+    margin-bottom: 3px;
 }
 
 .plugin-title-container {

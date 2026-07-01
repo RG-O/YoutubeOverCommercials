@@ -76,17 +76,33 @@ const ws = {
     isPluginCommercialTriggerWS: false,
     isPluginOverlayWS: false,
     isSharedWS: false,
+    //TODO: start montitoring and accounting for full life cycles in here
+    hasPluginCommercialTriggerWSConnected: false,
+    hasPluginOverlayWSConnected: false,
+    hasSharedWSConnected: false,
+    pluginCommercialTriggerWSOpenedBy: "none",
+    pluginOverlayWSOpenedBy: "none",
+    sharedWSOpenedBy: "none",
     initWSPlugins(payload) {
         ws.isPluginCommercialTriggerWS = (payload.data.preferences.isPluginCommercialTriggerMode && payload.data.preferences.pluginCommercialTriggerFramework === 'ws');
         ws.isPluginOverlayWS = (payload.data.preferences.isPluginOverlayMode && payload.data.preferences.pluginOverlayFramework === 'ws');
         ws.isSharedWS = (ws.isPluginCommercialTriggerWS && ws.isPluginOverlayWS && payload.data.preferences.pluginCommercialTriggerWSURL === payload.data.preferences.pluginOverlayWSURL);
 
-        if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS) {
-            ws.initDetection(payload);
+        if (ws.hasPluginCommercialTriggerWSConnected || ws.hasPluginOverlayWSConnected || ws.hasSharedWSConnected) {
+            ws.sendMessageToWSPlugins(payload);
         }
 
-        if (ws.isPluginOverlayWS && !ws.isSharedWS) {
+        //TODO: allow for switching WS URLs
+        if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && !ws.hasPluginCommercialTriggerWSConnected) {
+            ws.initDetection(payload);
+            ws.hasPluginCommercialTriggerWSConnected = true;
+            ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
+        }
+
+        if (ws.isPluginOverlayWS && !ws.isSharedWS && !ws.hasPluginOverlayWSConnected) {
             ws.initOverlay(payload);
+            ws.hasPluginOverlayWSConnected = true;
+            ws.pluginOverlayWSOpenedBy = payload.meta.wsOpenedBy;
         }
 
         if (ws.isSharedWS) {
@@ -94,15 +110,15 @@ const ws = {
         }
     },
     sendMessageToWSPlugins(payload) {
-        if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS) {
+        if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && ws.hasPluginCommercialTriggerWSConnected) {
             ws.sendToDetection(payload);
         }
 
-        if (ws.isPluginOverlayWS && !ws.isSharedWS) {
+        if (ws.isPluginOverlayWS && !ws.isSharedWS && ws.hasPluginOverlayWSConnected) {
             ws.sendToOverlay(payload);
         }
 
-        if (ws.isSharedWS) {
+        if (ws.isSharedWS && ws.hasSharedWSConnected) {
             //TODO: Something
         }
     },
@@ -117,6 +133,9 @@ const ws = {
                 sender: "trigger-plugin",
                 connectionState: "started",
                 connectionMessage: "Plugin connected",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
             detectionWS.send(payload);
         };
@@ -132,6 +151,9 @@ const ws = {
                     sender: "trigger-plugin",
                     connectionState: "failed",
                     connectionMessage: "Failed to connect to plugin",
+                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
                 });
             } else {
                 chrome.runtime.sendMessage({
@@ -141,6 +163,9 @@ const ws = {
                     sender: "trigger-plugin",
                     connectionState: "disconnected",
                     connectionMessage: "Plugin disconnected",
+                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
                 });
             }
         };
@@ -153,6 +178,9 @@ const ws = {
                 sender: "trigger-plugin",
                 connectionState: "reconnecting",
                 connectionMessage: "Attempting to reconnect to plugin...",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
         };
 
@@ -169,6 +197,9 @@ const ws = {
                 sender: "trigger-plugin",
                 connectionState: "connected",
                 connectionMessage: "Connected",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
         }
     },
@@ -181,6 +212,9 @@ const ws = {
                 sender: "trigger-plugin",
                 connectionState: "failed",
                 connectionMessage: "Failed to send message to plugin",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
             return;
         }
@@ -198,6 +232,9 @@ const ws = {
                 sender: "overlay-plugin",
                 connectionState: "started",
                 connectionMessage: "Overly plugin connected",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
             overlayWS.send(payload);
         };
@@ -213,6 +250,9 @@ const ws = {
                     sender: "overlay-plugin",
                     connectionState: "failed",
                     connectionMessage: "Failed to connect to overlay plugin",
+                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
                 });
             } else {
                 chrome.runtime.sendMessage({
@@ -222,6 +262,9 @@ const ws = {
                     sender: "overlay-plugin",
                     connectionState: "disconnected",
                     connectionMessage: "Overlay plugin disconnected",
+                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
                 });
             }
         };
@@ -234,6 +277,9 @@ const ws = {
                 sender: "overlay-plugin",
                 connectionState: "reconnecting",
                 connectionMessage: "Attempting to reconnect to overlay plugin...",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
         };
 
@@ -250,6 +296,9 @@ const ws = {
                 sender: "overlay-plugin",
                 connectionState: "connected",
                 connectionMessage: "Overlay plugin connected",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
         }
     },
@@ -262,6 +311,9 @@ const ws = {
                 sender: "overlay-plugin",
                 connectionState: "failed",
                 connectionMessage: "Failed to send message to overlay plugin",
+                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+                sharedWSOpenedBy: ws.sharedWSOpenedBy,
             });
             return;
         }

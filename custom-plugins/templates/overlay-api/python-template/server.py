@@ -6,8 +6,10 @@ app = Flask(__name__)
 
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
-    data = request.json
+    data = request.json #TODO: rename this to msg
     request_type = data["type"]
+    preferences = data["data"]["preferences"]
+    custom_overlay_plugin_preferences = preferences["pluginOverlayPreferences"]["preferences"]
 
     if request_type == "commercial_state_change":
         is_commercial = data["data"]["isCommercialState"]
@@ -28,8 +30,13 @@ def custom_plugin_overlay():
             # Note: commercial_state_change: is_commercial = false usually gets sent directly before this if user exited fullscreen during commercial
 
     elif request_type == "init":
-        print("Extension Initiated")
+        print("Extension initiated")
+        print("Full message:")
         print(data)
+        print("Full preferences:")
+        print(preferences)
+        print("Your custom requested plugin preferences:")
+        print(custom_overlay_plugin_preferences)
 
     elif request_type == "end":
         print("Extension Stopped")
@@ -42,8 +49,8 @@ def custom_plugin_overlay():
 @app.route("/plugin-manifest", methods=["GET"])
 def plugin_manifest():
     return jsonify({
-        "name": "My Overlay Plugin",
-        "id": "my-overlay-plugin", # Must be unique
+        "name": "My Overlay Plugin (API)",
+        "id": "my-overlay-plugin-api", # Must be unique
         "version": "1.0.0",
         "description": "My overlay plugin description.", # Optional
         "primaryColor": "#12384d", # Optional
@@ -51,13 +58,56 @@ def plugin_manifest():
         "capabilities": ["overlay"],
         "preferences": [
             {
-                "key": "volume",
-                "label": "Volume",
-                "description": "This sets the volume.", # Optional
+                "key": "text-field-example",
+                "label": "Text",
+                "description": "Example of a text field.", # Optional
+                "type": "text",
+                "default": "Default Text", # Optional
+            },
+            {
+                "key": "number-field-example",
+                "label": "Number",
+                "description": "Example of a number field.", # Optional
                 "type": "number",
                 "default": 50, # Optional
-            } #TODO: add more example preferences to template
-        ] # Optional
+            },
+            {
+                "key": "checkbox-field-example",
+                "label": "Checkbox",
+                "description": "Example of a checkbox field.", # Optional
+                "type": "checkbox",
+                "default": False, # Optional
+            },
+            {
+                "key": "dropdown-field-example",
+                "label": "Dropdown",
+                "description": "Example of a dropdown field.", # Optional
+                "type": "select",
+                "options": [
+                    { "label": "Value 1", "value": "value-1" },
+                    { "label": "Value 2", "value": "value-2" },
+                ],
+                "default": "value-1",
+            },
+            {
+                "key": "radio-field-example",
+                "label": "Radio",
+                "description": "Example of a radio field.", # Optional
+                "type": "radio",
+                "options": [
+                    { "label": "Value 1", "value": "value-1" },
+                    { "label": "Value 2", "value": "value-2" },
+                ],
+                "default": "value-2",
+            },
+            {
+                "key": "textarea-field-example",
+                "label": "Text Area",
+                "description": "Example of a text area field.", # Optional
+                "type": "textarea",
+                "default": "Default Text", # Optional
+            },
+        ], # Optional
     })
 
 @app.route("/ping", methods=["GET"])

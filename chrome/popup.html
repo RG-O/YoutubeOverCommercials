@@ -132,14 +132,14 @@
                 <br />
                 TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
             </div>
+            <div id="custom-plugin-trigger-manifest-success" class="success-box settings-box" style="display: none;">
+                Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+            </div>
             <div id="custom-plugin-trigger-manifest-error" class="error-box settings-box" style="display: none;">
                 <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
                 <div>
                     TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
                 </div>
-            </div>
-            <div id="custom-plugin-trigger-success" class="success-box settings-box" style="display: none;">
-                TODO: Update all of this. Verified Advanced Logo Analyzer companion app is running properly on this machine.
             </div>
             <div id="custom-plugin-trigger-instructions" class="mode-how-to settings-box" style="display: none;">
                 <b>HOW TO USE:</b><br />
@@ -289,20 +289,13 @@
                 <br />
                 TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
             </div>
+            <div id="custom-plugin-overlay-manifest-success" class="success-box settings-box" style="display: none;">
+                Overlay plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+            </div>
             <div id="custom-plugin-overlay-manifest-error" class="error-box settings-box" style="display: none;">
                 <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
                 <div>
                     TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
-                </div>
-            </div>
-            <div id="custom-plugin-overlay-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
-                <div class="plugin-title-container">
-                    <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
-                    <span id="plugin-version" class="note">Plugin Version</span>
-                </div>
-                <div id="plugin-description" class="plugin-description"></div>
-                <div id="plugin-settings" class="plugin-settings">
-                    <div class="plugin-settings-header"><b id="plugin-settings-header"></b></div>
                 </div>
             </div>
             <div id="custom-plugin-overlay-instructions" class="mode-how-to settings-box" style="display: none;">
@@ -470,7 +463,6 @@
             </div>
 
             <!--TODO: Add color difference demo and slide scale-->
-
             <!--<table class="general-field color-difference-demo-table">
                 <tr>
                     <td class="color-difference-cell-red-shift">DIFFERENCE</td>
@@ -576,6 +568,36 @@
 
         </div>
     </form>
+
+
+    <div id="plugins-section" class="plugins-section" style="display: none;">
+
+        <div style="padding-bottom: 10px"></div>
+        <h2>YOUR PLUGINS</h2>
+
+        <div id="custom-plugin-trigger-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
+            <div class="plugin-title-container">
+                <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
+                <span id="plugin-version" class="note">Plugin Version</span>
+            </div>
+            <div id="plugin-description" class="plugin-description"></div>
+            <div id="plugin-settings" class="plugin-settings">
+                <div class="plugin-settings-header"><u id="plugin-settings-header">Settings:</u></div>
+            </div>
+        </div>
+
+        <div id="custom-plugin-overlay-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
+            <div class="plugin-title-container">
+                <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
+                <span id="plugin-version" class="note">Plugin Version</span>
+            </div>
+            <div id="plugin-description" class="plugin-description"></div>
+            <div id="plugin-settings" class="plugin-settings">
+                <div class="plugin-settings-header"><u id="plugin-settings-header">Settings:</u></div>
+            </div>
+        </div>
+
+    </div>
 
     <div class="sticky-buttons">
         <button class="button" id="save-button">Save & Apply</button>

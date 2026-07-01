@@ -443,8 +443,6 @@ def custom_plugin_overlay():
     request_type = data["type"]
     preferences = data["data"]["preferences"]
 
-    
-
     overlay_video_width_percentage = float(preferences["videoOverlayWidth"])
     overlay_video_height_percentage = float(preferences["videoOverlayHeight"])
     overlay_video_location_horizontal = preferences["overlayVideoLocationHorizontal"]

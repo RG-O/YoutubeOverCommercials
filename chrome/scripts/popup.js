@@ -6,11 +6,14 @@ var pipGridCells;
 var hasPreviouslyInstalledCompanionApp;
 var isCompanionAppCallSuccess = true;
 var hasGrantedMicAccess = false;
+var isLastExtensionInitiatedTabStillOpen;
 var hasPreviouslyInstalledPluginTrigger;
 var hasPreviouslyInstalledPluginOverlay;
 var isPluginTriggerCallSuccess = true;
 var isPluginOverlayCallSuccess = true;
-var hasAlreadyCalledPluginOverlyaManifestViaAPI = false;
+var hasAlreadyCalledPluginOverlyaManifestViaAPI = false; //TODO: fix spelling
+var hasAlreadyCalledPluginOverlyaManifestViaWS = false; //TODO: fix spelling
+var hasAlreadyCalledPluginTriggerManifestViaWS = false;
 var pluginTriggerManifest;
 var pluginOverlayManifest;
 var pluginSharedManifest;
@@ -378,13 +381,17 @@ document.getElementById("save-button").onclick = function () {
             overlayHostName = 'www.youtube.com';
         }
 
-        //TODO: add isPluginOverlayMode check to here
-        if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' && pluginOverlayManifest) {
+        //capture pluginOverlayPreferences preferences
+        if ((optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked) && pluginOverlayManifest) {
             const preferences = {};
             const pluginOverlayManifestContainerElm = document.getElementById('custom-plugin-overlay-manifest-container');
 
             pluginOverlayManifestContainerElm.querySelectorAll("[data-key]").forEach(input => {
-                if (input.type === "checkbox") {
+                if (input.type === "radio") {
+                    if (input.checked) {
+                        preferences[input.dataset.key] = input.value;
+                    }
+                } else if (input.type === "checkbox") {
                     preferences[input.dataset.key] = input.checked;
                 } else {
                     preferences[input.dataset.key] = input.value;
@@ -393,6 +400,29 @@ document.getElementById("save-button").onclick = function () {
 
             pluginOverlayPreferences = {
                 id: pluginOverlayManifest.id,
+                preferences: preferences,
+            }
+        }
+
+        //capture pluginTriggerPreferences preferences
+        if ((optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked) && pluginTriggerManifest) {
+            const preferences = {};
+            const pluginTriggerManifestContainerElm = document.getElementById('custom-plugin-trigger-manifest-container');
+
+            pluginTriggerManifestContainerElm.querySelectorAll("[data-key]").forEach(input => {
+                if (input.type === "radio") {
+                    if (input.checked) {
+                        preferences[input.dataset.key] = input.value;
+                    }
+                } else if (input.type === "checkbox") {
+                    preferences[input.dataset.key] = input.checked;
+                } else {
+                    preferences[input.dataset.key] = input.value;
+                }
+            });
+
+            pluginTriggerPreferences = {
+                id: pluginTriggerManifest.id,
                 preferences: preferences,
             }
         }
@@ -1119,18 +1149,18 @@ function displayPingCompanionAppError() {
 
 
 function getPluginManifests() {
-    if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay') {
+    if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked) {
         getPluginOverlyaManifest();
     }
 
-    if (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger') {
+    if (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked) {
         getPluginTriggerManifest();
     }
 }
 
 
 function getPluginOverlyaManifest() {
-    if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay') {
+    if (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked) {
         isPluginOverlayCallSuccess = false;
         document.getElementById('save-button').disabled = true;
         document.getElementById('custom-plugin-overlay-loading').style.display = 'block';
@@ -1139,8 +1169,8 @@ function getPluginOverlyaManifest() {
         if (optionsForm.pluginOverlayFramework.value === 'api' && !hasAlreadyCalledPluginOverlyaManifestViaAPI) {
             hasAlreadyCalledPluginOverlyaManifestViaAPI = true;
             getPluginOverlyaManifestViaAPI();
-        } else {
-            //do something
+        } else if (optionsForm.pluginOverlayFramework.value === 'ws' && !hasAlreadyCalledPluginOverlyaManifestViaWS) {
+            getPluginManifestsViaWS();
         }
     }
 }
@@ -1159,14 +1189,69 @@ function getPluginOverlyaManifestViaAPI() {
 }
 
 
+function getPluginManifestsViaWS() {
+    let isPluginOverlayModeTemp = false;
+    if (
+        (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked) &&
+        optionsForm.pluginOverlayFramework.value === 'ws' &&
+        !hasAlreadyCalledPluginOverlyaManifestViaWS
+    ) {
+        isPluginOverlayModeTemp = true;
+        hasAlreadyCalledPluginOverlyaManifestViaWS = true;
+    }
+
+    let isPluginCommercialTriggerModeTemp = false;
+    if (
+        (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked) &&
+        !hasAlreadyCalledPluginTriggerManifestViaWS
+    ) {
+        isPluginCommercialTriggerModeTemp = true;
+        hasAlreadyCalledPluginTriggerManifestViaWS = true;
+    }
+
+    if (isPluginOverlayModeTemp || isPluginCommercialTriggerModeTemp) {
+        const payload = {
+            type: "plugin_manifest",
+            timestamp: Date.now(),
+            data: {
+                preferences: {
+                    isPluginOverlayMode: isPluginOverlayModeTemp,
+                    pluginOverlayFramework: 'ws',
+                    pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
+                    isPluginCommercialTriggerMode: isPluginCommercialTriggerModeTemp, //TODO: add real value here to do them both at the same time if I can?
+                    pluginCommercialTriggerFramework: 'ws',
+                    pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value //TODO: add real value here to do them both at the same time if I can?
+                }
+            },
+            meta: {
+                wsOpenedBy: 'popup',
+            },
+        };
+
+        if (isFirefox) {
+            //TODO: setup firefox
+        } else {
+            chrome.runtime.sendMessage({
+                action: "chrome-connect-to-ws-plugins",
+                payload: payload,
+            });
+        }
+    }
+}
+
+
 function displayPluginOverlyaManifestSuccess(manifest) {
     pluginOverlayManifest = manifest;
-
     isPluginOverlayCallSuccess = true;
+
     document.getElementById('custom-plugin-overlay-loading').style.display = 'none';
     document.getElementById('custom-plugin-overlay-additional-setup').style.display = 'none';
     document.getElementById('custom-plugin-overlay-manifest-error').style.display = 'none';
+
+    document.getElementById('plugins-section').style.display = 'block';
+    document.getElementById('custom-plugin-overlay-manifest-success').style.display = 'block';
     document.getElementById('custom-plugin-overlay-instructions').style.display = 'block';
+
     enableSaveButton();
 
     const pluginOverlayManifestContainerElm = document.getElementById('custom-plugin-overlay-manifest-container');
@@ -1174,7 +1259,7 @@ function displayPluginOverlyaManifestSuccess(manifest) {
 
     //clearing preferences if different plugin used last time.
     pluginOverlayPreferences = (pluginOverlayPreferences.id === pluginOverlayManifest.id) ? pluginOverlayPreferences : {};
-    renderPluginPreferences(pluginOverlayManifestContainerElm, pluginOverlayManifest, pluginOverlayPreferences);
+    displayPluginManifest(pluginOverlayManifestContainerElm, pluginOverlayManifest, pluginOverlayPreferences);
 
     if (!hasPreviouslyInstalledPluginOverlay) {
         //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
@@ -1203,14 +1288,63 @@ function displayPluginOverlyaManifestError() {
 
 
 function getPluginTriggerManifest() {
-    if (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger') {
-        getPluginTriggerManifestViaWS();
+    if (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked) {
+        isPluginTriggerCallSuccess = false;
+        document.getElementById('save-button').disabled = true;
+        document.getElementById('custom-plugin-overlay-loading').style.display = 'block';
+        document.getElementById('custom-plugin-overlay-manifest-error').style.display = 'none'; //here for when retriggered from error
+
+        if (!hasAlreadyCalledPluginTriggerManifestViaWS) {
+            getPluginManifestsViaWS();
+        }
     }
 }
 
 
-function getPluginTriggerManifestViaWS() {
+function displayPluginTriggerManifestSuccess(manifest) {
+    pluginTriggerManifest = manifest;
+    isPluginTriggerCallSuccess = true;
 
+    document.getElementById('custom-plugin-trigger-loading').style.display = 'none';
+    document.getElementById('custom-plugin-trigger-additional-setup').style.display = 'none';
+    document.getElementById('custom-plugin-trigger-manifest-error').style.display = 'none';
+
+    document.getElementById('plugins-section').style.display = 'block';
+    document.getElementById('custom-plugin-trigger-manifest-success').style.display = 'block';
+    document.getElementById('custom-plugin-trigger-instructions').style.display = 'block';
+
+    enableSaveButton();
+
+    const pluginTriggerManifestContainerElm = document.getElementById('custom-plugin-trigger-manifest-container');
+    pluginTriggerManifestContainerElm.style.display = 'block';
+
+    //clearing preferences if different plugin used last time.
+    pluginTriggerPreferences = (pluginTriggerPreferences.id === pluginTriggerManifest.id) ? pluginTriggerPreferences : {};
+    displayPluginManifest(pluginTriggerManifestContainerElm, pluginTriggerManifest, pluginTriggerPreferences);
+
+    if (!hasPreviouslyInstalledPluginTrigger) {
+        //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledPluginTrigger = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledPluginTrigger: hasPreviouslyInstalledPluginTrigger });
+    }
+}
+
+
+function displayPluginTriggerManifestError() {
+    isPluginOverlayCallSuccess = false;
+    //TODO: maybe let users save with warning instead of blocking them
+    document.getElementById('custom-plugin-trigger-loading').style.display = 'none';
+    document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
+    document.getElementById('custom-plugin-trigger-instructions').style.display = 'none';
+
+    if (hasPreviouslyInstalledPluginOverlay) {
+        document.getElementById('custom-plugin-trigger-manifest-error').style.display = 'block';
+        //document.getElementById('custom-plugin-trigger-additional-setup').style.display = 'none'; //777
+        document.getElementById('custom-plugin-trigger-additional-setup').style.display = 'block'; //777
+    } else {
+        document.getElementById('custom-plugin-trigger-manifest-error').style.display = 'none';
+        document.getElementById('custom-plugin-trigger-additional-setup').style.display = 'block';
+    }
 }
 
 
@@ -1220,7 +1354,11 @@ function canEnableSaveButton() {
 
 
 function doesMakeExternalCall() {
-    return optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo' || optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.overlayVideoType.value === 'custom-plugin-overlay';
+    return optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo' ||
+        optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' ||
+        optionsForm.overlayVideoType.value === 'custom-plugin-overlay' ||
+        optionsForm.isPluginOverlayMode.checked ||
+        optionsForm.isPluginCommercialTriggerMode.checked;
 }
 
 
@@ -1242,7 +1380,7 @@ function updatePluginOverlayFramework() {
 }
 
 
-function renderPluginPreferences(container, manifest, preferences = {}) {
+function displayPluginManifest(container, manifest, preferences = {}) {
     //TODO: rename various variables
     const savedValues = preferences.preferences ?? {};
 
@@ -1270,8 +1408,8 @@ function renderPluginPreferences(container, manifest, preferences = {}) {
 
     const settings = container.querySelector("#plugin-settings");
     if (manifest.preferences) {
-        const settingsHeader = container.querySelector("#plugin-settings-header");
-        settingsHeader.textContent = manifest.name + " Settings:"
+        //const settingsHeader = container.querySelector("#plugin-settings-header");
+        //settingsHeader.textContent = manifest.name + " Settings:"
 
         manifest.preferences.forEach(field => {
             const wrapper = document.createElement("div");
@@ -1288,34 +1426,67 @@ function renderPluginPreferences(container, manifest, preferences = {}) {
                     input = document.createElement("input");
                     input.type = field.type;
                     input.value = savedValues[field.key] ?? field.default ?? "";
+                    input.dataset.key = field.key;
                     break;
 
                 case "checkbox":
+                    label.htmlFor = field.key;
                     input = document.createElement("input");
                     input.type = "checkbox";
+                    input.style.accentColor = manifest.primaryColor ?? "#12384d";
+                    input.id = field.key;
+                    input.name = field.key;
                     input.checked = savedValues[field.key] ?? field.default ?? false;
+                    input.dataset.key = field.key;
+                    wrapper.appendChild(input);
+                    break;
+
+                case "radio":
+                    input = document.createElement("div");
+                    const selectedValue = getValidOptionValue(
+                        savedValues[field.key],
+                        field.options,
+                        field.default
+                    );
+                    field.options.forEach(opt => {
+                        const radioWrapper = document.createElement("div");
+                        const radio = document.createElement("input");
+                        radio.type = "radio";
+                        input.style.accentColor = manifest.primaryColor ?? "#12384d";
+                        radio.name = field.key;
+                        radio.value = opt.value;
+                        radio.checked = opt.value === selectedValue;
+                        radio.dataset.key = field.key;
+                        const radioLabel = document.createElement("label");
+                        radioLabel.textContent = opt.label;
+                        radioWrapper.appendChild(radio);
+                        radioWrapper.appendChild(radioLabel);
+                        input.appendChild(radioWrapper);
+                    });
                     break;
 
                 case "select":
                     input = document.createElement("select");
                     field.options.forEach(opt => {
-                        const o = document.createElement("option");
-                        o.value = opt.value;
-                        o.textContent = opt.label;
-                        input.appendChild(o);
+                        const option = document.createElement("option");
+                        option.value = opt.value;
+                        option.textContent = opt.label;
+                        input.appendChild(option);
                     });
-                    input.value = savedValues[field.key] ?? field.default;
+                    input.value = getValidOptionValue(
+                        savedValues[field.key],
+                        field.options,
+                        field.default
+                    );
+                    input.dataset.key = field.key;
                     break;
 
                 case "textarea":
                     input = document.createElement("textarea");
                     input.value = savedValues[field.key] ?? field.default ?? "";
+                    input.dataset.key = field.key;
                     break;
-
-                //TODO: add dropdown
             }
-
-            input.dataset.key = field.key;
 
             wrapper.appendChild(label);
             if (field.description) {
@@ -1324,12 +1495,27 @@ function renderPluginPreferences(container, manifest, preferences = {}) {
                 description.textContent = field.description;
                 wrapper.appendChild(description);
             }
-            wrapper.appendChild(input);
+            if (field.type !== "checkbox") {
+                wrapper.appendChild(input); //doing this earlier for checkbox
+            }
             settings.appendChild(wrapper);
         });
     } else {
         settings.remove();
     }
+}
+
+
+function getValidOptionValue(savedValue, options, defaultValue) {
+    if (options.some(opt => opt.value === savedValue)) {
+        return savedValue;
+    }
+
+    if (options.some(opt => opt.value === defaultValue)) {
+        return defaultValue;
+    }
+
+    return options[0]?.value ?? "";
 }
 
 
@@ -1351,3 +1537,51 @@ function hexToRgb(hex) {
 function isLightColor(r, g, b) {
     return (r * 0.299 + g * 0.587 + b * 0.114) > 150
 }
+
+
+function closeChromeOffscreenDoc(pluginCommercialTriggerWSOpenedBy, pluginOverlayWSOpenedBy, sharedWSOpenedBy) {
+    if (!isFirefox) {
+        //do not want to close offscreen if it is currently in use by the other plugins //TODO: check if currently in use by mic as well
+        if (
+            pluginCommercialTriggerWSOpenedBy !== 'content' &&
+            pluginOverlayWSOpenedBy !== 'content' &&
+            sharedWSOpenedBy !== 'content'
+        ) {
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "close"
+            });
+        }
+    }
+}
+
+
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action == 'forward_message_from_plugin_ws') {
+        if (message.sender === "trigger-plugin" || message.sender === "both-plugin") {
+            if (message.connectionState === "failed") {
+                hasAlreadyCalledPluginTriggerManifestViaWS = true;
+                displayPluginTriggerManifestError();
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+            } else if (message.connectionState === "connected") {
+                if (message.payload.type === "plugin_manifest") {
+                    hasAlreadyCalledPluginTriggerManifestViaWS = true;
+                    displayPluginTriggerManifestSuccess(message.payload.data);
+                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+                }
+            } //else ignore all other connectionStates
+        } else if (message.sender === "overlay-plugin") {
+            if (message.connectionState === "failed") {
+                hasAlreadyCalledPluginOverlyaManifestViaWS = true;
+                displayPluginOverlyaManifestError();
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+            } else if (message.connectionState === "connected") {
+                if (message.payload.type === "plugin_manifest") {
+                    hasAlreadyCalledPluginOverlyaManifestViaWS = true;
+                    displayPluginOverlyaManifestSuccess(message.payload.data);
+                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+                }
+            } //else ignore all other connectionStates
+        }
+    }
+});
