@@ -117,33 +117,35 @@
                     <label>WebSocket URL:</label>
                 </div>
                 <div class="id-input-row">
-                    <input type="text" name="pluginCommercialTriggerWSURL" id="pluginCommercialTriggerWSURL">
+                    <input type="text" name="pluginCommercialTriggerWSURL" id="pluginCommercialTriggerWSURL" data-sync="pluginCommercialTriggerWSURL">
                     <button id="pull-button-pluginCommercialTriggerWSURL" class="pull-id-button">
                         &#128260;
                         <span class="pull-id-tooltip">Refresh plugin manifest.</span>
                     </button>
                 </div>
             </div>
-            <div id="custom-plugin-trigger-loading" class="loading-spinner"></div>
-            <div id="custom-plugin-trigger-additional-setup" class="mode-how-to settings-box" style="display: none;">
-                <b>ADDITIONAL SETUP REQUIRED</b><br />
-                <br />
-                TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
-                <br />
-                TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
-            </div>
-            <div id="custom-plugin-trigger-manifest-success" class="success-box settings-box" style="display: none;">
-                Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
-            </div>
-            <div id="custom-plugin-trigger-manifest-error" class="error-box settings-box" style="display: none;">
-                <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
-                <div>
-                    TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+            <div class="custom-plugin-trigger-messaging-container">
+                <div class="custom-plugin-trigger-loading loading-spinner"></div>
+                <div class="custom-plugin-trigger-additional-setup mode-how-to settings-box" style="display: none;">
+                    <b>ADDITIONAL SETUP REQUIRED</b><br />
+                    <br />
+                    TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
+                    <br />
+                    TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
                 </div>
-            </div>
-            <div id="custom-plugin-trigger-instructions" class="mode-how-to settings-box" style="display: none;">
-                <b>HOW TO USE:</b><br />
-                TODO: Update all of this. Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
+                <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
+                    Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                </div>
+                <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
+                    <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
+                    <div>
+                        TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                    </div>
+                </div>
+                <div class="custom-plugin-trigger-instructions mode-how-to settings-box" style="display: none;">
+                    <b>HOW TO USE:</b><br />
+                    Go to stream, make full screen, and hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate the extension with your plugin.
+                </div>
             </div>
         </div>
 
@@ -258,49 +260,47 @@
             <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">TODO: add description here.</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-overlay" class="id-field-wrapper">
-            <div class="blue-settings-box settings-box">
+            <div class="plugin-url-wrapper blue-settings-box settings-box">
                 <div class="id-field-label">
                     <label>API or WebSocket and URL:</label>
                 </div>
                 <div class="id-input-row" style="margin-bottom: 5px;">
-                    <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
+                    <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
                     <label for="pluginOverlayFramework-api">API</label>
-                    <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL">
+                    <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL" data-sync="pluginOverlayAPIURL">
                     <button id="pull-button-pluginOverlayAPIURL" class="pull-id-button">
                         &#128260;
                         <span class="pull-id-tooltip">Refresh plugin manifest.</span>
                     </button>
                 </div>
                 <div class="id-input-row">
-                    <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
+                    <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
                     <label for="pluginOverlayFramework-ws">WS</label>
-                    <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL">
+                    <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL" data-sync="pluginOverlayWSURL">
                     <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">
                         &#128260;
                         <span class="pull-id-tooltip">Refresh plugin manifest.</span>
                     </button>
                 </div>
             </div>
-            <div id="custom-plugin-overlay-loading" class="loading-spinner"></div>
-            <div id="custom-plugin-overlay-additional-setup" class="mode-how-to settings-box" style="display: none;">
-                <b>ADDITIONAL SETUP REQUIRED</b><br />
-                <br />
-                TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
-                <br />
-                TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
-            </div>
-            <div id="custom-plugin-overlay-manifest-success" class="success-box settings-box" style="display: none;">
-                Overlay plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
-            </div>
-            <div id="custom-plugin-overlay-manifest-error" class="error-box settings-box" style="display: none;">
-                <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
-                <div>
-                    TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+            <div class="custom-plugin-overlay-messaging-container">
+                <div class="custom-plugin-overlay-loading loading-spinner"></div>
+                <div class="custom-plugin-overlay-additional-setup mode-how-to settings-box" style="display: none;">
+                    <b>ADDITIONAL SETUP REQUIRED</b><br />
+                    <br />
+                    TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
+                    <br />
+                    TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
                 </div>
-            </div>
-            <div id="custom-plugin-overlay-instructions" class="mode-how-to settings-box" style="display: none;">
-                <b>HOW TO USE:</b><br />
-                TODO: Update all of this. Go to stream, make full screen, hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> when out of commercial break and program/game is on, and then follow the on-screen instructions presented.
+                <div class="custom-plugin-overlay-manifest-success success-box settings-box" style="display: none;">
+                    Overlay plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                </div>
+                <div class="custom-plugin-overlay-manifest-error error-box settings-box" style="display: none;">
+                    <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
+                    <div>
+                        TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -426,6 +426,50 @@
                 <label class="checkbox-label" for="isPluginOverlayMode">Always Call Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the out of the box overlay option set above, you can toggle this on to use a plugin overlay at the same time.</span></span><span class="badge badge-advanced">Advanced</span>
                 <input type="checkbox" name="isPluginOverlayMode" id="isPluginOverlayMode">
             </div>
+            <div id="custom-plugin-overlay-settings-checkbox-duplicate" style="display: none;">
+                <div class="plugin-url-wrapper blue-settings-box settings-box">
+                    <div class="id-field-label">
+                        <label>API or WebSocket and URL:</label>
+                    </div>
+                    <div class="id-input-row" style="margin-bottom: 5px;">
+                        <input type="radio" id="pluginOverlayFramework-apiDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
+                        <label for="pluginOverlayFramework-api">API</label>
+                        <input type="text" name="pluginOverlayAPIURLDuplicate" id="pluginOverlayAPIURLDuplicate" data-sync="pluginOverlayAPIURL">
+                        <button id="pull-button-pluginOverlayAPIURLDuplicate" class="pull-id-button">
+                            &#128260;
+                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                        </button>
+                    </div>
+                    <div class="id-input-row">
+                        <input type="radio" id="pluginOverlayFramework-wsDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
+                        <label for="pluginOverlayFramework-ws">WS</label>
+                        <input type="text" name="pluginOverlayWSURLDuplicate" id="pluginOverlayWSURLDuplicate" data-sync="pluginOverlayWSURL">
+                        <button id="pull-button-pluginOverlayWSURLDuplicate" class="pull-id-button">
+                            &#128260;
+                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="custom-plugin-overlay-messaging-container">
+                    <div class="custom-plugin-overlay-loading loading-spinner"></div>
+                    <div class="custom-plugin-overlay-additional-setup mode-how-to settings-box" style="display: none;">
+                        <b>ADDITIONAL SETUP REQUIRED</b><br />
+                        <br />
+                        TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
+                        <br />
+                        TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+                    </div>
+                    <div class="custom-plugin-overlay-manifest-success success-box settings-box" style="display: none;">
+                        Overlay plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                    </div>
+                    <div class="custom-plugin-overlay-manifest-error error-box settings-box" style="display: none;">
+                        <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
+                        <div>
+                            TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             <h3>PRIMARY STREAM</h3>
 
@@ -524,6 +568,39 @@
             <div class="general-field">
                 <label class="checkbox-label" for="isPluginCommercialTriggerMode">Always Allow Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the out of the box commercial detection option set above, you can toggle this on to use a custom plugin trigger at the same time.</span></span><span class="badge badge-advanced">Advanced</span>
                 <input type="checkbox" name="isPluginCommercialTriggerMode" id="isPluginCommercialTriggerMode">
+            </div>
+            <div id="custom-plugin-trigger-settings-checkbox-duplicate" style="display: none;">
+                <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
+                    <div class="id-field-label">
+                        <label>WebSocket URL:</label>
+                    </div>
+                    <div class="id-input-row">
+                        <input type="text" name="pluginCommercialTriggerWSURLDuplicate" id="pluginCommercialTriggerWSURLDuplicate" data-sync="pluginCommercialTriggerWSURL">
+                        <button id="pull-button-pluginCommercialTriggerWSURL" class="pull-id-button">
+                            &#128260;
+                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="custom-plugin-trigger-messaging-container">
+                    <div class="custom-plugin-trigger-loading loading-spinner"></div>
+                    <div class="custom-plugin-trigger-additional-setup mode-how-to settings-box" style="display: none;">
+                        <b>ADDITIONAL SETUP REQUIRED</b><br />
+                        <br />
+                        TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
+                        <br />
+                        TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+                    </div>
+                    <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
+                        Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                    </div>
+                    <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
+                        <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
+                        <div>
+                            TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="general-field">
