@@ -1219,80 +1219,6 @@ function getPluginOverlayManifest() {
 }
 
 
-function showPluginOverlayLoading() {
-    displayClass('custom-plugin-overlay-loading');
-    hideClass('custom-plugin-overlay-manifest-error');
-    hideClass('custom-plugin-overlay-manifest-success');
-    hideClass('custom-plugin-overlay-additional-setup');
-}
-
-
-function getPluginOverlayManifestViaAPI() {
-    hasAlreadyCalledPluginOverlayManifestViaAPI = true;
-
-    fetch(optionsForm.pluginOverlayAPIURL.value + "/plugin-manifest")
-        .then(response => response.json())
-        .then((response) => {
-            displayPluginOverlayManifestSuccess(response);
-        })
-        .catch((error) => {
-            console.log(error);
-            displayPluginOverlayManifestError();
-        });
-}
-
-
-function getPluginManifestsViaWS() {
-    let isPluginOverlayModeTemp = false;
-    if (
-        (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked) &&
-        optionsForm.pluginOverlayFramework.value === 'ws' &&
-        !hasAlreadyCalledPluginOverlayManifestViaWS
-    ) {
-        isPluginOverlayModeTemp = true;
-        hasAlreadyCalledPluginOverlayManifestViaWS = true;
-    }
-
-    let isPluginCommercialTriggerModeTemp = false;
-    if (
-        (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked) &&
-        !hasAlreadyCalledPluginTriggerManifestViaWS
-    ) {
-        isPluginCommercialTriggerModeTemp = true;
-        hasAlreadyCalledPluginTriggerManifestViaWS = true;
-    }
-
-    if (isPluginOverlayModeTemp || isPluginCommercialTriggerModeTemp) {
-        const payload = {
-            type: "plugin_manifest",
-            timestamp: Date.now(),
-            data: {
-                preferences: {
-                    isPluginOverlayMode: isPluginOverlayModeTemp,
-                    pluginOverlayFramework: 'ws',
-                    pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
-                    isPluginCommercialTriggerMode: isPluginCommercialTriggerModeTemp, //TODO: add real value here to do them both at the same time if I can?
-                    pluginCommercialTriggerFramework: 'ws',
-                    pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value //TODO: add real value here to do them both at the same time if I can?
-                }
-            },
-            meta: {
-                wsOpenedBy: 'popup',
-            },
-        };
-
-        if (isFirefox) {
-            //TODO: setup firefox
-        } else {
-            chrome.runtime.sendMessage({
-                action: "chrome-connect-to-ws-plugins",
-                payload: payload,
-            });
-        }
-    }
-}
-
-
 function displayPluginOverlayManifestSuccess(manifest) {
     pluginOverlayManifest = manifest;
     isPluginOverlayCallSuccess = true;
@@ -1368,15 +1294,6 @@ function getPluginTriggerManifest() {
 }
 
 
-function showPluginTriggerLoading() {
-    displayClass('custom-plugin-trigger-loading');
-    hideClass('custom-plugin-trigger-manifest-error');
-    hideClass('custom-plugin-trigger-manifest-success');
-    hideClass('custom-plugin-trigger-instructions');
-    hideClass('custom-plugin-trigger-additional-setup');
-}
-
-
 function displayPluginTriggerManifestSuccess(manifest) {
     pluginTriggerManifest = manifest;
     isPluginTriggerCallSuccess = true;
@@ -1420,6 +1337,89 @@ function displayPluginTriggerManifestError() {
     } else {
         hideClass('custom-plugin-trigger-manifest-error');
         displayClass('custom-plugin-trigger-additional-setup');
+    }
+}
+
+
+function showPluginOverlayLoading() {
+    displayClass('custom-plugin-overlay-loading');
+    hideClass('custom-plugin-overlay-manifest-error');
+    hideClass('custom-plugin-overlay-manifest-success');
+    hideClass('custom-plugin-overlay-additional-setup');
+}
+
+
+function showPluginTriggerLoading() {
+    displayClass('custom-plugin-trigger-loading');
+    hideClass('custom-plugin-trigger-manifest-error');
+    hideClass('custom-plugin-trigger-manifest-success');
+    hideClass('custom-plugin-trigger-instructions');
+    hideClass('custom-plugin-trigger-additional-setup');
+}
+
+
+function getPluginOverlayManifestViaAPI() {
+    hasAlreadyCalledPluginOverlayManifestViaAPI = true;
+
+    fetch(optionsForm.pluginOverlayAPIURL.value + "/plugin-manifest")
+        .then(response => response.json())
+        .then((response) => {
+            displayPluginOverlayManifestSuccess(response);
+        })
+        .catch((error) => {
+            console.log(error);
+            displayPluginOverlayManifestError();
+        });
+}
+
+
+function getPluginManifestsViaWS() {
+    let isPluginOverlayModeTemp = false;
+    if (
+        (optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked) &&
+        optionsForm.pluginOverlayFramework.value === 'ws' &&
+        !hasAlreadyCalledPluginOverlayManifestViaWS
+    ) {
+        isPluginOverlayModeTemp = true;
+        hasAlreadyCalledPluginOverlayManifestViaWS = true;
+    }
+
+    let isPluginCommercialTriggerModeTemp = false;
+    if (
+        (optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked) &&
+        !hasAlreadyCalledPluginTriggerManifestViaWS
+    ) {
+        isPluginCommercialTriggerModeTemp = true;
+        hasAlreadyCalledPluginTriggerManifestViaWS = true;
+    }
+
+    if (isPluginOverlayModeTemp || isPluginCommercialTriggerModeTemp) {
+        const payload = {
+            type: "plugin_manifest",
+            timestamp: Date.now(),
+            data: {
+                preferences: {
+                    isPluginOverlayMode: isPluginOverlayModeTemp,
+                    pluginOverlayFramework: 'ws',
+                    pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
+                    isPluginCommercialTriggerMode: isPluginCommercialTriggerModeTemp, //TODO: add real value here to do them both at the same time if I can?
+                    pluginCommercialTriggerFramework: 'ws',
+                    pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value //TODO: add real value here to do them both at the same time if I can?
+                }
+            },
+            meta: {
+                wsOpenedBy: 'popup',
+            },
+        };
+
+        if (isFirefox) {
+            //TODO: setup firefox
+        } else {
+            chrome.runtime.sendMessage({
+                action: "chrome-connect-to-ws-plugins",
+                payload: payload,
+            });
+        }
     }
 }
 
