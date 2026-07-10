@@ -124,7 +124,7 @@ async def send_manifest(ws):
             "type": "plugin_manifest",
             "timestamp": time.time(),
             "data": {
-                "name": "My Trigger Plugin (WS)",
+                "name": "My Trigger Plugin",
                 "id": "my-trigger-plugin-ws", # Must be unique
                 "version": "1.0.0",
                 "description": "My trigger plugin description.", # Optional

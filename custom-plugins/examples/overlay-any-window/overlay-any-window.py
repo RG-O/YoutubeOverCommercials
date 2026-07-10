@@ -210,6 +210,11 @@ async def handle_message(ws, msg):
     print(msg)
 
     message_type = msg["type"]
+
+    if message_type == "plugin_manifest":
+        await send_manifest(ws)
+        return
+
     preferences = msg["data"]["preferences"]
 
     overlay_video_width = float(preferences["videoOverlayWidth"])
@@ -293,6 +298,28 @@ async def send_status(ws, display, debug):
                 "display": display,
                 "debug": debug
             }
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_status send stopped: client disconnected")
+
+async def send_manifest(ws):
+    try:
+        await ws.send(json.dumps({
+            "type": "plugin_manifest",
+            "timestamp": time.time(),
+            "data": {
+                "name": "Overlay Any Window",
+                "id": "overlay-any-window", # Must be unique
+                "version": "1.0.0",
+                "description": "My overlay plugin description.", # Optional
+                "primaryColor": "#12384d", # Optional
+                "secondaryColor": "#dadcdc", # Optional
+                "capabilities": ["overlay"],
+            },
+            "meta": {
+                "display": "Sending Manifest",
+                "debug": "Sending Manifest",
+            },
         }))
     except websockets.exceptions.ConnectionClosed:
         print("send_status send stopped: client disconnected")

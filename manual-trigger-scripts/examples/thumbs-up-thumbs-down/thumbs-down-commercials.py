@@ -552,6 +552,9 @@ async def handle_message(ws, msg):
 
     message_type = msg["type"]
 
+    if message_type == "plugin_manifest":
+        await send_manifest(ws)
+
     if message_type == "init":
         is_debug_mode = msg["data"]["preferences"]["isDebugMode"]
         
@@ -634,6 +637,28 @@ async def send_status(ws, display, debug):
 
     except websockets.exceptions.ConnectionClosed:
         pass
+
+async def send_manifest(ws):
+    try:
+        await ws.send(json.dumps({
+            "type": "plugin_manifest",
+            "timestamp": time.time(),
+            "data": {
+                "name": "Thumbs Down Commercials",
+                "id": "my-trigger-plugin-ws", # Must be unique
+                "version": "1.0.0",
+                "description": "My trigger plugin description.", # Optional
+                "primaryColor": "#12384d", # Optional
+                "secondaryColor": "#dadcdc", # Optional
+                "capabilities": ["detection"], #TODO: delete this?
+            },
+            "meta": {
+                "display": "Sending Manifest",
+                "debug": "Sending Manifest",
+            },
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_status send stopped: client disconnected")
 
 # --------------------------------------------------
 # Main
