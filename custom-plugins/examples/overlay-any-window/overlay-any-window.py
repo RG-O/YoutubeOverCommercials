@@ -17,11 +17,43 @@ clients = set()
 
 window_title = "Picture"
 
+def get_window_dropdown_options():
+    windows = []
+
+    def enum_handler(hwnd, _):
+        if not win32gui.IsWindowVisible(hwnd):
+            return
+
+        title = win32gui.GetWindowText(hwnd).strip()
+
+        # Ignore windows without a visible title.
+        if not title:
+            return
+
+        windows.append({
+            "label": title,
+            "value": title,
+        })
+
+    win32gui.EnumWindows(enum_handler, None)
+
+    # Sort alphabetically and remove duplicate titles.
+    unique_windows = {
+        window["value"]: window
+        for window in windows
+    }
+
+    return sorted(
+        unique_windows.values(),
+        key=lambda window: window["label"].lower()
+    )
+
+#TODO: rename partial_title variable to just title
 def find_window_by_title(partial_title):
     def enum_handler(hwnd, result):
         if win32gui.IsWindowVisible(hwnd):
             title = win32gui.GetWindowText(hwnd)
-            if partial_title in title:
+            if partial_title == title:
                 print(title)
                 result.append(hwnd)
 
@@ -216,6 +248,19 @@ async def handle_message(ws, msg):
         return
 
     preferences = msg["data"]["preferences"]
+    plugin_preferences = preferences["pluginOverlayPreferences"]["preferences"]
+    print(plugin_preferences)
+
+    window_title = plugin_preferences.get("window-title", "")
+    print(window_title)
+
+    if not window_title:
+        await send_status(
+            ws,
+            "No window selected",
+            "The window-title preference is empty."
+        )
+        return
 
     overlay_video_width = float(preferences["videoOverlayWidth"])
     overlay_video_height = float(preferences["videoOverlayHeight"])
@@ -229,7 +274,12 @@ async def handle_message(ws, msg):
 
     hwnd = find_window_by_title(window_title)
     if hwnd is None:
-        await send_status(ws, "Window not found", "Window not found")
+        await send_status(
+            ws,
+            f'Could not find a window matching "{window_title}".',
+            f'Could not find a window matching "{window_title}".'
+        )
+        return
     else:
         if message_type == "init":
             print(msg)
@@ -304,17 +354,34 @@ async def send_status(ws, display, debug):
 
 async def send_manifest(ws):
     try:
+        window_options = get_window_dropdown_options()
+
         await ws.send(json.dumps({
             "type": "plugin_manifest",
             "timestamp": time.time(),
             "data": {
                 "name": "Overlay Any Window",
-                "id": "overlay-any-window", # Must be unique
+                "id": "overlay-any-window",
                 "version": "1.0.0",
-                "description": "My overlay plugin description.", # Optional
-                "primaryColor": "#12384d", # Optional
-                "secondaryColor": "#dadcdc", # Optional
+                "description": "Overlay any open Windows application.",
+                "primaryColor": "#12384d",
+                "secondaryColor": "#dadcdc",
                 "capabilities": ["overlay"],
+                "preferences": [
+                    {
+                        "key": "window-title",
+                        "label": "Window",
+                        "description": "Select the window to use as the overlay.",
+                        "type": "select",
+                        "options": window_options,
+                        "default": (
+                            window_options[0]["value"]
+                            if window_options
+                            else ""
+                        ),
+                        "required": True,
+                    }
+                ],
             },
             "meta": {
                 "display": "Sending Manifest",
@@ -322,7 +389,7 @@ async def send_manifest(ws):
             },
         }))
     except websockets.exceptions.ConnectionClosed:
-        print("send_status send stopped: client disconnected")
+        print("send_manifest stopped: client disconnected")
 
 async def main():
     async with websockets.serve(handle_client, "localhost", PORT):
