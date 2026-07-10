@@ -290,7 +290,8 @@ chrome.storage.sync.get([
             cell.classList.add('selected');
         });
     });
-    
+
+    //TODO: combine these somehow
     document.getElementById('pull-button-ytPlaylistID').addEventListener('click', async (event) => {
         event.preventDefault();
         let id = await getIDFromCurrentTab('list');
@@ -329,6 +330,36 @@ chrome.storage.sync.get([
         if (id) {
             optionsForm.otherLiveURL.value = id;
         }
+    });
+
+    document.getElementById('pull-button-pluginCommercialTriggerWSURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginTriggerWSManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayAPIURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayAPIManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayWSURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayWSManifest();
+    });
+
+    document.getElementById('pull-button-pluginCommercialTriggerWSURLDuplicate').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginTriggerWSManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayAPIURLDuplicate').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayAPIManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayWSURLDuplicate').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayWSManifest();
     });
 
     //clear cache on buy me a coffee image to show updated supporter count
@@ -1355,6 +1386,24 @@ function showPluginTriggerLoading() {
     hideClass('custom-plugin-trigger-manifest-success');
     hideClass('custom-plugin-trigger-instructions');
     hideClass('custom-plugin-trigger-additional-setup');
+}
+
+
+function refreshPluginOverlayAPIManifest() {
+    hasAlreadyCalledPluginOverlayManifestViaAPI = false;
+    getPluginOverlayManifest();
+}
+
+
+function refreshPluginOverlayWSManifest() {
+    hasAlreadyCalledPluginOverlayManifestViaWS = false;
+    getPluginOverlayManifest();
+}
+
+
+function refreshPluginTriggerWSManifest() {
+    hasAlreadyCalledPluginTriggerManifestViaWS = false;
+    getPluginTriggerManifest();
 }
 
 
