@@ -468,6 +468,25 @@ datalist {
         color: rgb(18, 56, 61);
     }
 
+.plugin-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+    .plugin-divider::before,
+    .plugin-divider::after {
+        content: "";
+        flex: 1;
+        height: 2px;
+        background: #bfc5ca;
+    }
+
+    .plugin-divider span {
+        font-size: 20px;
+    }
+
 .plugin-manifest-container input[type=text],
 .plugin-manifest-container input[type=number],
 .plugin-manifest-container select,

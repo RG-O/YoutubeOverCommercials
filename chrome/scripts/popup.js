@@ -1283,7 +1283,9 @@ function displayPluginOverlayManifestSuccess(manifest) {
 
 function displayPluginOverlayManifestError() {
     isPluginOverlayCallSuccess = false;
+
     hideClass('custom-plugin-overlay-loading');
+    hideClass('custom-plugin-overlay-manifest-success');
     document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
 
     if (optionsForm.isPluginOverlayMode.checked) {
@@ -1367,6 +1369,7 @@ function displayPluginTriggerManifestError() {
 
     hideClass('custom-plugin-trigger-loading');
     hideClass('custom-plugin-trigger-instructions');
+    hideClass('custom-plugin-trigger-manifest-success');
     document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
 
     if (optionsForm.isPluginOverlayMode.checked) {
