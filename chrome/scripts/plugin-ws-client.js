@@ -80,6 +80,7 @@ const ws = {
     hasPluginCommercialTriggerWSConnected: false,
     hasPluginOverlayWSConnected: false,
     hasSharedWSConnected: false,
+    totalWSConnectionsInQueue: 0,
     pluginCommercialTriggerWSOpenedBy: "none",
     pluginOverlayWSOpenedBy: "none",
     sharedWSOpenedBy: "none",
@@ -94,18 +95,21 @@ const ws = {
 
         //TODO: allow for switching WS URLs
         if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && !ws.hasPluginCommercialTriggerWSConnected) {
+            ws.totalWSConnectionsInQueue++;
             ws.initDetection(payload);
             ws.hasPluginCommercialTriggerWSConnected = true;
             ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
         }
 
         if (ws.isPluginOverlayWS && !ws.isSharedWS && !ws.hasPluginOverlayWSConnected) {
+            ws.totalWSConnectionsInQueue++;
             ws.initOverlay(payload);
             ws.hasPluginOverlayWSConnected = true;
             ws.pluginOverlayWSOpenedBy = payload.meta.wsOpenedBy;
         }
 
         if (ws.isSharedWS) {
+            ws.totalWSConnectionsInQueue++;
             //TODO: Something
         }
     },
@@ -126,6 +130,9 @@ const ws = {
         detectionWS = new WSClient(payload.data.preferences.pluginCommercialTriggerWSURL, "Detection");
 
         detectionWS.onOpen = () => {
+            ws.totalWSConnectionsInQueue--;
+
+            //TODO: add these can be combined into a single function and have repeating values not be inputs
             chrome.runtime.sendMessage({
                 action: "forward_message_from_plugin_ws",
                 payload: null,
@@ -136,6 +143,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
             detectionWS.send(payload);
         };
@@ -144,6 +152,8 @@ const ws = {
 
         detectionWS.onClose = ({ wasConnected }) => {
             if (!wasConnected) {
+                ws.totalWSConnectionsInQueue--;
+
                 chrome.runtime.sendMessage({
                     action: "forward_message_from_plugin_ws",
                     payload: null,
@@ -154,6 +164,7 @@ const ws = {
                     pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                     pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                     sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
                 });
             } else {
                 chrome.runtime.sendMessage({
@@ -166,6 +177,7 @@ const ws = {
                     pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                     pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                     sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
                 });
             }
         };
@@ -181,6 +193,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
         };
 
@@ -200,6 +213,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
         }
     },
@@ -215,6 +229,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
             return;
         }
@@ -225,6 +240,8 @@ const ws = {
         overlayWS = new WSClient(payload.data.preferences.pluginOverlayWSURL, "Overlay");
 
         overlayWS.onOpen = () => {
+            ws.totalWSConnectionsInQueue--;
+
             chrome.runtime.sendMessage({
                 action: "forward_message_from_plugin_ws",
                 payload: null,
@@ -235,6 +252,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
             overlayWS.send(payload);
         };
@@ -243,6 +261,8 @@ const ws = {
 
         overlayWS.onClose = ({ wasConnected }) => {
             if (!wasConnected) {
+                ws.totalWSConnectionsInQueue--;
+
                 chrome.runtime.sendMessage({
                     action: "forward_message_from_plugin_ws",
                     payload: null,
@@ -253,6 +273,7 @@ const ws = {
                     pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                     pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                     sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
                 });
             } else {
                 chrome.runtime.sendMessage({
@@ -265,6 +286,7 @@ const ws = {
                     pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                     pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                     sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
                 });
             }
         };
@@ -280,6 +302,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
         };
 
@@ -299,6 +322,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
         }
     },
@@ -314,6 +338,7 @@ const ws = {
                 pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
                 pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
+                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
             return;
         }

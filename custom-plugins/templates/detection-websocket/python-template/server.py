@@ -4,6 +4,12 @@ import websockets
 import json
 import time
 
+plugin_protocol_version = 1 # DO NOT TOUCH
+
+plugin_name = "My Trigger Plugin"
+plugin_id = "my-trigger-plugin-ws" # Must be unique
+plugin_version = "1.0.0"
+
 PORT = 64145
 
 clients = set()
@@ -24,18 +30,25 @@ async def handle_client(websocket):
         print("Client disconnected")
 
 async def handle_message(ws, msg):
-    print(msg)
-
     message_type = msg["type"]
+    preferences = msg["data"]["preferences"]
+    custom_trigger_plugin_preferences = preferences.get("pluginTriggerPreferences", {}).get("preferences", {}) # First time plugin users might not have this when they call for manifest
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")
         await send_manifest(ws)
 
     if message_type == "init":
+        print("Extension initiated")
+        print("Full message:")
         print(msg)
+        print("Full preferences:")
+        print(preferences)
+        print("Your custom requested plugin preferences:")
+        print(custom_trigger_plugin_preferences)
 
         # Send initial message
+        print("Returning connected status")
         await send_status(ws, "Connected", "Ready")
 
         # Start detection loop
@@ -72,10 +85,13 @@ async def demo_loop(ws):
         await send_commercial_state_change(ws, is_commercial, display, debug)
 
 async def send_commercial_state_change(ws, is_commercial, display, debug):
+    global plugin_protocol_version
+
     try:
         await ws.send(json.dumps({
             "type": "commercial_state_change",
             "timestamp": time.time(),
+            "pluginProtocolVersion": plugin_protocol_version,
             "data": {
                 "isCommercial": is_commercial
             },
@@ -89,10 +105,13 @@ async def send_commercial_state_change(ws, is_commercial, display, debug):
 
 # This can be used to disable or enable any auto commercial detection that the browser extension is doing
 async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_blocked, display, debug):
+    global plugin_protocol_version
+
     try:
         await ws.send(json.dumps({
             "type": "auto_commercial_blocked_state_change",
             "timestamp": time.time(),
+            "pluginProtocolVersion": plugin_protocol_version,
             "data": {
                 "isAutoCommercialBlocked": is_auto_commercial_blocked
             },
@@ -105,10 +124,13 @@ async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_block
         print("send_auto_commercial_blocked_state_change stopped: client disconnected")
 
 async def send_status(ws, display, debug):
+    global plugin_protocol_version
+
     try:
         await ws.send(json.dumps({
             "type": "status",
             "timestamp": time.time(),
+            "pluginProtocolVersion": plugin_protocol_version,
             "data": {},
             "meta": {
                 "display": display,
@@ -119,18 +141,24 @@ async def send_status(ws, display, debug):
         print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
+    global plugin_name
+    global plugin_id
+    global plugin_version
+    global plugin_protocol_version
+
     try:
         await ws.send(json.dumps({
             "type": "plugin_manifest",
             "timestamp": time.time(),
+            "pluginProtocolVersion": plugin_protocol_version,
             "data": {
-                "name": "My Trigger Plugin",
-                "id": "my-trigger-plugin-ws", # Must be unique
-                "version": "1.0.0",
+                "name": plugin_name,
+                "id": plugin_id,
+                "version": plugin_version,
                 "description": "My trigger plugin description.", # Optional
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional
-                "capabilities": ["detection"], #TODO: delete this?
+                "capabilities": ["trigger"],
                 "preferences": [
                     {
                         "key": "text-field-example",

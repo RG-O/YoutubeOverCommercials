@@ -455,6 +455,8 @@ document.getElementById("save-button").onclick = function () {
 
             pluginOverlayPreferences = {
                 id: pluginOverlayManifest.id,
+                version: pluginOverlayManifest.version,
+                lastSavedTimestamp: Date.now(),
                 preferences: preferences,
             }
         }
@@ -478,6 +480,8 @@ document.getElementById("save-button").onclick = function () {
 
             pluginTriggerPreferences = {
                 id: pluginTriggerManifest.id,
+                version: pluginTriggerManifest.version,
+                lastSavedTimestamp: Date.now(),
                 preferences: preferences,
             }
         }
@@ -578,7 +582,6 @@ document.getElementById("save-button").onclick = function () {
                     console.log(error);
                     closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig);
                 });
-
 
         });
 
@@ -1283,6 +1286,11 @@ function displayPluginOverlayManifestError() {
     hideClass('custom-plugin-overlay-loading');
     document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
 
+    if (optionsForm.isPluginOverlayMode.checked) {
+        document.getElementById('expand-button').style.color = 'red';
+        document.querySelector('label[for="isPluginOverlayMode"]').style.color = 'red';
+    }
+
     if (hasPreviouslyInstalledPluginOverlay) {
         displayClass('custom-plugin-overlay-manifest-error');
         //hideClass('custom-plugin-overlay-additional-setup'); //777
@@ -1361,6 +1369,11 @@ function displayPluginTriggerManifestError() {
     hideClass('custom-plugin-trigger-instructions');
     document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
 
+    if (optionsForm.isPluginOverlayMode.checked) {
+        document.getElementById('expand-button').style.color = 'red';
+        document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.color = 'red';
+    }
+
     if (hasPreviouslyInstalledPluginOverlay) {
         displayClass('custom-plugin-trigger-manifest-error');
         //hideClass('custom-plugin-trigger-additional-setup'); //777
@@ -1413,11 +1426,16 @@ function getPluginOverlayManifestViaAPI() {
     fetch(optionsForm.pluginOverlayAPIURL.value + "/plugin-manifest")
         .then(response => response.json())
         .then((response) => {
-            displayPluginOverlayManifestSuccess(response);
+            if (optionsForm.pluginOverlayFramework.value === 'api') {
+                displayPluginOverlayManifestSuccess(response.data);
+            }
+            
         })
         .catch((error) => {
             console.log(error);
-            displayPluginOverlayManifestError();
+            if (optionsForm.pluginOverlayFramework.value === 'api') {
+                displayPluginOverlayManifestError();
+            }
         });
 }
 
@@ -1480,6 +1498,21 @@ function enableSaveButton() {
         ((optionsForm.commercialDetectionMode.value !== 'custom-plugin-trigger' && !optionsForm.isPluginCommercialTriggerMode.checked) || isPluginTriggerCallSuccess)
     ) {
         document.getElementById('save-button').disabled = false;
+    }
+
+    if (!optionsForm.isPluginOverlayMode.checked || isPluginOverlayCallSuccess) {
+        document.querySelector('label[for="isPluginOverlayMode"]').style.removeProperty('color');
+    }
+
+    if (!optionsForm.isPluginCommercialTriggerMode.checked || isPluginTriggerCallSuccess) {
+        document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.removeProperty('color');
+    }
+
+    if (
+        (!optionsForm.isPluginOverlayMode.checked || isPluginOverlayCallSuccess) &&
+        (!optionsForm.isPluginCommercialTriggerMode.checked || isPluginTriggerCallSuccess)
+    ) {
+        document.getElementById('expand-button').style.removeProperty('color');
     }
 }
 
@@ -1687,13 +1720,14 @@ function hideClass(className) {
 }
 
 
-function closeChromeOffscreenDoc(pluginCommercialTriggerWSOpenedBy, pluginOverlayWSOpenedBy, sharedWSOpenedBy) {
+function closeChromeOffscreenDoc(pluginCommercialTriggerWSOpenedBy, pluginOverlayWSOpenedBy, sharedWSOpenedBy, totalWSConnectionsInQueue) {
     if (!isFirefox) {
         //do not want to close offscreen if it is currently in use by the other plugins //TODO: check if currently in use by mic as well
         if (
             pluginCommercialTriggerWSOpenedBy !== 'content' &&
             pluginOverlayWSOpenedBy !== 'content' &&
-            sharedWSOpenedBy !== 'content'
+            sharedWSOpenedBy !== 'content' &&
+            totalWSConnectionsInQueue <= 0
         ) {
             chrome.runtime.sendMessage({
                 target: "offscreen",
@@ -1745,24 +1779,28 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             if (message.connectionState === "failed") {
                 hasAlreadyCalledPluginTriggerManifestViaWS = true;
                 displayPluginTriggerManifestError();
-                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy, message.totalWSConnectionsInQueue);
             } else if (message.connectionState === "connected") {
                 if (message.payload.type === "plugin_manifest") {
                     hasAlreadyCalledPluginTriggerManifestViaWS = true;
                     displayPluginTriggerManifestSuccess(message.payload.data);
-                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy, message.totalWSConnectionsInQueue);
                 }
             } //else ignore all other connectionStates
         } else if (message.sender === "overlay-plugin") {
             if (message.connectionState === "failed") {
-                hasAlreadyCalledPluginOverlayManifestViaWS = true;
-                displayPluginOverlayManifestError();
-                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+                if (optionsForm.pluginOverlayFramework.value === 'ws') {
+                    hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                    displayPluginOverlayManifestError();
+                }
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy, message.totalWSConnectionsInQueue);
             } else if (message.connectionState === "connected") {
                 if (message.payload.type === "plugin_manifest") {
-                    hasAlreadyCalledPluginOverlayManifestViaWS = true;
-                    displayPluginOverlayManifestSuccess(message.payload.data);
-                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy);
+                    if (optionsForm.pluginOverlayFramework.value === 'ws') {
+                        hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                        displayPluginOverlayManifestSuccess(message.payload.data);
+                    }
+                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.sharedWSOpenedBy, message.totalWSConnectionsInQueue);
                 }
             } //else ignore all other connectionStates
         }

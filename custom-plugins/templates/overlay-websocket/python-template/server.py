@@ -4,6 +4,12 @@ import websockets
 import json
 import time
 
+plugin_protocol_version = 1 # DO NOT TOUCH
+
+plugin_name = "My Overlay Plugin (WS)"
+plugin_id = "my-overlay-plugin-ws" # Must be unique
+plugin_version = "1.0.0"
+
 PORT = 64146
 
 clients = set()
@@ -24,16 +30,22 @@ async def handle_client(websocket):
         print("Client disconnected")
 
 async def handle_message(ws, msg):
-    print(msg)
-
     message_type = msg["type"]
+    preferences = msg["data"]["preferences"]
+    custom_overlay_plugin_preferences = preferences.get("pluginOverlayPreferences", {}).get("preferences", {}) # First time plugin users might not have this when they call for manifest
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")
         await send_manifest(ws)
 
     if message_type == "init":
+        print("Extension initiated")
+        print("Full message:")
         print(msg)
+        print("Full preferences:")
+        print(preferences)
+        print("Your custom requested plugin preferences:")
+        print(custom_overlay_plugin_preferences)
 
         # Optionally send status to present it to user
         # await send_status(ws, "Connected", "Ready")
@@ -64,19 +76,25 @@ async def send_status(ws, display, debug):
         print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
+    global plugin_name
+    global plugin_id
+    global plugin_version
+    global plugin_protocol_version
+
     try:
         await ws.send(json.dumps({
             "type": "plugin_manifest",
             "timestamp": time.time(),
+            "pluginProtocolVersion": plugin_protocol_version,
             "data": {
-                "name": "My Overlay Plugin (WS)",
-                "id": "my-overlay-plugin-ws", # Must be unique
-                "version": "1.0.0",
+                "name": plugin_name,
+                "id": plugin_id,
+                "version": plugin_version,
                 "description": "My overlay plugin description.", # Optional
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional
                 "capabilities": ["overlay"],
-                "preferences": [
+                "preferences": [ # Optional
                     {
                         "key": "text-field-example",
                         "label": "Text",
@@ -127,7 +145,7 @@ async def send_manifest(ws):
                         "type": "textarea",
                         "default": "Default Text", # Optional
                     },
-                ], # Optional
+                ],
             },
             "meta": {
                 "display": "Sending Manifest",
