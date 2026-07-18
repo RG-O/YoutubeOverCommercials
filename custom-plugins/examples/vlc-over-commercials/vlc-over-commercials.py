@@ -14,6 +14,8 @@ from pathlib import Path
 
 from flask import Flask, request, jsonify
 
+plugin_protocol_version = 1 # DO NOT TOUCH
+
 is_vlc_http_api_control_mode = True
 vlc_http_api_auth = ("", "1234")
 my_file_path = "file:///C:/Users/user/Downloads/video.mp4"
@@ -504,6 +506,7 @@ def custom_plugin_overlay():
             restore_borders(hwnd)
 
     elif request_type == "init":
+        print("init")
         if is_vlc_http_api_control_mode:
             my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
             open_vlc_with_specific_file(my_file_path)
@@ -511,17 +514,18 @@ def custom_plugin_overlay():
             time.sleep(1) #todo: better way to wait or not have to wait at all?
             print("waiting for playing")
             wait_for_vlc_playing()
+            time.sleep(0.5) #TODO: dynamically wait for video demensions
             print("done waiting for playing")
             window_title = "VLC"  # Change this to your target window
             hwnd = find_window_by_title(window_title)
             if hwnd is None:
                 return jsonify({"status": "error", "error": "No VLC window found."}) #TODO: update message
             make_borderless(hwnd)
-            print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
+            #print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
 
             time.sleep(0.2)
 
-            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early
+            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early #TODO: figure this out for windows 11
             time.sleep(0.2) #todo: better way to wait or not have to wait at all?
             # resume_seconds = get_saved_resume_time(my_file_path)
             # requests.get(
@@ -567,22 +571,28 @@ def custom_plugin_overlay():
 @app.route("/plugin-manifest", methods=["GET"])
 def plugin_manifest():
     return jsonify({
-        "name": "VLC Over Commercials",
-        "id": "vlc-over-commercials",
-        "version": "1.0.0",
-        "description": "This plugin will automatically play VLC over commercials. Have latest version of VLC installed and closed before initiating.", #TODO: Update this.
-        "primaryColor": "#E85E00",
-        "secondaryColor": "#f2c7aa",
-        "capabilities": ["overlay"],
-        "preferences": [
-            {
-                "key": "url",
-                "label": "Video URL",
-                "description": "This can be a stream URL or a local file URL (E.g. file:///C:/Users/user/Downloads/video.mp4)",
-                "type": "text",
-                "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
-            }
-        ]
+        "type": "plugin_manifest",
+        "timestamp": time.time(),
+        "pluginProtocolVersion": plugin_protocol_version,
+        "data": {
+            "name": "VLC Over Commercials",
+            "id": "vlc-over-commercials",
+            "version": "1.0.0",
+            "description": "This plugin will automatically play VLC over commercials. Have latest version of VLC installed and closed before initiating.", #TODO: Update this.
+            "primaryColor": "#E85E00",
+            "secondaryColor": "#f2c7aa",
+            "capabilities": ["overlay"],
+            "preferences": [
+                {
+                    "key": "url",
+                    "label": "Video URL",
+                    "description": "This can be a stream URL or a local file URL (E.g. file:///C:/Users/user/Downloads/video.mp4)",
+                    "type": "text",
+                    "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
+                }
+            ]
+        }
+        
     })
 
 @app.route("/ping", methods=["GET"])
