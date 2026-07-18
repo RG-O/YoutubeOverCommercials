@@ -38,7 +38,7 @@ Trigger Plugins:
 - [Say NO to Commercials](examples/say-no-to-commercials) - Set your own keywords or phrases to trigger blocking commercials or removing the blocker
 - [Thumbs Down Commercials](examples/thumbs-down-commercials) - Connect to your webcam and give a thumbs down to block commercials and a thumbs up to remove the blocker
 
-## Comunity Built Plugins
+## Community Built Plugins
 
 These are not my own. Inspect before running and use at your own risk.
 

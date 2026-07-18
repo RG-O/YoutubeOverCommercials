@@ -109,7 +109,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-custom-plugin-trigger" name="commercialDetectionMode" value="custom-plugin-trigger">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">TODO: Description here.</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">Trigger the extension any way you can dream of with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
             <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
@@ -127,19 +127,16 @@
             <div class="custom-plugin-trigger-messaging-container">
                 <div class="custom-plugin-trigger-loading loading-spinner"></div>
                 <div class="custom-plugin-trigger-additional-setup mode-how-to settings-box" style="display: none;">
-                    <b>ADDITIONAL SETUP REQUIRED</b><br />
+                    <b>TECHNICAL SETUP REQUIRED</b><br />
                     <br />
-                    TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
-                    <br />
-                    TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+                    This mode can be used to code your own plugin to trigger the extension any way you would like! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far, I have built one that allows you to set a keyword or phrase to block or unblock commercials. For example, yell "tomato!" when a commercial starts to block it and then yell "banana!" to unblock when the game is back on!
                 </div>
                 <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
-                    Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                    Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
                 </div>
                 <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
-                    <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
                     <div>
-                        TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                        Error reaching plugin WebSocket. Please check to make sure your plugin WS is running and the WS URL above is set correctly and then click the refresh button next to the WS URL above to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                     </div>
                 </div>
                 <div class="custom-plugin-trigger-instructions mode-how-to settings-box" style="display: none;">
@@ -257,7 +254,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-custom-plugin-overlay" name="overlayVideoType" value="custom-plugin-overlay">
-            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">TODO: add description here.</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Have anything you can dream of happen automatically during commercials with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-overlay" class="id-field-wrapper">
             <div class="plugin-url-wrapper blue-settings-box settings-box">
@@ -286,19 +283,16 @@
             <div class="custom-plugin-overlay-messaging-container">
                 <div class="custom-plugin-overlay-loading loading-spinner"></div>
                 <div class="custom-plugin-overlay-additional-setup mode-how-to settings-box" style="display: none;">
-                    <b>ADDITIONAL SETUP REQUIRED</b><br />
+                    <b>TECHNICAL SETUP REQUIRED</b><br />
                     <br />
-                    TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
-                    <br />
-                    TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+                    This mode can be used to code your own plugin to do anything you want during commercials! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far I have built one that plays VLC on your PC over top of commercials.
                 </div>
                 <div class="custom-plugin-overlay-manifest-success success-box settings-box" style="display: none;">
-                    Overlay plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                    Plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
                 </div>
                 <div class="custom-plugin-overlay-manifest-error error-box settings-box" style="display: none;">
-                    <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
                     <div>
-                        TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                        Error reaching plugin. Please check to make sure your plugin is running and the plugin URL settings above are set correctly for your plugin and then click the refresh button next to the plugin URL to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                     </div>
                 </div>
             </div>
@@ -453,19 +447,16 @@
                 <div class="custom-plugin-overlay-messaging-container">
                     <div class="custom-plugin-overlay-loading loading-spinner"></div>
                     <div class="custom-plugin-overlay-additional-setup mode-how-to settings-box" style="display: none;">
-                        <b>ADDITIONAL SETUP REQUIRED</b><br />
+                        <b>TECHNICAL SETUP REQUIRED</b><br />
                         <br />
-                        TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
-                        <br />
-                        TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+                        This mode can be used to code your own plugin to do anything you want during commercials! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far I have built one that plays VLC on your PC over top of commercials.
                     </div>
                     <div class="custom-plugin-overlay-manifest-success success-box settings-box" style="display: none;">
-                        Overlay plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                        Plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
                     </div>
                     <div class="custom-plugin-overlay-manifest-error error-box settings-box" style="display: none;">
-                        <button id="customPluginOverlayPingRetry" class="button" style="float: right;">Try Again</button>
                         <div>
-                            TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                            Error reaching plugin. Please check to make sure your plugin is running and the plugin URL settings above are set correctly for your plugin and then click the refresh button next to the plugin URL to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                         </div>
                     </div>
                 </div>
@@ -566,7 +557,7 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="isPluginCommercialTriggerMode">Always Allow Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the out of the box commercial detection option set above, you can toggle this on to use a custom plugin trigger at the same time.</span></span><span class="badge badge-advanced">Advanced</span>
+                <label class="checkbox-label" for="isPluginCommercialTriggerMode">Always Allow Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the Commercial Detection Mode you set above, have a back up trigger for the extension with a plugin.</span></span><span class="badge badge-advanced">Advanced</span>
                 <input type="checkbox" name="isPluginCommercialTriggerMode" id="isPluginCommercialTriggerMode">
             </div>
             <div id="custom-plugin-trigger-settings-checkbox-duplicate" style="display: none;">
@@ -585,19 +576,16 @@
                 <div class="custom-plugin-trigger-messaging-container">
                     <div class="custom-plugin-trigger-loading loading-spinner"></div>
                     <div class="custom-plugin-trigger-additional-setup mode-how-to settings-box" style="display: none;">
-                        <b>ADDITIONAL SETUP REQUIRED</b><br />
+                        <b>TECHNICAL SETUP REQUIRED</b><br />
                         <br />
-                        TODO: Update all of this. To use this mode, you'll need to install the free <i>Advanced Logo Analyzer</i> companion app. Installation instructions are available <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">here</a>.<br />
-                        <br />
-                        TODO: Update all of this. This small desktop app was built specifically for this extension so it can perform advanced local "computer vision" analysis of channel logos to improve commercial detection, including support for faint or semi-transparent logos that the extension cannot detect on its own.
+                        This mode can be used to code your own plugin to trigger the extension any way you would like! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far I have built one that allows you to set a keyword or phrase to block or unblock commercials. Yell "tomato!" when a commercial starts to block it and then yell "banana!" to unblock when the game is back on!
                     </div>
                     <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
-                        Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. See __TODO__ for more plugins built by me or the community or try building your own plugin!
+                        Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
                     </div>
                     <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
-                        <button id="customPluginTriggerPingRetry" class="button" style="float: right;">Try Again</button>
                         <div>
-                            TODO: Update all of this. Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                            Error reaching plugin WS. Please check to make sure your plugin WS is running and the WS URL above is set correctly and then click the refresh button next to the WS URL above to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                         </div>
                     </div>
                 </div>
