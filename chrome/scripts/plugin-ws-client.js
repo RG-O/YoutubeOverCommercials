@@ -96,16 +96,18 @@ const ws = {
         //TODO: allow for switching WS URLs
         if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && !ws.hasPluginCommercialTriggerWSConnected) {
             ws.totalWSConnectionsInQueue++;
+            ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
+
             ws.initTrigger(payload);
             ws.hasPluginCommercialTriggerWSConnected = true;
-            ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
         }
 
         if (ws.isPluginOverlayWS && !ws.isSharedWS && !ws.hasPluginOverlayWSConnected) {
             ws.totalWSConnectionsInQueue++;
+            ws.pluginOverlayWSOpenedBy = payload.meta.wsOpenedBy;
+
             ws.initOverlay(payload);
             ws.hasPluginOverlayWSConnected = true;
-            ws.pluginOverlayWSOpenedBy = payload.meta.wsOpenedBy;
         }
 
         if (ws.isSharedWS) {
@@ -132,19 +134,13 @@ const ws = {
         triggerWS.onOpen = () => {
             ws.totalWSConnectionsInQueue--;
 
-            //TODO: add these can be combined into a single function and have repeating values not be inputs
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: null,
-                source: "plugin",
-                sender: "trigger-plugin",
-                connectionState: "started",
-                connectionMessage: "Plugin connected",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "trigger-plugin",
+                "started",
+                "Trigger plugin connected",
+            );
+
             triggerWS.send(payload);
         };
 
@@ -154,47 +150,29 @@ const ws = {
             if (!wasConnected) {
                 ws.totalWSConnectionsInQueue--;
 
-                chrome.runtime.sendMessage({
-                    action: "forward_message_from_plugin_ws",
-                    payload: null,
-                    source: "plugin",
-                    sender: "trigger-plugin",
-                    connectionState: "failed",
-                    connectionMessage: "Failed to connect to plugin",
-                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-                });
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "trigger-plugin",
+                    "failed",
+                    "Failed to connect to trigger plugin",
+                );
             } else {
-                chrome.runtime.sendMessage({
-                    action: "forward_message_from_plugin_ws",
-                    payload: null,
-                    source: "plugin",
-                    sender: "trigger-plugin",
-                    connectionState: "disconnected",
-                    connectionMessage: "Plugin disconnected",
-                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-                });
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "trigger-plugin",
+                    "disconnected",
+                    "Trigger plugin disconnected",
+                );
             }
         };
 
         triggerWS.onReconnect = () => {
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: null,
-                source: "plugin",
-                sender: "trigger-plugin",
-                connectionState: "reconnecting",
-                connectionMessage: "Attempting to reconnect to plugin...",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "trigger-plugin",
+                "reconnecting",
+                "Attempting to reconnect to trigger plugin...",
+            );
         };
 
         triggerWS.connect();
@@ -203,34 +181,23 @@ const ws = {
         if (ws.isInContentFrame) {
             console.log(ws.isInContentFrame); //TODO: something for firefox
         } else {
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: msg,
-                source: "plugin",
-                sender: "trigger-plugin",
-                connectionState: "connected",
-                connectionMessage: "Connected",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                msg,
+                "trigger-plugin",
+                "connected",
+                "Trigger plugin connected",
+            );
         }
     },
     sendToTrigger(payload) {
         if (!triggerWS || !triggerWS.connected) {
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: null,
-                source: "plugin",
-                sender: "trigger-plugin",
-                connectionState: "failed",
-                connectionMessage: "Failed to send message to plugin",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "trigger-plugin",
+                "failed",
+                "Failed to send message to trigger plugin",
+            );
+
             return;
         }
 
@@ -242,18 +209,13 @@ const ws = {
         overlayWS.onOpen = () => {
             ws.totalWSConnectionsInQueue--;
 
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: null,
-                source: "plugin",
-                sender: "overlay-plugin",
-                connectionState: "started",
-                connectionMessage: "Overly plugin connected",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "overlay-plugin",
+                "started",
+                "Overly plugin connected",
+            );
+
             overlayWS.send(payload);
         };
 
@@ -263,47 +225,29 @@ const ws = {
             if (!wasConnected) {
                 ws.totalWSConnectionsInQueue--;
 
-                chrome.runtime.sendMessage({
-                    action: "forward_message_from_plugin_ws",
-                    payload: null,
-                    source: "plugin",
-                    sender: "overlay-plugin",
-                    connectionState: "failed",
-                    connectionMessage: "Failed to connect to overlay plugin",
-                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-                });
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "overlay-plugin",
+                    "failed",
+                    "Failed to connect to overlay plugin",
+                );
             } else {
-                chrome.runtime.sendMessage({
-                    action: "forward_message_from_plugin_ws",
-                    payload: null,
-                    source: "plugin",
-                    sender: "overlay-plugin",
-                    connectionState: "disconnected",
-                    connectionMessage: "Overlay plugin disconnected",
-                    pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                    pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                    sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                    totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-                });
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "overlay-plugin",
+                    "disconnected",
+                    "Overlay plugin disconnected",
+                );
             }
         };
 
         overlayWS.onReconnect = () => {
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: null,
-                source: "plugin",
-                sender: "overlay-plugin",
-                connectionState: "reconnecting",
-                connectionMessage: "Attempting to reconnect to overlay plugin...",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "overlay-plugin",
+                "reconnecting",
+                "Attempting to reconnect to overlay plugin...",
+            );
         };
 
         overlayWS.connect();
@@ -312,37 +256,40 @@ const ws = {
         if (ws.isInContentFrame) {
             console.log(ws.isInContentFrame); //TODO: something for firefox
         } else {
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: msg,
-                source: "plugin",
-                sender: "overlay-plugin",
-                connectionState: "connected",
-                connectionMessage: "Overlay plugin connected",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                msg,
+                "overlay-plugin",
+                "connected",
+                "Overlay plugin connected",
+            );
         }
     },
     sendToOverlay(payload) {
         if (!overlayWS || !overlayWS.connected) {
-            chrome.runtime.sendMessage({
-                action: "forward_message_from_plugin_ws",
-                payload: null,
-                source: "plugin",
-                sender: "overlay-plugin",
-                connectionState: "failed",
-                connectionMessage: "Failed to send message to overlay plugin",
-                pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
-                pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-                sharedWSOpenedBy: ws.sharedWSOpenedBy,
-                totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-            });
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "overlay-plugin",
+                "failed",
+                "Failed to send message to overlay plugin",
+            );
+
             return;
         }
 
         overlayWS.send(payload);
+    },
+    forwardMessageFromPluginWSClient(payload, sender, connectionState, connectionMessage) {
+        chrome.runtime.sendMessage({
+            action: "forward_message_from_plugin_ws",
+            payload: payload,
+            source: "plugin",
+            sender: sender,
+            connectionState: connectionState,
+            connectionMessage: connectionMessage,
+            pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
+            pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
+            sharedWSOpenedBy: ws.sharedWSOpenedBy,
+            totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
+        });
     }
 }

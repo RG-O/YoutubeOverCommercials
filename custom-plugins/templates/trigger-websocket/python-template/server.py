@@ -49,7 +49,7 @@ async def handle_message(ws, msg):
 
         # Send initial message
         print("Returning connected status")
-        await send_status(ws, "Connected", "Ready")
+        await send_status(ws, plugin_name + " connected!", plugin_name + " ready")
 
         # Start detection loop
         asyncio.create_task(demo_loop(ws))
