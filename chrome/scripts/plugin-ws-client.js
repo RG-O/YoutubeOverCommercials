@@ -96,7 +96,7 @@ const ws = {
         //TODO: allow for switching WS URLs
         if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && !ws.hasPluginCommercialTriggerWSConnected) {
             ws.totalWSConnectionsInQueue++;
-            ws.initDetection(payload);
+            ws.initTrigger(payload);
             ws.hasPluginCommercialTriggerWSConnected = true;
             ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
         }
@@ -115,7 +115,7 @@ const ws = {
     },
     sendMessageToWSPlugins(payload) {
         if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && ws.hasPluginCommercialTriggerWSConnected) {
-            ws.sendToDetection(payload);
+            ws.sendToTrigger(payload);
         }
 
         if (ws.isPluginOverlayWS && !ws.isSharedWS && ws.hasPluginOverlayWSConnected) {
@@ -126,10 +126,10 @@ const ws = {
             //TODO: Something
         }
     },
-    initDetection(payload) {
-        detectionWS = new WSClient(payload.data.preferences.pluginCommercialTriggerWSURL, "Detection");
+    initTrigger(payload) {
+        triggerWS = new WSClient(payload.data.preferences.pluginCommercialTriggerWSURL, "Trigger");
 
-        detectionWS.onOpen = () => {
+        triggerWS.onOpen = () => {
             ws.totalWSConnectionsInQueue--;
 
             //TODO: add these can be combined into a single function and have repeating values not be inputs
@@ -145,12 +145,12 @@ const ws = {
                 sharedWSOpenedBy: ws.sharedWSOpenedBy,
                 totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             });
-            detectionWS.send(payload);
+            triggerWS.send(payload);
         };
 
-        detectionWS.onMessage = ws.handleDetectionMessage;
+        triggerWS.onMessage = ws.handleTriggerMessage;
 
-        detectionWS.onClose = ({ wasConnected }) => {
+        triggerWS.onClose = ({ wasConnected }) => {
             if (!wasConnected) {
                 ws.totalWSConnectionsInQueue--;
 
@@ -182,7 +182,7 @@ const ws = {
             }
         };
 
-        detectionWS.onReconnect = () => {
+        triggerWS.onReconnect = () => {
             chrome.runtime.sendMessage({
                 action: "forward_message_from_plugin_ws",
                 payload: null,
@@ -197,9 +197,9 @@ const ws = {
             });
         };
 
-        detectionWS.connect();
+        triggerWS.connect();
     },
-    handleDetectionMessage(msg) {
+    handleTriggerMessage(msg) {
         if (ws.isInContentFrame) {
             console.log(ws.isInContentFrame); //TODO: something for firefox
         } else {
@@ -217,8 +217,8 @@ const ws = {
             });
         }
     },
-    sendToDetection(payload) {
-        if (!detectionWS || !detectionWS.connected) {
+    sendToTrigger(payload) {
+        if (!triggerWS || !triggerWS.connected) {
             chrome.runtime.sendMessage({
                 action: "forward_message_from_plugin_ws",
                 payload: null,
@@ -234,7 +234,7 @@ const ws = {
             return;
         }
 
-        detectionWS.send(payload);
+        triggerWS.send(payload);
     },
     initOverlay(payload) {
         overlayWS = new WSClient(payload.data.preferences.pluginOverlayWSURL, "Overlay");

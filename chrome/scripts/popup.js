@@ -1248,6 +1248,7 @@ function getPluginOverlayManifest() {
     } else {
         enableSaveButton();
         hideClass('custom-plugin-overlay-messaging-container');
+        document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'none';
         document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
     }
 }
@@ -1330,6 +1331,7 @@ function getPluginTriggerManifest() {
     } else {
         enableSaveButton();
         hideClass('custom-plugin-trigger-messaging-container');
+        document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'none';
         document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
     }
 }
