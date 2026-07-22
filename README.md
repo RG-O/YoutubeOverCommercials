@@ -13,7 +13,11 @@ Automatically block TV commercials on live sports streams and play media of your
 
 Think of it as an ad blocker for live TV, but instead of just muting or hiding commercials, it replaces them with content you actually want to watch or listen to while you wait for the game to return.
 
-[Short demonstration video](https://youtube.com/shorts/WbH0MabA_M8)
+<img src="demo-image.png" alt="How to block live TV commercials" width="49%">
+<img src="how-it-works-image.png" alt="How Live Commercial Blocker extension works" width="49%">
+
+<img src="promo-image.png" alt="Promo image" width="49%">
+<img src="extension-popup-image.png" alt="Screenshot of settings" width="49%">
 
 ---
 
@@ -33,7 +37,7 @@ Follow installation instructions for the optional companion app [here](https://g
 
 ## Plugins (optional)
 
-...TODO
+Follow instructions [here](custom-plugins\README.md).
 
 ---
 
