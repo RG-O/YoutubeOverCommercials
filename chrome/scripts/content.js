@@ -144,7 +144,7 @@ var pluginCommercialTriggerWSURL;
 var isAnyPluginMode;
 var pluginTriggerPreferences;
 var pluginOverlayPreferences;
-var pluginSharedPreferences;
+var pluginDualPreferences;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -511,7 +511,7 @@ function sendMessageToPlugins(type) {
         isDebugMode: isDebugMode,
         pluginTriggerPreferences: pluginTriggerPreferences,
         pluginOverlayPreferences: pluginOverlayPreferences,
-        pluginSharedPreferences: pluginSharedPreferences,
+        pluginDualPreferences: pluginDualPreferences,
     }
 
     const payload = {
@@ -845,7 +845,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'pluginCommercialTriggerWSURL',
                             'pluginTriggerPreferences',
                             'pluginOverlayPreferences',
-                            'pluginSharedPreferences',
+                            'pluginDualPreferences',
                         ], (result) => {
 
                             //set them to default if not set by user yet
@@ -930,7 +930,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             clapSensitivity = result.clapSensitivity ?? 40;
                             pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
                             pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
-                            pluginSharedPreferences = result.pluginSharedPreferences ?? {};
+                            pluginDualPreferences = result.pluginDualPreferences ?? {};
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -2883,7 +2883,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 //'pluginCommercialTriggerWSURL',
                 'pluginTriggerPreferences',
                 'pluginOverlayPreferences',
-                'pluginSharedPreferences',
+                'pluginDualPreferences',
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -2913,7 +2913,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 clapSensitivity = result.clapSensitivity ?? 40;
                 pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
                 pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
-                pluginSharedPreferences = result.pluginSharedPreferences ?? {};
+                pluginDualPreferences = result.pluginDualPreferences ?? {};
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
@@ -3046,7 +3046,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
         if (isDebugMode) console.log(message);
 
-        if (message.sender === "trigger-plugin" || message.sender === "both-plugin") {
+        if (message.sender === "trigger-plugin" || message.sender === "dual-plugin") {
 
             if (message.connectionState !== "connected") {
                 if (message.connectionState === "failed") {
@@ -3060,7 +3060,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 totalFailedCommercialTriggerWSConnectAttempts = 0;
             }
 
-            if (message.payload.meta.display) {
+            if (message.payload?.meta?.display) {
                 if (pluginCommercialTriggerIndicator) {
                     pluginCommercialTriggerIndicator.textContent = message.payload.meta.display;
                 }
@@ -3092,7 +3092,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 }
             }
 
-            if (isDebugMode) {
+            if (isDebugMode && message.payload?.meta?.debug) {
                 if (message.payload.meta.debug.startsWith("data:image/")) {
                     //TODO: better way to do this?
                     let previousDebugImage = pluginCommercialTriggerDebugOverlay.getElementsByTagName('img')[0];
@@ -3124,7 +3124,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 }
             } else {
                 totalFailedOverlayWSConnectAttempts = 0;
-                if (message.payload.meta.display) {
+                if (message.payload?.meta?.display) {
                     messageToDisplay = message.payload.meta.display;
                 }
             }
@@ -3140,7 +3140,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 }, messageDisplayTime);
             }
 
-            if (isDebugMode && message.payload.meta.debug) {
+            if (isDebugMode && message.payload?.meta?.debug) {
                 console.log(message.payload.meta.debug);
             }
 

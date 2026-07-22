@@ -38,6 +38,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                 isAudioConnected = false;
             }
         } else if (message.action == 'connect-tab-audio') {
+            //TODO: set pluginCommercialTriggerWSOpenedBy, pluginOverlayWSOpenedBy, and dualWSOpenedBy here so offscreen isn't closed after grabbing manifests
             if (!isAudioConnected) {
                 audioSource.connect(audioContext.destination);
                 isAudioConnected = true;

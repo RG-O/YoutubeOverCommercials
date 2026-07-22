@@ -75,26 +75,26 @@ const ws = {
     isInContentFrame: typeof mainVideoCollection !== 'undefined',
     isPluginCommercialTriggerWS: false,
     isPluginOverlayWS: false,
-    isSharedWS: false,
+    isDualWS: false,
     //TODO: start montitoring and accounting for full life cycles in here
     hasPluginCommercialTriggerWSConnected: false,
     hasPluginOverlayWSConnected: false,
-    hasSharedWSConnected: false,
+    hasDualWSConnected: false,
     totalWSConnectionsInQueue: 0,
     pluginCommercialTriggerWSOpenedBy: "none",
     pluginOverlayWSOpenedBy: "none",
-    sharedWSOpenedBy: "none",
+    dualWSOpenedBy: "none",
     initWSPlugins(payload) {
         ws.isPluginCommercialTriggerWS = (payload.data.preferences.isPluginCommercialTriggerMode && payload.data.preferences.pluginCommercialTriggerFramework === 'ws');
         ws.isPluginOverlayWS = (payload.data.preferences.isPluginOverlayMode && payload.data.preferences.pluginOverlayFramework === 'ws');
-        ws.isSharedWS = (ws.isPluginCommercialTriggerWS && ws.isPluginOverlayWS && payload.data.preferences.pluginCommercialTriggerWSURL === payload.data.preferences.pluginOverlayWSURL);
+        ws.isDualWS = (ws.isPluginCommercialTriggerWS && ws.isPluginOverlayWS && payload.data.preferences.pluginCommercialTriggerWSURL === payload.data.preferences.pluginOverlayWSURL);
 
-        if (ws.hasPluginCommercialTriggerWSConnected || ws.hasPluginOverlayWSConnected || ws.hasSharedWSConnected) {
+        if (ws.hasPluginCommercialTriggerWSConnected || ws.hasPluginOverlayWSConnected || ws.hasDualWSConnected) {
             ws.sendMessageToWSPlugins(payload);
         }
 
         //TODO: allow for switching WS URLs
-        if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && !ws.hasPluginCommercialTriggerWSConnected) {
+        if (ws.isPluginCommercialTriggerWS && !ws.isDualWS && !ws.hasPluginCommercialTriggerWSConnected) {
             ws.totalWSConnectionsInQueue++;
             ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
 
@@ -102,7 +102,7 @@ const ws = {
             ws.hasPluginCommercialTriggerWSConnected = true;
         }
 
-        if (ws.isPluginOverlayWS && !ws.isSharedWS && !ws.hasPluginOverlayWSConnected) {
+        if (ws.isPluginOverlayWS && !ws.isDualWS && !ws.hasPluginOverlayWSConnected) {
             ws.totalWSConnectionsInQueue++;
             ws.pluginOverlayWSOpenedBy = payload.meta.wsOpenedBy;
 
@@ -110,22 +110,25 @@ const ws = {
             ws.hasPluginOverlayWSConnected = true;
         }
 
-        if (ws.isSharedWS) {
+        if (ws.isDualWS && !ws.hasDualWSConnected) {
             ws.totalWSConnectionsInQueue++;
-            //TODO: Something
+            ws.dualWSOpenedBy = payload.meta.wsOpenedBy;
+
+            ws.initDual(payload);
+            ws.hasDualWSConnected = true;
         }
     },
     sendMessageToWSPlugins(payload) {
-        if (ws.isPluginCommercialTriggerWS && !ws.isSharedWS && ws.hasPluginCommercialTriggerWSConnected) {
+        if (ws.isPluginCommercialTriggerWS && !ws.isDualWS && ws.hasPluginCommercialTriggerWSConnected) {
             ws.sendToTrigger(payload);
         }
 
-        if (ws.isPluginOverlayWS && !ws.isSharedWS && ws.hasPluginOverlayWSConnected) {
+        if (ws.isPluginOverlayWS && !ws.isDualWS && ws.hasPluginOverlayWSConnected) {
             ws.sendToOverlay(payload);
         }
 
-        if (ws.isSharedWS && ws.hasSharedWSConnected) {
-            //TODO: Something
+        if (ws.isDualWS && ws.hasDualWSConnected) {
+            ws.sendToDual(payload);
         }
     },
     initTrigger(payload) {
@@ -278,6 +281,81 @@ const ws = {
 
         overlayWS.send(payload);
     },
+    initDual(payload) {
+        dualWS = new WSClient(payload.data.preferences.pluginCommercialTriggerWSURL, "Dual"); //note: just using this url since they should both be the same
+
+        dualWS.onOpen = () => {
+            ws.totalWSConnectionsInQueue--;
+
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "dual-plugin",
+                "started",
+                "Overly plugin connected",
+            );
+
+            dualWS.send(payload);
+        };
+
+        dualWS.onMessage = ws.handleDualMessage;
+
+        dualWS.onClose = ({ wasConnected }) => {
+            if (!wasConnected) {
+                ws.totalWSConnectionsInQueue--;
+
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "dual-plugin",
+                    "failed",
+                    "Failed to connect to dual plugin",
+                );
+            } else {
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "dual-plugin",
+                    "disconnected",
+                    "Dual plugin disconnected",
+                );
+            }
+        };
+
+        dualWS.onReconnect = () => {
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "dual-plugin",
+                "reconnecting",
+                "Attempting to reconnect to dual plugin...",
+            );
+        };
+
+        dualWS.connect();
+    },
+    handleDualMessage(msg) {
+        if (ws.isInContentFrame) {
+            console.log(ws.isInContentFrame); //TODO: something for firefox
+        } else {
+            ws.forwardMessageFromPluginWSClient(
+                msg,
+                "dual-plugin",
+                "connected",
+                "Dual plugin connected",
+            );
+        }
+    },
+    sendToDual(payload) {
+        if (!dualWS || !dualWS.connected) {
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "dual-plugin",
+                "failed",
+                "Failed to send message to dual plugin",
+            );
+
+            return;
+        }
+
+        dualWS.send(payload);
+    },
     forwardMessageFromPluginWSClient(payload, sender, connectionState, connectionMessage) {
         chrome.runtime.sendMessage({
             action: "forward_message_from_plugin_ws",
@@ -288,7 +366,7 @@ const ws = {
             connectionMessage: connectionMessage,
             pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
             pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
-            sharedWSOpenedBy: ws.sharedWSOpenedBy,
+            dualWSOpenedBy: ws.dualWSOpenedBy,
             totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
         });
     }

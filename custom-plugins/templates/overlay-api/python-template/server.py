@@ -125,6 +125,7 @@ def plugin_manifest():
                 },
             ],
         },
+        "meta": {},
     })
 
 @app.route("/ping", methods=["GET"])
