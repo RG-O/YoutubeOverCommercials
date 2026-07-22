@@ -37,7 +37,7 @@ Follow installation instructions for the optional companion app [here](https://g
 
 ## Plugins (optional)
 
-Follow instructions [here](custom-plugins\README.md).
+Follow instructions [here](custom-plugins/README.md).
 
 ---
 
