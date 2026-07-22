@@ -4,11 +4,11 @@ import websockets
 import json
 import time
 
-plugin_protocol_version = 1 # DO NOT TOUCH
+PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-plugin_name = "My Trigger Plugin"
-plugin_id = "my-trigger-plugin-ws" # Must be unique
-plugin_version = "1.0.0"
+PLUGIN_NAME = "My Trigger Plugin"
+PLUGIN_ID = "my-trigger-plugin-ws" # Must be unique
+PLUGIN_VERSION = "1.0.0"
 
 PORT = 64145
 
@@ -49,7 +49,7 @@ async def handle_message(ws, msg):
 
         # Send initial message
         print("Returning connected status")
-        await send_status(ws, plugin_name + " connected!", plugin_name + " ready")
+        await send_status(ws, PLUGIN_NAME + " connected!", PLUGIN_NAME + " ready")
 
         # Start detection loop
         asyncio.create_task(demo_loop(ws))
@@ -85,13 +85,13 @@ async def demo_loop(ws):
         await send_commercial_state_change(ws, is_commercial, display, debug)
 
 async def send_commercial_state_change(ws, is_commercial, display, debug):
-    global plugin_protocol_version
+    global PLUGIN_PROTOCOL_VERSION
 
     try:
         await ws.send(json.dumps({
             "type": "commercial_state_change",
             "timestamp": time.time(),
-            "pluginProtocolVersion": plugin_protocol_version,
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
             "data": {
                 "isCommercial": is_commercial
             },
@@ -105,13 +105,13 @@ async def send_commercial_state_change(ws, is_commercial, display, debug):
 
 # This can be used to disable or enable any auto commercial detection that the browser extension is doing
 async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_blocked, display, debug):
-    global plugin_protocol_version
+    global PLUGIN_PROTOCOL_VERSION
 
     try:
         await ws.send(json.dumps({
             "type": "auto_commercial_blocked_state_change",
             "timestamp": time.time(),
-            "pluginProtocolVersion": plugin_protocol_version,
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
             "data": {
                 "isAutoCommercialBlocked": is_auto_commercial_blocked
             },
@@ -124,13 +124,13 @@ async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_block
         print("send_auto_commercial_blocked_state_change stopped: client disconnected")
 
 async def send_status(ws, display, debug):
-    global plugin_protocol_version
+    global PLUGIN_PROTOCOL_VERSION
 
     try:
         await ws.send(json.dumps({
             "type": "status",
             "timestamp": time.time(),
-            "pluginProtocolVersion": plugin_protocol_version,
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
             "data": {},
             "meta": {
                 "display": display,
@@ -141,20 +141,20 @@ async def send_status(ws, display, debug):
         print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
-    global plugin_name
-    global plugin_id
-    global plugin_version
-    global plugin_protocol_version
+    global PLUGIN_NAME
+    global PLUGIN_ID
+    global PLUGIN_VERSION
+    global PLUGIN_PROTOCOL_VERSION
 
     try:
         await ws.send(json.dumps({
             "type": "plugin_manifest",
             "timestamp": time.time(),
-            "pluginProtocolVersion": plugin_protocol_version,
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
             "data": {
-                "name": plugin_name,
-                "id": plugin_id,
-                "version": plugin_version,
+                "name": PLUGIN_NAME,
+                "id": PLUGIN_ID,
+                "version": PLUGIN_VERSION,
                 "description": "My trigger plugin description.", # Optional
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional

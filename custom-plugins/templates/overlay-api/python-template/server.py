@@ -2,11 +2,11 @@
 from flask import Flask, request, jsonify
 import time
 
-plugin_protocol_version = 1 # DO NOT TOUCH
+PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-plugin_name = "My Overlay Plugin (API)"
-plugin_id = "my-overlay-plugin-api" # Must be unique
-plugin_version = "1.0.0"
+PLUGIN_NAME = "My Overlay Plugin (API)"
+PLUGIN_ID = "my-overlay-plugin-api" # Must be unique
+PLUGIN_VERSION = "1.0.0"
 
 app = Flask(__name__)
 
@@ -55,19 +55,19 @@ def custom_plugin_overlay():
 
 @app.route("/plugin-manifest", methods=["GET"])
 def plugin_manifest():
-    global plugin_name
-    global plugin_id
-    global plugin_version
-    global plugin_protocol_version
+    global PLUGIN_NAME
+    global PLUGIN_ID
+    global PLUGIN_VERSION
+    global PLUGIN_PROTOCOL_VERSION
 
     return jsonify({
         "type": "plugin_manifest",
         "timestamp": time.time(),
-        "pluginProtocolVersion": plugin_protocol_version,
+        "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
         "data": {
-            "name": plugin_name,
-            "id": plugin_id,
-            "version": plugin_version,
+            "name": PLUGIN_NAME,
+            "id": PLUGIN_ID,
+            "version": PLUGIN_VERSION,
             "description": "My overlay plugin description.", # Optional
             "primaryColor": "#12384d", # Optional
             "secondaryColor": "#dadcdc", # Optional
