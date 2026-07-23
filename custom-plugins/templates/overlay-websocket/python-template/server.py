@@ -62,8 +62,6 @@ async def handle_message(ws, msg):
         print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
 
 async def send_status(ws, display, debug):
-    global PLUGIN_PROTOCOL_VERSION
-
     try:
         await ws.send(json.dumps({
             "type": "status",
@@ -79,11 +77,6 @@ async def send_status(ws, display, debug):
         print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
-    global PLUGIN_NAME
-    global PLUGIN_ID
-    global PLUGIN_VERSION
-    global PLUGIN_PROTOCOL_VERSION
-
     try:
         await ws.send(json.dumps({
             "type": "plugin_manifest",

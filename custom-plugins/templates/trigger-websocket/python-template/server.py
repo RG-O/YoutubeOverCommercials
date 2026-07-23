@@ -85,8 +85,6 @@ async def demo_loop(ws):
         await send_commercial_state_change(ws, is_commercial, display, debug)
 
 async def send_commercial_state_change(ws, is_commercial, display, debug):
-    global PLUGIN_PROTOCOL_VERSION
-
     try:
         await ws.send(json.dumps({
             "type": "commercial_state_change",
@@ -105,8 +103,6 @@ async def send_commercial_state_change(ws, is_commercial, display, debug):
 
 # This can be used to disable or enable any auto commercial detection that the browser extension is doing
 async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_blocked, display, debug):
-    global PLUGIN_PROTOCOL_VERSION
-
     try:
         await ws.send(json.dumps({
             "type": "auto_commercial_blocked_state_change",
@@ -124,8 +120,6 @@ async def send_auto_commercial_blocked_state_change(ws, is_auto_commercial_block
         print("send_auto_commercial_blocked_state_change stopped: client disconnected")
 
 async def send_status(ws, display, debug):
-    global PLUGIN_PROTOCOL_VERSION
-
     try:
         await ws.send(json.dumps({
             "type": "status",
@@ -141,11 +135,6 @@ async def send_status(ws, display, debug):
         print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
-    global PLUGIN_NAME
-    global PLUGIN_ID
-    global PLUGIN_VERSION
-    global PLUGIN_PROTOCOL_VERSION
-
     try:
         await ws.send(json.dumps({
             "type": "plugin_manifest",

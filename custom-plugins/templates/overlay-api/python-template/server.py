@@ -55,11 +55,6 @@ def custom_plugin_overlay():
 
 @app.route("/plugin-manifest", methods=["GET"])
 def plugin_manifest():
-    global PLUGIN_NAME
-    global PLUGIN_ID
-    global PLUGIN_VERSION
-    global PLUGIN_PROTOCOL_VERSION
-
     return jsonify({
         "type": "plugin_manifest",
         "timestamp": time.time(),
