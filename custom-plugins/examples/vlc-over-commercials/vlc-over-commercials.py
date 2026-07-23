@@ -35,6 +35,8 @@ previous_overlay_video_height_percentage = 0
 
 vlc_process = None
 
+is_setup_complete = False
+
 def find_window_by_title(partial_title):
     def enum_handler(hwnd, result):
         if win32gui.IsWindowVisible(hwnd):
@@ -169,6 +171,22 @@ def wait_for_vlc_playing(timeout=60):
         time.sleep(0.2)
 
     return False
+
+
+def wait_for_setup_complete(timeout=30):
+    if is_setup_complete:
+        return True
+        
+    start = time.time()
+
+    while time.time() - start < timeout:
+        time.sleep(0.5)
+        
+        if is_setup_complete:
+            return True
+        
+    return False
+
 
 def calculate_largest_aspect_fit(max_width_percent=90, max_height_percent=75):
     screen_width = win32api.GetSystemMetrics(0)
@@ -443,6 +461,7 @@ def custom_plugin_overlay():
     global optimized_width_percentage, optimized_height_percentage
     global previous_overlay_video_width_percentage, previous_overlay_video_height_percentage
     global vlc_process
+    global is_setup_complete
 
     data = request.json
     request_type = data["type"]
@@ -455,6 +474,8 @@ def custom_plugin_overlay():
 
     if request_type == "commercial_state_change":
         is_commercial = data["data"]["isCommercialState"]
+        
+        wait_for_setup_complete()
 
         if is_commercial:
             print("START overlay")
@@ -513,6 +534,21 @@ def custom_plugin_overlay():
         if is_vlc_http_api_control_mode:
             original_forground_window = win32gui.GetForegroundWindow()
             print(win32gui.GetWindowText(original_forground_window))
+            
+            if original_forground_window is not None:
+                win32gui.SetWindowPos(
+                    original_forground_window,
+                    win32con.HWND_TOPMOST,
+                    #win32con.HWND_NOTOPMOST,
+                    #win32con.HWND_TOP,
+                    0, 0, 0, 0,
+                    win32con.SWP_NOMOVE |
+                    win32con.SWP_NOSIZE #|
+                    #win32con.SWP_NOOWNERZORDER
+                    | win32con.SWP_NOACTIVATE
+                )
+                time.sleep(0.4)
+                
             my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
             open_vlc_with_specific_file(my_file_path)
             #requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
@@ -549,6 +585,19 @@ def custom_plugin_overlay():
             # win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
             if original_forground_window is not None:
+                # win32gui.SetWindowPos(
+                #     original_forground_window,
+                #     win32con.HWND_TOPMOST,
+                #     win32con.HWND_NOTOPMOST,
+                #     win32con.HWND_TOP,
+                #     0, 0, 0, 0,
+                #     win32con.SWP_NOMOVE |
+                #     win32con.SWP_NOSIZE |
+                #     win32con.SWP_NOOWNERZORDER
+                # )
+                
+                time.sleep(1)
+
                 win32gui.SetWindowPos(
                     original_forground_window,
                     #win32con.HWND_TOPMOST,
@@ -556,20 +605,11 @@ def custom_plugin_overlay():
                     #win32con.HWND_TOP,
                     0, 0, 0, 0,
                     win32con.SWP_NOMOVE |
-                    win32con.SWP_NOSIZE |
-                    win32con.SWP_NOOWNERZORDER
+                    win32con.SWP_NOSIZE #|
+                    #win32con.SWP_NOOWNERZORDER
                 )
-
-                # win32gui.SetWindowPos(
-                #     original_forground_window,
-                #     #win32con.HWND_TOPMOST,
-                #     win32con.HWND_NOTOPMOST,
-                #     #win32con.HWND_TOP,
-                #     0, 0, 0, 0,
-                #     win32con.SWP_NOMOVE |
-                #     win32con.SWP_NOSIZE |
-                #     win32con.SWP_NOOWNERZORDER
-                # )
+                
+            is_setup_complete = True
 
             return jsonify({"status": "info", "message": "Message from VLC Over Commercials plugin: Success! Click in this window to return focus and you are good to go!"})
 
