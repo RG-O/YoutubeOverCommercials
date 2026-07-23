@@ -511,6 +511,8 @@ def custom_plugin_overlay():
     elif request_type == "init":
         print("init")
         if is_vlc_http_api_control_mode:
+            original_forground_window = win32gui.GetForegroundWindow()
+            print(win32gui.GetWindowText(original_forground_window))
             my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
             open_vlc_with_specific_file(my_file_path)
             #requests.get("http://localhost:8080/requests/status.json?command=pl_pause", auth=vlc_http_api_auth)
@@ -542,11 +544,35 @@ def custom_plugin_overlay():
             time.sleep(0.2)
             win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE) #TODO: maybe do have everything show at the beginging and do this?
             time.sleep(0.2)
-            position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-            time.sleep(0.2)
-            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            # position_and_resize_window(hwnd, width_percent=10, height_percent=10)
+            # time.sleep(0.2)
+            # win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
-        
+            if original_forground_window is not None:
+                win32gui.SetWindowPos(
+                    original_forground_window,
+                    #win32con.HWND_TOPMOST,
+                    win32con.HWND_NOTOPMOST,
+                    #win32con.HWND_TOP,
+                    0, 0, 0, 0,
+                    win32con.SWP_NOMOVE |
+                    win32con.SWP_NOSIZE |
+                    win32con.SWP_NOOWNERZORDER
+                )
+
+                # win32gui.SetWindowPos(
+                #     original_forground_window,
+                #     #win32con.HWND_TOPMOST,
+                #     win32con.HWND_NOTOPMOST,
+                #     #win32con.HWND_TOP,
+                #     0, 0, 0, 0,
+                #     win32con.SWP_NOMOVE |
+                #     win32con.SWP_NOSIZE |
+                #     win32con.SWP_NOOWNERZORDER
+                # )
+
+            return jsonify({"status": "info", "message": "Message from VLC Over Commercials plugin: Success! Click in this window to return focus and you are good to go!"})
+
         print(data)
 
     elif request_type == "end":
