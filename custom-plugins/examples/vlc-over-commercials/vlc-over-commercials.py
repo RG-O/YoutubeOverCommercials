@@ -11,10 +11,13 @@ import re
 import json
 
 from pathlib import Path
-
 from flask import Flask, request, jsonify
 
-plugin_protocol_version = 1 # DO NOT TOUCH
+PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
+
+PLUGIN_NAME = "VLC Over Commercials"
+PLUGIN_ID = "vlc-over-commercials"
+PLUGIN_VERSION = "1.0.0"
 
 is_vlc_http_api_control_mode = True
 vlc_http_api_auth = ("", "1234")
@@ -573,12 +576,12 @@ def plugin_manifest():
     return jsonify({
         "type": "plugin_manifest",
         "timestamp": time.time(),
-        "pluginProtocolVersion": plugin_protocol_version,
+        "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
         "data": {
-            "name": "VLC Over Commercials",
-            "id": "vlc-over-commercials",
-            "version": "1.0.0",
-            "description": "This plugin will automatically play VLC over commercials. Have latest version of VLC installed and closed before initiating.", #TODO: Update this.
+            "name": PLUGIN_NAME,
+            "id": PLUGIN_ID,
+            "version": PLUGIN_VERSION,
+            "description": "This plugin will automatically play VLC(TM) over commercials. Have latest version of VLC installed and closed before initiating. VLC is a trademark of the VideoLAN organization. This plugin is not affiliated with VLC or VideoLAN.", #TODO: Update this.
             "primaryColor": "#E85E00",
             "secondaryColor": "#f2c7aa",
             "capabilities": ["overlay"],
