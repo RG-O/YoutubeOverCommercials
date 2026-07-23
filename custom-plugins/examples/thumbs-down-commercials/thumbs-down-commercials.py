@@ -69,6 +69,8 @@ THRESHOLDS = [
     (0.57, 0.8),
 ]
 
+CAMERA_RESOLUTION = "native"
+
 VISIBILITY_THRESHOLD = 0.50
 COOLDOWN = 1.0
 
@@ -214,6 +216,7 @@ def get_available_cameras(max_index=10):
 
 def apply_plugin_preferences(preferences):
     global CAMERA_INDEX
+    global CAMERA_RESOLUTION
     global MIRROR_CAMERA
     global COMMERCIAL_GESTURE
     global CONTENT_GESTURE
@@ -229,6 +232,14 @@ def apply_plugin_preferences(preferences):
 
     try:
         CAMERA_INDEX = max(0, int(preferences.get("cameraIndex", CAMERA_INDEX)))
+    except (TypeError, ValueError):
+        print("Invalid cameraIndex preference; keeping", CAMERA_INDEX)
+
+    try:
+        CAMERA_RESOLUTION = preferences.get(
+            "cameraResolution",
+            "native"
+        )
     except (TypeError, ValueError):
         print("Invalid cameraIndex preference; keeping", CAMERA_INDEX)
 
@@ -672,13 +683,11 @@ async def camera_loop(ws):
         #     cv2.VideoWriter_fourcc(*"MJPG")
         # )
 
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        if CAMERA_RESOLUTION != "native":
+            width, height = map(int, CAMERA_RESOLUTION.split("x"))
 
-        #TODO: add advanced/troubleshooting option for this
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
         #TODO: add advanced/troubleshooting option for this
         # cap.set(cv2.CAP_PROP_FPS, 30)
@@ -1096,6 +1105,27 @@ async def send_manifest(ws):
                         ),
                         "type": "number",
                         "default": 4,
+                    },
+                    {
+                        "key": "cameraResolution",
+                        "label": "Camera Resolution",
+                        "description": "Resolution used when capturing frames for gesture recognition.",
+                        "type": "select",
+                        "options": [
+                            {
+                                "label": "Native",
+                                "value": "native"
+                            },
+                            {
+                                "label": "1920x1080",
+                                "value": "1920x1080"
+                            },
+                            {
+                                "label": "1280x720",
+                                "value": "1280x720"
+                            }
+                        ],
+                        "default": "native"
                     },
                     {
                         "key": "mirrorCamera",
