@@ -1,3 +1,4 @@
+
 import asyncio
 import websockets
 import json
@@ -5,10 +6,18 @@ import time
 import os
 import cv2
 import base64
+import platform
+import aiohttp
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import mediapipe as mp
+
+PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
+
+PLUGIN_NAME = "Thumbs Down Commercials"
+PLUGIN_ID = "my-trigger-plugin-ws" # Must be unique
+PLUGIN_VERSION = "1.1.0"
 
 # --------------------------------------------------
 # Configuration
@@ -18,25 +27,36 @@ PORT = 64145
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "gesture_recognizer.task")
+MODEL_URL = (
+    "https://storage.googleapis.com/mediapipe-models/"
+    "gesture_recognizer/gesture_recognizer/float16/latest/"
+    "gesture_recognizer.task"
+)
 
 is_debug_mode = False
 CAMERA_INDEX = 0
+MIRROR_CAMERA = True
 
-REQUIRED_GESTURE_COUNTS = {
-    "Thumb_Up": 2,
-    "Thumb_Down": 2
+# default values
+COMMERCIAL_GESTURE = "Thumb_Down"
+CONTENT_GESTURE = "ILoveYou"
+COMMERCIAL_GESTURE_COUNT = 2
+CONTENT_GESTURE_COUNT = 1
+TOTAL_HANDS_PROCESSED = 4
+
+# MediaPipe Gesture Recognizer canned gesture names.
+GESTURE_OPTIONS = {
+    "Closed_Fist": {"label": "Closed Fist \u270A", "emoji": "\u270A"},
+    "Open_Palm": {"label": "Open Palm \u270B", "emoji": "\u270B"},
+    "Pointing_Up": {"label": "Pointing Up \u261D\uFE0F", "emoji": "\u261D\uFE0F"},
+    "Thumb_Down": {"label": "Thumb Down \uD83D\uDC4E", "emoji": "\uD83D\uDC4E"},
+    "Thumb_Up": {"label": "Thumb Up \uD83D\uDC4D", "emoji": "\uD83D\uDC4D"},
+    "Victory": {"label": "Victory \u270C\uFE0F", "emoji": "\u270C\uFE0F"},
+    "ILoveYou": {"label": "I Love You \uD83E\uDD1F", "emoji": "\uD83E\uDD1F"},
 }
 
-TARGET_GESTURES = {
-    "Thumb_Up": {
-        "action": "content",
-        "emoji": "\uD83D\uDC4D"
-    },
-    "Thumb_Down": {
-        "action": "commercial",
-        "emoji": "\uD83D\uDC4E"
-    }
-}
+REQUIRED_GESTURE_COUNTS = {}
+TARGET_GESTURES = {}
 
 GREEN_SQUARE = "\uD83D\uDFE9"
 CHECK_BUTTON = "\u2705"
@@ -64,12 +84,248 @@ clients = set()
 camera_task = None
 camera_active = asyncio.Event()
 
+camera_options = None
+default_camera = None
+
 current_is_commercial = None
 last_status_display = None
 
 gesture_group_states = {}
 
 any_trigger_display_until = time.time()
+
+# --------------------------------------------------
+# Model management
+# --------------------------------------------------
+
+async def ensure_model_exists(ws):
+    """
+    Download the MediaPipe gesture model if it is not already present.
+
+    Returns:
+        True if the model exists and appears valid.
+        False if the download or validation fails.
+    """
+
+    if os.path.isfile(MODEL_PATH) and os.path.getsize(MODEL_PATH) > 0:
+        print(f"Model found: {MODEL_PATH}")
+        return True
+
+    await send_status(
+        ws,
+        "Downloading AI model...",
+        "Downloading MediaPipe Gesture Recognizer model..."
+    )
+
+    print("Gesture recognizer model was not found.")
+    print("Downloading MediaPipe model...")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(MODEL_URL) as response:
+                response.raise_for_status()
+
+                with open(MODEL_PATH, "wb") as f:
+                    total = int(response.headers.get("Content-Length", 0))
+                    downloaded = 0
+
+                    async for chunk in response.content.iter_chunked(1024 * 1024):
+                        downloaded += len(chunk)
+                        f.write(chunk)
+
+                        if total:
+                            percent = int(downloaded * 100 / total)
+
+                            await send_status(
+                                ws,
+                                f"Downloading AI model... {percent}%",
+                                f"Downloaded {downloaded:,} / {total:,} bytes"
+                            )
+
+        return True
+
+    except Exception as error:
+        print(f"Failed to download gesture model: {error}")
+
+        return False
+
+# --------------------------------------------------
+# Preference helpers
+# --------------------------------------------------
+
+def clamp(value, minimum, maximum):
+    return max(minimum, min(value, maximum))
+
+
+def rebuild_target_gestures():
+    """Rebuild runtime gesture mappings from the current preferences."""
+    global TARGET_GESTURES
+    global REQUIRED_GESTURE_COUNTS
+    global gesture_group_states
+
+    TARGET_GESTURES = {
+        COMMERCIAL_GESTURE: {
+            "action": "commercial",
+            "emoji": GESTURE_OPTIONS[COMMERCIAL_GESTURE]["emoji"],
+        },
+        CONTENT_GESTURE: {
+            "action": "content",
+            "emoji": GESTURE_OPTIONS[CONTENT_GESTURE]["emoji"],
+        },
+    }
+
+    REQUIRED_GESTURE_COUNTS = {
+        COMMERCIAL_GESTURE: COMMERCIAL_GESTURE_COUNT,
+        CONTENT_GESTURE: CONTENT_GESTURE_COUNT,
+    }
+
+    gesture_group_states.clear()
+
+
+def get_video_capture_backend():
+    # DirectShow generally avoids slow camera probing on Windows.
+    if platform.system() == "Windows":
+        return cv2.CAP_DSHOW
+    return cv2.CAP_ANY
+
+
+def get_available_cameras(max_index=10):
+    """Return camera options OpenCV can successfully open."""
+    cameras = []
+    backend = get_video_capture_backend()
+
+    for index in range(max_index):
+        cap = cv2.VideoCapture(index, backend)
+        if cap.isOpened():
+            success, _ = cap.read()
+            if success:
+                cameras.append({
+                    "label": f"Camera {index}",
+                    "value": str(index),
+                })
+        cap.release()
+
+    # Always provide a usable option even if probing is blocked by another app.
+    if not cameras:
+        cameras.append({"label": "Camera 0", "value": "0"})
+
+    return cameras
+
+
+def apply_plugin_preferences(preferences):
+    global CAMERA_INDEX
+    global MIRROR_CAMERA
+    global COMMERCIAL_GESTURE
+    global CONTENT_GESTURE
+    global COMMERCIAL_GESTURE_COUNT
+    global CONTENT_GESTURE_COUNT
+    global VISIBILITY_THRESHOLD
+    global COOLDOWN
+    global TOTAL_HANDS_PROCESSED
+
+    print(preferences)
+
+    available_gestures = set(GESTURE_OPTIONS)
+
+    try:
+        CAMERA_INDEX = max(0, int(preferences.get("cameraIndex", CAMERA_INDEX)))
+    except (TypeError, ValueError):
+        print("Invalid cameraIndex preference; keeping", CAMERA_INDEX)
+
+    MIRROR_CAMERA = bool(preferences.get("mirrorCamera", MIRROR_CAMERA))
+
+    commercial_gesture = preferences.get(
+        "commercialGesture",
+        COMMERCIAL_GESTURE,
+    )
+    content_gesture = preferences.get(
+        "contentGesture",
+        CONTENT_GESTURE,
+    )
+
+    if commercial_gesture in available_gestures:
+        COMMERCIAL_GESTURE = commercial_gesture
+
+    if content_gesture in available_gestures:
+        CONTENT_GESTURE = content_gesture
+
+    # Using the same gesture for both actions would make state changes ambiguous.
+    if CONTENT_GESTURE == COMMERCIAL_GESTURE:
+        fallback = "Thumb_Up" if COMMERCIAL_GESTURE != "Thumb_Up" else "Thumb_Down"
+        print(
+            "Commercial and content gestures matched; "
+            f"using {fallback} for content instead."
+        )
+        CONTENT_GESTURE = fallback
+
+    try:
+        COMMERCIAL_GESTURE_COUNT = int(clamp(
+            int(preferences.get(
+                "commercialGestureCount",
+                COMMERCIAL_GESTURE_COUNT,
+            )),
+            1,
+            4,
+        ))
+    except (TypeError, ValueError):
+        print("Invalid commercialGestureCount preference")
+
+    try:
+        CONTENT_GESTURE_COUNT = int(clamp(
+            int(preferences.get(
+                "contentGestureCount",
+                CONTENT_GESTURE_COUNT,
+            )),
+            1,
+            4,
+        ))
+    except (TypeError, ValueError):
+        print("Invalid contentGestureCount preference")
+
+    try:
+        TOTAL_HANDS_PROCESSED = int(preferences.get("totalHandsProcessed", TOTAL_HANDS_PROCESSED))
+    except (TypeError, ValueError):
+        print("Invalid totalHandsProcessed preference")
+
+    try:
+        VISIBILITY_THRESHOLD = float(clamp(
+            float(preferences.get(
+                "minimumGestureConfidence",
+                VISIBILITY_THRESHOLD,
+            )),
+            0.0,
+            1.0,
+        ))
+    except (TypeError, ValueError):
+        print("Invalid minimumGestureConfidence preference")
+
+    try:
+        COOLDOWN = float(clamp(
+            float(preferences.get("cooldownSeconds", COOLDOWN)),
+            0.0,
+            10.0,
+        ))
+    except (TypeError, ValueError):
+        print("Invalid cooldownSeconds preference")
+
+    rebuild_target_gestures()
+
+    print(
+        "Applied plugin preferences:",
+        {
+            "cameraIndex": CAMERA_INDEX,
+            "mirrorCamera": MIRROR_CAMERA,
+            "commercialGesture": COMMERCIAL_GESTURE,
+            "commercialGestureCount": COMMERCIAL_GESTURE_COUNT,
+            "contentGesture": CONTENT_GESTURE,
+            "contentGestureCount": CONTENT_GESTURE_COUNT,
+            "minimumGestureConfidence": VISIBILITY_THRESHOLD,
+            "cooldownSeconds": COOLDOWN,
+        },
+    )
+
+
+rebuild_target_gestures()
 
 # --------------------------------------------------
 # Display helpers
@@ -373,12 +629,25 @@ async def process_gesture_group(ws, gesture_name, hands, now, frame):
 # --------------------------------------------------
 
 async def camera_loop(ws):
+    cap = None
+    recognizer = None
+    debug_window_created = False
+
     try:
-        if not os.path.exists(MODEL_PATH):
-            print("Model not found:", MODEL_PATH)
+        if not await ensure_model_exists(ws):
+            await send_status(
+                ws,
+                "Model unavailable",
+                "The gesture recognition model could not be downloaded."
+            )
             return
 
         print("Loading MediaPipe model...")
+        await send_status(
+            ws,
+            "Loading MediaPipe model...",
+            "Loading MediaPipe model..."
+        )
 
         base_options = python.BaseOptions(
             model_asset_path=MODEL_PATH
@@ -386,18 +655,51 @@ async def camera_loop(ws):
 
         options = vision.GestureRecognizerOptions(
             base_options=base_options,
-            num_hands=4
+            num_hands=max(
+                TOTAL_HANDS_PROCESSED,
+                COMMERCIAL_GESTURE_COUNT,
+                CONTENT_GESTURE_COUNT,
+            )
         )
 
         recognizer = vision.GestureRecognizer.create_from_options(options)
 
-        cap = cv2.VideoCapture(CAMERA_INDEX)
+        cap = cv2.VideoCapture(CAMERA_INDEX, get_video_capture_backend())
+
+        #TODO: add advanced/troubleshooting option for this
+        # cap.set(
+        #     cv2.CAP_PROP_FOURCC,
+        #     cv2.VideoWriter_fourcc(*"MJPG")
+        # )
+
+        #TODO: add advanced/troubleshooting option for this
+        # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+        #TODO: add advanced/troubleshooting option for this
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+
+        #TODO: add advanced/troubleshooting option for this
+        # cap.set(cv2.CAP_PROP_FPS, 30)
+
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        print(f"Camera resolution: {width}x{height}")
 
         if not cap.isOpened():
             print("Failed to open webcam")
             return
 
         print("Camera started")
+
+        if is_debug_mode:
+            cv2.namedWindow(
+                "MediaPipe Gesture Debug",
+                cv2.WINDOW_NORMAL
+            )
+            debug_window_created = True
 
         await send_expected_resting_status(ws, "Ready")
 
@@ -410,7 +712,24 @@ async def camera_loop(ws):
                 await asyncio.sleep(0.01)
                 continue
 
-            frame = cv2.flip(frame, 1)
+            if MIRROR_CAMERA:
+                frame = cv2.flip(frame, 1)
+
+            #TODO: add option for this
+            # display_frame = frame
+
+            # processing_frame = cv2.resize(
+            #     frame,
+            #     None,
+            #     fx=0.5,
+            #     fy=0.5,
+            #     interpolation=cv2.INTER_AREA
+            # )
+
+            # rgb_frame = cv2.cvtColor(
+            #     processing_frame,
+            #     cv2.COLOR_BGR2RGB
+            # )
 
             rgb_frame = cv2.cvtColor(
                 frame,
@@ -495,12 +814,37 @@ async def camera_loop(ws):
 
             await asyncio.sleep(0)
 
-        cap.release()
-        cv2.destroyAllWindows()
-
     except asyncio.CancelledError:
         print("camera_loop shutting down")
         raise
+
+    except Exception as error:
+        print(f"Camera loop error: {error}")
+
+    finally:
+        print("Cleaning up camera resources")
+
+        if cap is not None:
+            cap.release()
+
+        if debug_window_created:
+            try:
+                cv2.destroyAllWindows()
+
+                # Let OpenCV process the window-close event.
+                cv2.waitKey(1)
+
+            except cv2.error:
+                pass
+
+        if recognizer is not None:
+            try:
+                recognizer.close()
+                print("Recognizer closed")
+            except Exception:
+                pass
+
+        print("Camera resources released")
 
 # --------------------------------------------------
 # WebSocket handling
@@ -521,7 +865,7 @@ async def handle_client(websocket):
         pass
 
     finally:
-        clients.remove(websocket)
+        clients.discard(websocket)
 
         if len(clients) == 0:
             print("Stopping camera")
@@ -556,12 +900,20 @@ async def handle_message(ws, msg):
         await send_manifest(ws)
 
     if message_type == "init":
-        is_debug_mode = msg["data"]["preferences"]["isDebugMode"]
-        
-        current_is_commercial = (
-            msg.get("data", {})
-            .get("isCommercialState")
+        data = msg.get("data", {})
+        general_preferences = data.get("preferences", {})
+
+        is_debug_mode = bool(
+            general_preferences.get(
+                "isDebugMode",
+                data.get("isDebugMode", False),
+            )
         )
+
+        custom_trigger_plugin_preferences = general_preferences.get("pluginTriggerPreferences", {}).get("preferences", {})
+        apply_plugin_preferences(custom_trigger_plugin_preferences)
+
+        current_is_commercial = data.get("isCommercialState")
 
         last_status_display = None
 
@@ -573,11 +925,20 @@ async def handle_message(ws, msg):
 
         camera_active.set()
 
-        if not camera_task:
-            print("Starting camera task")
-            camera_task = asyncio.create_task(
-                camera_loop(ws)
-            )
+        # Restart the camera task so camera, hand-count, and related settings
+        # are guaranteed to take effect if a second init message is received.
+        if camera_task:
+            camera_task.cancel()
+            try:
+                await camera_task
+            except asyncio.CancelledError:
+                pass
+            camera_task = None
+
+        print("Starting camera task")
+        camera_task = asyncio.create_task(
+            camera_loop(ws)
+        )
 
     elif message_type == "commercial_state_change":
         current_is_commercial = msg["data"]["isCommercialState"]
@@ -607,6 +968,8 @@ async def send_commercial_state_change(
     display,
     debug,
 ):
+    global PLUGIN_PROTOCOL_VERSION
+
     try:
         await ws.send(json.dumps({
             "type": "commercial_state_change",
@@ -624,6 +987,8 @@ async def send_commercial_state_change(
         print("send_commercial_state_change failed")
 
 async def send_status(ws, display, debug):
+    global PLUGIN_PROTOCOL_VERSION
+
     try:
         await ws.send(json.dumps({
             "type": "status",
@@ -639,18 +1004,135 @@ async def send_status(ws, display, debug):
         pass
 
 async def send_manifest(ws):
+    global camera_options
+    global default_camera
+
+    # only get list of cameras if not already running and if it is, only set it if it isn't already cached
+    if not camera_task:
+        camera_options = get_available_cameras()
+    elif not camera_options:
+        camera_options = [{"label": "Camera 0", "value": "0"}]
+
+    if not default_camera:
+        default_camera = camera_options[-1]["value"]
+
+    gesture_options = [
+        {"label": config["label"], "value": gesture_name}
+        for gesture_name, config in GESTURE_OPTIONS.items()
+    ]
+
     try:
         await ws.send(json.dumps({
             "type": "plugin_manifest",
             "timestamp": time.time(),
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
             "data": {
-                "name": "Thumbs Down Commercials",
-                "id": "my-trigger-plugin-ws", # Must be unique
-                "version": "1.0.0",
-                "description": "My trigger plugin description.", # Optional
-                "primaryColor": "#12384d", # Optional
-                "secondaryColor": "#dadcdc", # Optional
-                "capabilities": ["detection"], #TODO: delete this?
+                "name": PLUGIN_NAME,
+                "id": PLUGIN_ID,
+                "version": PLUGIN_VERSION,
+                "description": (
+                    "Use configurable MediaPipe hand gestures to switch "
+                    "between commercial and content states."
+                ),
+                "primaryColor": "#12384d",
+                "secondaryColor": "#dadcdc",
+                "capabilities": ["detection"],
+                "preferences": [
+                    {
+                        "key": "cameraIndex",
+                        "label": "Camera",
+                        "description": "Camera used for gesture recognition.",
+                        "type": "select",
+                        "options": camera_options,
+                        "default": default_camera,
+                    },
+                    {
+                        "key": "commercialGesture",
+                        "label": "Commercial Gesture",
+                        "description": (
+                            "Gesture that changes the stream state to commercial."
+                        ),
+                        "type": "select",
+                        "options": gesture_options,
+                        "default": "Thumb_Down",
+                    },
+                    {
+                        "key": "commercialGestureCount",
+                        "label": "Commercial Gesture Count",
+                        "description": (
+                            "Number of matching hands required to trigger commercial (1-5)."
+                        ),
+                        "type": "number",
+                        "default": 2,
+                        "min": 1,
+                        "max": 4,
+                    },
+                    {
+                        "key": "contentGesture",
+                        "label": "Content Gesture",
+                        "description": (
+                            "Gesture that changes the stream state back to content."
+                        ),
+                        "type": "select",
+                        "options": gesture_options,
+                        "default": "Thumb_Up",
+                    },
+                    {
+                        "key": "contentGestureCount",
+                        "label": "Content Gesture Count",
+                        "description": (
+                            "Number of matching hands required to trigger content (1-5)."
+                        ),
+                        "type": "number",
+                        "default": 2,
+                        "min": 1,
+                        "max": 4,
+                    },
+                    {
+                        "key": "totalHandsProcessed",
+                        "label": "Total Hands Processed",
+                        "description": (
+                            "Total number of hands the model will recognize at a time (Recommended use less if can. Use more for crowded room.)."
+                        ),
+                        "type": "number",
+                        "default": 4,
+                    },
+                    {
+                        "key": "mirrorCamera",
+                        "label": "Mirror Camera",
+                        "description": (
+                            "Flip the camera horizontally like a selfie preview."
+                        ),
+                        "type": "checkbox",
+                        "default": True,
+                    },
+                    {
+                        "key": "minimumGestureConfidence",
+                        "label": "Minimum Gesture Confidence",
+                        "description": (
+                            "Ignore recognized gestures below this confidence, "
+                            "from 0.0 to 1.0."
+                        ),
+                        "type": "number",
+                        "default": 0.5,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.05,
+                    },
+                    {
+                        "key": "cooldownSeconds",
+                        "label": "Trigger Cooldown (Seconds)",
+                        "description": (
+                            "Minimum delay before the same gesture group can "
+                            "trigger again."
+                        ),
+                        "type": "number",
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 10.0,
+                        "step": 0.1,
+                    },
+                ],
             },
             "meta": {
                 "display": "Sending Manifest",
@@ -658,7 +1140,7 @@ async def send_manifest(ws):
             },
         }))
     except websockets.exceptions.ConnectionClosed:
-        print("send_status send stopped: client disconnected")
+        print("send_manifest stopped: client disconnected")
 
 # --------------------------------------------------
 # Main
