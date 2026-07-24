@@ -957,7 +957,9 @@ def plugin_manifest():
                 "description": (
                     "Automatically plays VLC media over commercial breaks. "
                     "Install the latest VLC version and close VLC before "
-                    "starting the plugin. VLC is a trademark of the VideoLAN "
+                    "starting the plugin. Note: This plugin uses the overlay "
+                    "and pip size and location settings in additional "
+                    "settings above. VLC is a trademark of the VideoLAN "
                     "organization. This plugin is not affiliated with VLC or "
                     "VideoLAN."
                 ),

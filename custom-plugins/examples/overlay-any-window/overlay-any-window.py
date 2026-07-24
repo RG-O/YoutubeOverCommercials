@@ -15,8 +15,6 @@ PORT = 64146
 
 clients = set()
 
-window_title = "Picture"
-
 def get_window_dropdown_options():
     windows = []
 
@@ -86,6 +84,12 @@ def mute_application_of_window(hwnd, mute=True):
 
     if not found_audio:
         print("No active audio session found for that window.")
+
+
+def send_spacebar(hwnd):
+    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down
+    time.sleep(0.05)
+    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
 
 def position_and_resize_window(
     hwnd,
@@ -238,7 +242,6 @@ async def handle_client(websocket):
         print("Client disconnected")
 
 async def handle_message(ws, msg):
-    global window_title
     print(msg)
 
     message_type = msg["type"]
@@ -248,11 +251,11 @@ async def handle_message(ws, msg):
         return
 
     preferences = msg["data"]["preferences"]
-    plugin_preferences = preferences["pluginOverlayPreferences"]["preferences"]
-    print(plugin_preferences)
+    custom_overlay_plugin_preferences = preferences.get("pluginOverlayPreferences", {}).get("preferences", {})
 
-    window_title = plugin_preferences.get("window-title", "")
-    print(window_title)
+    window_title = custom_overlay_plugin_preferences.get("window-title", "")
+    should_mute_window = bool(custom_overlay_plugin_preferences.get("should-mute-window", True))
+    should_send_spacebar = bool(custom_overlay_plugin_preferences.get("should-send-spacebar", False))
 
     if not window_title:
         await send_status(
@@ -279,7 +282,9 @@ async def handle_message(ws, msg):
             f'Could not find a window matching "{window_title}".',
             f'Could not find a window matching "{window_title}".'
         )
+
         return
+
     else:
         if message_type == "init":
             print(msg)
@@ -288,8 +293,11 @@ async def handle_message(ws, msg):
 
             if is_pip_mode:
                 position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+            else:
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
-            mute_application_of_window(hwnd, mute=True)
+            if should_mute_window:
+                mute_application_of_window(hwnd, mute=True)
 
             print("Extension Initiated.")
 
@@ -299,10 +307,18 @@ async def handle_message(ws, msg):
             if is_commercial:
                 print("START overlay")
                 position_and_resize_window(hwnd, width_percent=overlay_video_width, height_percent=overlay_video_height, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
-                mute_application_of_window(hwnd, mute=False)
+                if should_mute_window:
+                    mute_application_of_window(hwnd, mute=False)
+                if should_send_spacebar:
+                    time.sleep(0.3)
+                    send_spacebar(hwnd)
             else:
                 hwnd = find_window_by_title(window_title)
-                mute_application_of_window(hwnd, mute=True)
+                if should_send_spacebar:
+                    send_spacebar(hwnd)
+                    time.sleep(0.3)
+                if should_mute_window:
+                    mute_application_of_window(hwnd, mute=True)
                 if is_pip_mode:
                     position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
                 else:
@@ -317,13 +333,15 @@ async def handle_message(ws, msg):
 
             if is_fullscreen:
                 print("User entered fullscreen on browser")
-                mute_application_of_window(hwnd, mute=True)
+                if should_mute_window:
+                    mute_application_of_window(hwnd, mute=True)
                 make_borderless(hwnd)
                 if is_pip_mode:
                     position_and_resize_window(hwnd, width_percent=pip_height, height_percent=pip_width, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
             else:
                 print("User exited fullscreen on browser")
-                mute_application_of_window(hwnd, mute=False)
+                if should_mute_window:
+                    mute_application_of_window(hwnd, mute=False)
                 remove_topmost(hwnd, width_percent=90, height_percent=85)
                 restore_borders(hwnd)
 
@@ -332,7 +350,7 @@ async def handle_message(ws, msg):
         elif message_type == "end": #TODO: is this needed or can I go by disconnect?
             print("Extension Stopped")
 
-            mute_application_of_window(hwnd, mute=False)
+            mute_application_of_window(hwnd, mute=False) #note: not checking should_mute_window here in case user switched the settings at any point during use
             hwnd = find_window_by_title(window_title)
             remove_topmost(hwnd, width_percent=90, height_percent=75)
             restore_borders(hwnd)
@@ -363,7 +381,7 @@ async def send_manifest(ws):
                 "name": "Overlay Any Window",
                 "id": "overlay-any-window",
                 "version": "1.0.0",
-                "description": "Overlay any open Windows application.",
+                "description": "Overlay any open Windows application. Note: This plugin uses the overlay and pip size and location settings in additional settings above.",
                 "primaryColor": "#12384d",
                 "secondaryColor": "#dadcdc",
                 "capabilities": ["overlay"],
@@ -379,8 +397,21 @@ async def send_manifest(ws):
                             if window_options
                             else ""
                         ),
-                        "required": True,
-                    }
+                    },
+                    {
+                        "key": "should-mute-window",
+                        "label": "Mute window program during commercials",
+                        "description": "Note: This will mute the intire application that the window belongs to. So if the application has multiple windows open, it will mute all of them.",
+                        "type": "checkbox",
+                        "default": True,
+                    },
+                    {
+                        "key": "should-send-spacebar",
+                        "label": "Send spacebar keypress to window",
+                        "description": "The plugin will send the spacebar command to the window in an attempt to play whatever media is in the window and pause it when commercials end. Have the media in the window be paused when you initiate the extension if you plan to use this setting.",
+                        "type": "checkbox",
+                        "default": False,
+                    },
                 ],
             },
             "meta": {
