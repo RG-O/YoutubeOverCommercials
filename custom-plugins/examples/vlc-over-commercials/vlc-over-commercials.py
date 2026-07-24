@@ -39,6 +39,7 @@ is_original_forground_window_topmost = False
 is_setup_complete = False
 is_live_video = False
 set_volume = 256
+set_volume_fallback = 205
 
 def find_window_by_title(partial_title):
     def enum_handler(hwnd, result):
@@ -496,7 +497,7 @@ def custom_plugin_overlay():
     overlay_video_location_horizontal = preferences["overlayVideoLocationHorizontal"]
     overlay_video_location_vertical = preferences["overlayVideoLocationVertical"]
     
-    is_pip_mode = bool(preferences["overlayVideoLocationVertical"])
+    is_pip_mode = bool(preferences["isPiPMode"])
     pip_height_percentage = float(preferences["pipHeight"])
     pip_width_percentage = float(preferences["pipWidth"])
     pip_location_horizontal = preferences["pipLocationHorizontal"]
@@ -558,7 +559,9 @@ def custom_plugin_overlay():
             if is_vlc_http_api_control_mode:
                 response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
                 data = response.json()
-                set_volume = int(data.get("volume", 80))
+                set_volume = int(data.get("volume", set_volume_fallback))
+                if set_volume == 0:
+                    set_volume = set_volume_fallback
                 
                 if is_live_media(data) is False:
                     print("is_live_media is False")
@@ -575,9 +578,13 @@ def custom_plugin_overlay():
                         auth=vlc_http_api_auth,
                         timeout=3,
                     )
+                    print("is_pip_mode:")
+                    print(is_pip_mode)
                     if is_pip_mode:
                         pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
                         position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+                    else:
+                        win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
                     
                 #time.sleep(0.2)
             else:
@@ -587,7 +594,7 @@ def custom_plugin_overlay():
             print("STOP overlay")
 
     elif request_type == "browser_fullscreen_state_change":
-        is_fullscreen = data["data"]["isFullscreen"]
+        is_fullscreen = data["data"]["isFullscreen"] #TODO: set is_fullscreen earlier (maybe have global variable?) and use it for determining whether to do other things
 
         window_title = "VLC"  # Change this to your target window
         hwnd = find_window_by_title(window_title)
@@ -655,13 +662,13 @@ def custom_plugin_overlay():
             window_title = "VLC"  # Change this to your target window
             hwnd = find_window_by_title(window_title)
             if hwnd is None:
-                return jsonify({"status": "error", "error": "No VLC window found."}) #TODO: update message
+                return jsonify({"status": "error", "message": "VLC could not be opened."}) #TODO: update message
             make_borderless(hwnd)
             #print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
 
             time.sleep(0.2)
 
-            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early #TODO: figure this out for windows 11
+            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early
             time.sleep(0.2) #todo: better way to wait or not have to wait at all?
             # resume_seconds = get_saved_resume_time(my_file_path)
             # requests.get(
@@ -673,12 +680,18 @@ def custom_plugin_overlay():
             
             response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
             data = response.json()
-            set_volume = int(data.get("volume", 80))
+            set_volume = int(data.get("volume", set_volume_fallback))
+            if set_volume == 0:
+                set_volume = set_volume_fallback
                 
             if is_live_media(data) is False:
                 requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
                 time.sleep(0.2)
                 win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE) #TODO: maybe do have everything show at the beginging and do this?
+                time.sleep(0.2)
+                position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar
+                time.sleep(0.2)
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
                 time.sleep(0.2)
                 
                 if original_forground_window is not None:
@@ -693,7 +706,7 @@ def custom_plugin_overlay():
                         win32con.SWP_NOMOVE |
                         win32con.SWP_NOSIZE |
                         win32con.SWP_NOOWNERZORDER
-                    )
+                    ) # doing this to clear out the taskbar for windows 11
                 
                     is_original_forground_window_topmost = True
                 
@@ -707,9 +720,35 @@ def custom_plugin_overlay():
                     auth=vlc_http_api_auth,
                     timeout=3,
                 )
+                print("is_pip_mode:")
+                print(is_pip_mode)
                 if is_pip_mode:
                     pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
                     position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+                else:
+                    time.sleep(0.2)
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                    time.sleep(0.2)
+                    position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar for windows 10
+                    time.sleep(0.2)
+                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                    time.sleep(0.2)
+
+                    if original_forground_window is not None:
+                        time.sleep(0.4)
+
+                        win32gui.SetWindowPos(
+                            original_forground_window,
+                            win32con.HWND_TOPMOST,
+                            #win32con.HWND_NOTOPMOST,
+                            #win32con.HWND_TOP,
+                            0, 0, 0, 0,
+                            win32con.SWP_NOMOVE |
+                            win32con.SWP_NOSIZE |
+                            win32con.SWP_NOOWNERZORDER
+                        ) # doing this to clear out the taskbar for windows 11
+                
+                        is_original_forground_window_topmost = True
             
                 
             is_setup_complete = True
@@ -796,7 +835,7 @@ def plugin_manifest():
                 {
                     "key": "url",
                     "label": "Video URL",
-                    "description": "This can be a stream URL or a local file URL (E.g. file:///C:/Users/user/Downloads/video.mp4)",
+                    "description": "This can be a show/movie stream URL, live stream URL, or a local file URL (E.g. file:///C:/Users/user/Downloads/video.mp4)",
                     "type": "text",
                     "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
                 }
