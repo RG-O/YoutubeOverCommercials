@@ -1,683 +1,918 @@
+"""VLC Over Commercials plugin.
 
-import win32gui
-import win32con
-import win32api
-import pyautogui
-import time
-import requests
-import os
-import subprocess
+Runs a small Flask API used by the browser extension to show VLC during
+commercial breaks. The script controls VLC through its HTTP interface and
+manages the VLC window through the Windows API.
+"""
+
+from __future__ import annotations
+
+import logging
 import re
-import json
-
+import subprocess
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from flask import Flask, request, jsonify
+from typing import Any
 
-PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
+import requests
+import win32api
+import win32con
+import win32gui
+from flask import Flask, jsonify, request
 
+
+# ---------------------------------------------------------------------------
+# Plugin metadata
+# ---------------------------------------------------------------------------
+
+PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 PLUGIN_NAME = "VLC Over Commercials"
 PLUGIN_ID = "vlc-over-commercials"
 PLUGIN_VERSION = "1.0.0"
 
-vlc_http_api_auth = ("", "1234")
-my_file_path = "file:///C:/Users/user/Downloads/video.mp4"
-
-SCRIPT_DIR = Path(__file__).resolve().parent
-RESUME_FILE = SCRIPT_DIR / "vlc_resume_times.json"
-
-optimized_width_percentage = 90
-optimized_height_percentage = 85
-has_optimal_demensions_been_captured = False
-previous_overlay_video_width_percentage = 0
-previous_overlay_video_height_percentage = 0
-
-vlc_process = None
-original_forground_window = None
-is_original_forground_window_topmost = False
-is_setup_complete = False
-is_live_video = False
-set_volume = 256
-set_volume_fallback = 205
-
-def find_window_by_title(partial_title):
-    def enum_handler(hwnd, result):
-        if win32gui.IsWindowVisible(hwnd):
-            title = win32gui.GetWindowText(hwnd)
-            if partial_title in title:
-                print(title)
-                result.append(hwnd)
-
-    result = []
-    win32gui.EnumWindows(enum_handler, result)
-    return result[0] if result else None
-
-def find_vlc_exe():
-    possible_paths = [
-        r"C:\Program Files\VideoLAN\VLC\vlc.exe",
-        r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
-    ]
-
-    for path in possible_paths:
-        if os.path.exists(path):
-            return path
-
-    print("Could not find vlc.exe in Program Files or Program Files (x86).")
-
-def open_vlc_with_specific_file(file_path):
-    global vlc_http_api_auth
-    global vlc_process
-
-    vlc_path = find_vlc_exe()
-
-    vlc_process = subprocess.Popen([
-        vlc_path,
-
-        "--qt-start-minimized",
-        "--qt-minimal-view",
-
-        "--extraintf", "http",
-        "--http-password", "1234",
-
-        "--qt-continue=2", # 2 will resume last watched location automatically
-
-        "--qt-notification=0",   # Never show media change popup
-        "--no-video-title-show",
-        "--no-qt-privacy-ask",
-        "--no-qt-error-dialogs",
-        "--no-qt-updates-notif",
-
-        "--no-one-instance", #needed to be able to close later? maybe it doesn't help?
-        "--no-one-instance-when-started-from-file", #needed to be able to close later? maybe it doesn't help?
-
-        "--loop", #doing this helps get resume last watched actually work
-    ])
-
-    requests.get(
-        "http://localhost:8080/requests/status.json",
-        params={"command": "in_play", "input": file_path},
-        auth=vlc_http_api_auth
-    )
-
-def get_vlc_video_dimensions():
-    response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-
-    data = response.json()
-
-    print(data)
-
-    categories = data.get("information", {}).get("category", {})
-
-    for stream_name, stream_info in categories.items():
-        if not isinstance(stream_info, dict):
-            continue
-
-        stream_type = str(stream_info.get("Type", "")).lower()
-
-        if stream_type == "video":
-            # VLC often reports this format:
-            # "Video_resolution": "1920x1080"
-            resolution = (
-                stream_info.get("Video_resolution")
-                or stream_info.get("Buffer_dimensions")
-                or stream_info.get("Resolution")
-            )
-
-            if resolution:
-                match = re.search(r"(\d+)\s*x\s*(\d+)", str(resolution))
-                if match:
-                    width = int(match.group(1))
-                    height = int(match.group(2))
-                    return width, height
-
-            # Fallbacks for other VLC response shapes
-            width = stream_info.get("Width") or stream_info.get("width")
-            height = stream_info.get("Height") or stream_info.get("height")
-
-            if width and height:
-                return int(width), int(height)
-
-
-def wait_for_vlc_playing(timeout=60):
-    start = time.time()
-
-    last_displayed = None
-
-    while time.time() - start < timeout:
-        # TODO: move this call to its own function and have fancy timeouts and failure states
-        response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth) #TODO: wait/retry if not succesful?
-        status = response.json()
-
-        if status["state"] != "playing":
-            print("playing false")
-            time.sleep(0.2)
-            continue
-
-        displayed = status.get("stats", {}).get("displayedpictures", 0)
-
-        if last_displayed is not None and displayed > last_displayed:
-            return True
-
-        print("displayed > last_displayed false")
-        last_displayed = displayed
-
-        time.sleep(0.2)
-
-    return False
-
-
-def wait_for_setup_complete(timeout=30):
-    if is_setup_complete:
-        return True
-        
-    start = time.time()
-
-    while time.time() - start < timeout:
-        time.sleep(0.5)
-        
-        if is_setup_complete:
-            return True
-        
-    return False
-
-
-def calculate_largest_aspect_fit(max_width_percent=90, max_height_percent=75):
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
-
-    max_width_px = int(screen_width * (max_width_percent / 100))
-    max_height_px = int(screen_height * (max_height_percent / 100))
-
-    video_width, video_height = get_vlc_video_dimensions()
-
-    video_aspect = video_width / video_height
-    max_box_aspect = max_width_px / max_height_px
-
-    if video_aspect > max_box_aspect:
-        # Width is the limiting factor
-        final_width_px = max_width_px
-        final_height_px = int(final_width_px / video_aspect)
-    else:
-        # Height is the limiting factor
-        final_height_px = max_height_px
-        final_width_px = int(final_height_px * video_aspect)
-
-    final_width_percent = (final_width_px / screen_width) * 100
-    final_height_percent = (final_height_px / screen_height) * 100
-
-    return final_width_percent, final_height_percent
-
-
-def is_live_media(status):
-    length = status.get("length", 0)
-    print("length:")
-    print(length)
-
-    # Most true live streams have no known duration.
-    if not length or length <= 0:
-        return True
-
-    # If the stream reports a duration, it's probably VOD or a local file.
-    return False
-
-
-def position_and_resize_window(
-    hwnd,
-    width_percent=90,
-    height_percent=75,
-    vertical="middle",   # "top", "middle", "bottom"
-    horizontal="middle"  # "left", "middle", "right"
-):
-    print("hwnd = ", hwnd, ", ", "width_percent = ", width_percent, ", ", "height_percent = ", height_percent, ", ", "vertical = ", vertical, ", ", "horizontal = ", horizontal, ", ")
-    # Get screen resolution
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
-
-    # Calculate target size
-    target_width = int(screen_width * (width_percent / 100))
-    target_height = int(screen_height * (height_percent / 100))
-
-    print("screen_width = ", screen_width, ", ", "screen_height = ", screen_height, ", ", "target_width = ", target_width, ", ", "target_height = ", target_height)
-
-    # Calculate horizontal position
-    if horizontal == "left":
-        x = 0
-    elif horizontal == "right":
-        x = screen_width - target_width
-    else:  # "middle"
-        x = (screen_width - target_width) // 2
-
-    # Calculate vertical position
-    if vertical == "top":
-        y = 0
-    elif vertical == "bottom":
-        y = screen_height - target_height
-    else:  # "middle"
-        y = (screen_height - target_height) // 2
-
-    print("x = ", x, ", ", "y = ", y)
-
-    # Restore/show window without activating it
-    win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
-
-    # Move and resize window
-    win32gui.SetWindowPos(
-        hwnd,
-        win32con.HWND_TOPMOST,  # Keeps window above fullscreen apps
-        x,
-        y,
-        target_width,
-        target_height,
-        win32con.SWP_NOACTIVATE,
-    )
-
-
-def remove_topmost(hwnd, width_percent=90, height_percent=75):
-    # Get screen resolution
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
-
-    # Calculate target size
-    target_width = int(screen_width * (width_percent / 100))
-    target_height = int(screen_height * (height_percent / 100))
-
-    # Calculate centered position
-    x = (screen_width - target_width) // 2
-    y = (screen_height - target_height) // 2
-
-    # removing TOPMOST status so user can easily minimize it, but keeping it on top of the fullscreen browser
-    win32gui.SetWindowPos(
-        hwnd,
-        win32con.HWND_BOTTOM,
-        x,
-        y,
-        target_width,
-        target_height,
-        win32con.SWP_NOACTIVATE,
-    )
-
-
-def minimize_window(hwnd):
-    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-
-
-def make_borderless(hwnd):
-    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
-
-    # Remove title bar + borders
-    style &= ~(
-        win32con.WS_CAPTION |
-        win32con.WS_THICKFRAME |
-        win32con.WS_MINIMIZE |
-        win32con.WS_MAXIMIZE |
-        win32con.WS_SYSMENU
-    )
-
-    win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
-
-    # Apply changes
-    win32gui.SetWindowPos(
-        hwnd,
-        None,
-        0, 0, 0, 0,
-        win32con.SWP_NOMOVE |
-        win32con.SWP_NOSIZE |
-        win32con.SWP_NOZORDER |
-        win32con.SWP_FRAMECHANGED
-    )
-
-
-def restore_borders(hwnd):
-    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
-
-    style |= (
-        win32con.WS_CAPTION |
-        win32con.WS_THICKFRAME |
-        win32con.WS_MINIMIZE |
-        win32con.WS_MAXIMIZE |
-        win32con.WS_SYSMENU
-    )
-
-    win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
-
-    win32gui.SetWindowPos(
-        hwnd,
-        None,
-        0, 0, 0, 0,
-        win32con.SWP_FRAMECHANGED |
-        win32con.SWP_NOMOVE |
-        win32con.SWP_NOSIZE |
-        win32con.SWP_NOZORDER
-    )
-
-
-def close_window_by_hwnd(hwnd):
-    """
-    Try to close the real window gracefully.
-    If it does not close, kill the process that owns that window.
-    """
-    if not hwnd or not win32gui.IsWindow(hwnd):
-        return
-
-    # Ask the window to close, same as clicking X
-    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+API_HOST = "127.0.0.1"
+API_PORT = 64144
+VLC_HTTP_HOST = "127.0.0.1"
+VLC_HTTP_PORT = 8080
+VLC_HTTP_PASSWORD = "1234"
+VLC_WINDOW_TITLE = "VLC"
+
+DEFAULT_OVERLAY_WIDTH = 90.0
+DEFAULT_OVERLAY_HEIGHT = 85.0
+DEFAULT_VOLUME = 205
+SMALL_WINDOW_PERCENT = 10.0
+
+HTTP_TIMEOUT_SECONDS = 3.0
+VLC_START_TIMEOUT_SECONDS = 60.0
+SETUP_TIMEOUT_SECONDS = 30.0
+
+VLC_STATUS_URL = (
+    f"http://{VLC_HTTP_HOST}:{VLC_HTTP_PORT}/requests/status.json"
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+LOGGER = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 
-@app.route("/custom-plugin-overlay-api", methods=["POST"])
-def custom_plugin_overlay():
-    global vlc_http_api_auth
-    global my_file_path
-    global has_optimal_demensions_been_captured
-    global optimized_width_percentage, optimized_height_percentage
-    global previous_overlay_video_width_percentage, previous_overlay_video_height_percentage
-    global vlc_process
-    global is_setup_complete
-    global original_forground_window
-    global is_original_forground_window_topmost
-    global is_live_video
-    global set_volume
+# ---------------------------------------------------------------------------
+# Data models
+# ---------------------------------------------------------------------------
 
-    data = request.json
-    request_type = data["type"]
-    print(request_type)
-    preferences = data["data"]["preferences"]
-    
-    overlay_video_width_percentage = float(preferences["videoOverlayWidth"])
-    overlay_video_height_percentage = float(preferences["videoOverlayHeight"])
-    overlay_video_location_horizontal = preferences["overlayVideoLocationHorizontal"]
-    overlay_video_location_vertical = preferences["overlayVideoLocationVertical"]
-    
-    is_pip_mode = bool(preferences["isPiPMode"])
-    pip_height_percentage = float(preferences["pipHeight"])
-    pip_width_percentage = float(preferences["pipWidth"])
-    pip_location_horizontal = preferences["pipLocationHorizontal"]
-    pip_location_vertical = preferences["pipLocationVertical"]
 
-    if request_type == "commercial_state_change":
-        is_commercial = data["data"]["isCommercialState"]
-        
-        wait_for_setup_complete()
+@dataclass(frozen=True)
+class WindowLayout:
+    """Window size and placement expressed as screen percentages."""
 
-        if is_commercial:
-            print("START overlay")
-            
-            #TODO: somehow globally define hwnd
-            window_title = "VLC" 
-            hwnd = find_window_by_title(window_title)
+    width_percent: float
+    height_percent: float
+    horizontal: str = "middle"
+    vertical: str = "middle"
 
-            have_demensions_changed = (overlay_video_width_percentage != previous_overlay_video_width_percentage or overlay_video_height_percentage != previous_overlay_video_width_percentage) 
 
-            print(have_demensions_changed)
+@dataclass(frozen=True)
+class RequestPreferences:
+    """Relevant preferences supplied by the extension."""
 
-            previous_overlay_video_width_percentage = overlay_video_width_percentage
-            previous_overlay_video_height_percentage = overlay_video_height_percentage
+    overlay: WindowLayout
+    pip_enabled: bool
+    pip: WindowLayout
 
-            if have_demensions_changed:
-                optimized_width_percentage, optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=overlay_video_width_percentage, max_height_percent=overlay_video_height_percentage)
-                
-            position_and_resize_window(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
-            
-            time.sleep(0.1)
-            requests.get("http://localhost:8080/requests/status.json?command=pl_forceresume", auth=vlc_http_api_auth)
-                
-            response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-            data = response.json()
-                
-            if is_live_media(data):
-                print("is_live_media is True")
-                requests.get(
-                    "http://localhost:8080/requests/status.json",
-                    params={
-                        "command": "volume",
-                        "val": set_volume,
-                    },
-                    auth=vlc_http_api_auth,
-                    timeout=3,
-                )
-            else:
-                print("is_live_media is False")
+    @classmethod
+    def from_payload(cls, preferences: dict[str, Any]) -> "RequestPreferences":
+        return cls(
+            overlay=WindowLayout(
+                width_percent=float(preferences.get("videoOverlayWidth", 90)),
+                height_percent=float(preferences.get("videoOverlayHeight", 75)),
+                horizontal=str(
+                    preferences.get("overlayVideoLocationHorizontal", "middle")
+                ),
+                vertical=str(
+                    preferences.get("overlayVideoLocationVertical", "middle")
+                ),
+            ),
+            pip_enabled=as_bool(preferences.get("isPiPMode", False)),
+            pip=WindowLayout(
+                width_percent=float(preferences.get("pipWidth", 25)),
+                height_percent=float(preferences.get("pipHeight", 25)),
+                horizontal=str(preferences.get("pipLocationHorizontal", "right")),
+                vertical=str(preferences.get("pipLocationVertical", "bottom")),
+            ),
+        )
 
-            return jsonify({"status": "ok"})
+
+@dataclass
+class PluginState:
+    """Mutable state shared across extension API requests."""
+
+    vlc_process: subprocess.Popen[Any] | None = None
+    vlc_hwnd: int | None = None
+    original_foreground_window: int | None = None
+    original_foreground_window_is_topmost: bool = False
+    setup_complete: bool = False
+    saved_volume: int = DEFAULT_VOLUME
+    optimized_overlay_width: float = DEFAULT_OVERLAY_WIDTH
+    optimized_overlay_height: float = DEFAULT_OVERLAY_HEIGHT
+    previous_overlay_width: float | None = None
+    previous_overlay_height: float | None = None
+    session: requests.Session = field(default_factory=requests.Session)
+
+
+STATE = PluginState()
+
+
+# ---------------------------------------------------------------------------
+# General helpers
+# ---------------------------------------------------------------------------
+
+
+def as_bool(value: Any) -> bool:
+    """Convert common JSON/string values to a reliable boolean."""
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def get_screen_size() -> tuple[int, int]:
+    return win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+
+
+def find_window_by_title(partial_title: str) -> int | None:
+    """Return the first visible window whose title contains partial_title."""
+
+    matches: list[int] = []
+    partial_title_lower = partial_title.lower()
+
+    def enum_handler(hwnd: int, _: Any) -> None:
+        if not win32gui.IsWindowVisible(hwnd):
+            return
+
+        title = win32gui.GetWindowText(hwnd)
+        if partial_title_lower in title.lower():
+            LOGGER.debug("Matched window %s: %s", hwnd, title)
+            matches.append(hwnd)
+
+    win32gui.EnumWindows(enum_handler, None)
+    return matches[0] if matches else None
+
+
+def get_vlc_window(refresh: bool = False) -> int | None:
+    """Return the cached VLC window handle, refreshing it when necessary."""
+
+    if (
+        not refresh
+        and STATE.vlc_hwnd
+        and win32gui.IsWindow(STATE.vlc_hwnd)
+    ):
+        return STATE.vlc_hwnd
+
+    STATE.vlc_hwnd = find_window_by_title(VLC_WINDOW_TITLE)
+    return STATE.vlc_hwnd
+
+
+def require_vlc_window() -> int:
+    hwnd = get_vlc_window()
+    if not hwnd:
+        raise RuntimeError("The VLC window could not be found.")
+    return hwnd
+
+
+def find_vlc_executable() -> Path:
+    """Locate VLC in the standard 64-bit or 32-bit installation folders."""
+
+    candidates = (
+        Path(r"C:\Program Files\VideoLAN\VLC\vlc.exe"),
+        Path(r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe"),
+    )
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+
+    raise FileNotFoundError(
+        "Could not find vlc.exe. Install VLC in Program Files or Program Files (x86)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# VLC HTTP helpers
+# ---------------------------------------------------------------------------
+
+
+def vlc_request(
+    command: str | None = None,
+    *,
+    timeout: float = HTTP_TIMEOUT_SECONDS,
+    **params: Any,
+) -> dict[str, Any]:
+    """Call VLC's HTTP status endpoint and return its JSON response."""
+
+    if command:
+        params["command"] = command
+
+    response = STATE.session.get(
+        VLC_STATUS_URL,
+        params=params or None,
+        auth=("", VLC_HTTP_PASSWORD),
+        timeout=timeout,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def wait_for_vlc_http(timeout: float = 15.0) -> bool:
+    """Wait until VLC's HTTP interface begins accepting requests."""
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            vlc_request(timeout=1.0)
+            return True
+        except (requests.RequestException, ValueError):
+            time.sleep(0.2)
+    return False
+
+
+def open_vlc(media_url: str) -> None:
+    """Start an isolated VLC instance and begin playing media_url."""
+
+    vlc_path = find_vlc_executable()
+
+    command = [
+        str(vlc_path),
+        "--qt-start-minimized",
+        "--qt-minimal-view",
+        "--extraintf",
+        "http",
+        "--http-password",
+        VLC_HTTP_PASSWORD,
+        "--qt-continue=2",
+        "--qt-notification=0",
+        "--no-video-title-show",
+        "--no-qt-privacy-ask",
+        "--no-qt-error-dialogs",
+        "--no-qt-updates-notif",
+        "--no-one-instance",
+        "--no-one-instance-when-started-from-file",
+        "--loop",
+    ]
+
+    LOGGER.info("Starting VLC: %s", vlc_path)
+    STATE.vlc_process = subprocess.Popen(command)
+
+    if not wait_for_vlc_http():
+        raise RuntimeError("VLC started, but its HTTP interface did not become ready.")
+
+    vlc_request("in_play", input=media_url)
+
+
+def wait_for_vlc_playing(timeout: float = VLC_START_TIMEOUT_SECONDS) -> bool:
+    """Wait until VLC is playing and has rendered at least one new frame."""
+
+    deadline = time.monotonic() + timeout
+    last_displayed: int | None = None
+
+    while time.monotonic() < deadline:
+        try:
+            status = vlc_request(timeout=1.0)
+        except (requests.RequestException, ValueError):
+            time.sleep(0.2)
+            continue
+
+        if status.get("state") != "playing":
+            time.sleep(0.2)
+            continue
+
+        displayed = int(status.get("stats", {}).get("displayedpictures", 0) or 0)
+        if last_displayed is not None and displayed > last_displayed:
+            return True
+
+        last_displayed = displayed
+        time.sleep(0.2)
+
+    return False
+
+
+def get_vlc_video_dimensions() -> tuple[int, int] | None:
+    """Read the active video's width and height from VLC status data."""
+
+    status = vlc_request()
+    categories = status.get("information", {}).get("category", {})
+
+    for stream_info in categories.values():
+        if not isinstance(stream_info, dict):
+            continue
+        if str(stream_info.get("Type", "")).lower() != "video":
+            continue
+
+        resolution = (
+            stream_info.get("Video_resolution")
+            or stream_info.get("Buffer_dimensions")
+            or stream_info.get("Resolution")
+        )
+        if resolution:
+            match = re.search(r"(\d+)\s*x\s*(\d+)", str(resolution))
+            if match:
+                return int(match.group(1)), int(match.group(2))
+
+        width = stream_info.get("Width") or stream_info.get("width")
+        height = stream_info.get("Height") or stream_info.get("height")
+        if width and height:
+            return int(width), int(height)
+
+    return None
+
+
+def is_live_media(status: dict[str, Any]) -> bool:
+    """Treat media with no known positive duration as a live stream."""
+
+    try:
+        length = float(status.get("length", 0) or 0)
+    except (TypeError, ValueError):
+        length = 0
+
+    return length <= 0
+
+
+def read_and_store_volume(status: dict[str, Any] | None = None) -> int:
+    """Remember VLC's current nonzero volume for later restoration."""
+
+    status = status or vlc_request()
+    try:
+        volume = int(status.get("volume", DEFAULT_VOLUME))
+    except (TypeError, ValueError):
+        volume = DEFAULT_VOLUME
+
+    if volume > 0:
+        STATE.saved_volume = volume
+
+    return STATE.saved_volume
+
+
+def set_vlc_volume(volume: int) -> None:
+    vlc_request("volume", val=int(volume))
+
+
+# ---------------------------------------------------------------------------
+# Window helpers
+# ---------------------------------------------------------------------------
+
+
+def calculate_largest_aspect_fit(
+    max_width_percent: float,
+    max_height_percent: float,
+) -> tuple[float, float]:
+    """Fit the video inside the requested screen-percentage bounding box."""
+
+    screen_width, screen_height = get_screen_size()
+    dimensions = get_vlc_video_dimensions()
+
+    if not dimensions:
+        LOGGER.warning(
+            "VLC did not report video dimensions; using requested dimensions."
+        )
+        return max_width_percent, max_height_percent
+
+    video_width, video_height = dimensions
+    if video_width <= 0 or video_height <= 0:
+        return max_width_percent, max_height_percent
+
+    max_width_px = max(1, int(screen_width * max_width_percent / 100))
+    max_height_px = max(1, int(screen_height * max_height_percent / 100))
+
+    video_aspect = video_width / video_height
+    box_aspect = max_width_px / max_height_px
+
+    if video_aspect > box_aspect:
+        final_width_px = max_width_px
+        final_height_px = int(final_width_px / video_aspect)
+    else:
+        final_height_px = max_height_px
+        final_width_px = int(final_height_px * video_aspect)
+
+    return (
+        final_width_px / screen_width * 100,
+        final_height_px / screen_height * 100,
+    )
+
+
+def calculate_window_position(
+    target_width: int,
+    target_height: int,
+    horizontal: str,
+    vertical: str,
+) -> tuple[int, int]:
+    screen_width, screen_height = get_screen_size()
+
+    horizontal = horizontal.lower()
+    vertical = vertical.lower()
+
+    if horizontal == "left":
+        x = 0
+    elif horizontal == "right":
+        x = screen_width - target_width
+    else:
+        x = (screen_width - target_width) // 2
+
+    if vertical == "top":
+        y = 0
+    elif vertical == "bottom":
+        y = screen_height - target_height
+    else:
+        y = (screen_height - target_height) // 2
+
+    return max(0, x), max(0, y)
+
+
+def position_and_resize_window(hwnd: int, layout: WindowLayout) -> None:
+    """Show VLC without activation, size it, position it, and make it topmost."""
+
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        raise RuntimeError("Cannot position VLC because its window is unavailable.")
+
+    screen_width, screen_height = get_screen_size()
+    target_width = max(1, int(screen_width * layout.width_percent / 100))
+    target_height = max(1, int(screen_height * layout.height_percent / 100))
+    x, y = calculate_window_position(
+        target_width,
+        target_height,
+        layout.horizontal,
+        layout.vertical,
+    )
+
+    LOGGER.info(
+        "Positioning VLC at (%s, %s), size %sx%s, placement %s/%s",
+        x,
+        y,
+        target_width,
+        target_height,
+        layout.horizontal,
+        layout.vertical,
+    )
+
+    win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+    win32gui.SetWindowPos(
+        hwnd,
+        win32con.HWND_TOPMOST,
+        x,
+        y,
+        target_width,
+        target_height,
+        win32con.SWP_NOACTIVATE,
+    )
+
+
+def remove_topmost(hwnd: int) -> None:
+    """Remove VLC's topmost status without changing its size or position."""
+
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return
+
+    win32gui.SetWindowPos(
+        hwnd,
+        win32con.HWND_NOTOPMOST,
+        0,
+        0,
+        0,
+        0,
+        win32con.SWP_NOMOVE
+        | win32con.SWP_NOSIZE
+        | win32con.SWP_NOACTIVATE,
+    )
+
+
+def minimize_window(hwnd: int | None) -> None:
+    if hwnd and win32gui.IsWindow(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+
+
+def make_borderless(hwnd: int) -> None:
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return
+
+    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+    style &= ~(
+        win32con.WS_CAPTION
+        | win32con.WS_THICKFRAME
+        | win32con.WS_MINIMIZE
+        | win32con.WS_MAXIMIZE
+        | win32con.WS_SYSMENU
+    )
+    win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+    refresh_window_frame(hwnd)
+
+
+def restore_borders(hwnd: int) -> None:
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return
+
+    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+    style |= (
+        win32con.WS_CAPTION
+        | win32con.WS_THICKFRAME
+        | win32con.WS_MINIMIZE
+        | win32con.WS_MAXIMIZE
+        | win32con.WS_SYSMENU
+    )
+    win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
+    refresh_window_frame(hwnd)
+
+
+def refresh_window_frame(hwnd: int) -> None:
+    win32gui.SetWindowPos(
+        hwnd,
+        None,
+        0,
+        0,
+        0,
+        0,
+        win32con.SWP_NOMOVE
+        | win32con.SWP_NOSIZE
+        | win32con.SWP_NOZORDER
+        | win32con.SWP_NOACTIVATE
+        | win32con.SWP_FRAMECHANGED,
+    )
+
+
+def close_window_by_hwnd(hwnd: int | None) -> None:
+    if hwnd and win32gui.IsWindow(hwnd):
+        win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+
+
+def set_original_window_topmost() -> None:
+    hwnd = STATE.original_foreground_window
+    if not hwnd or not win32gui.IsWindow(hwnd):
+        return
+
+    win32gui.SetWindowPos(
+        hwnd,
+        win32con.HWND_TOPMOST,
+        0,
+        0,
+        0,
+        0,
+        win32con.SWP_NOMOVE
+        | win32con.SWP_NOSIZE
+        | win32con.SWP_NOOWNERZORDER,
+    )
+    STATE.original_foreground_window_is_topmost = True
+
+
+def restore_original_window_z_order() -> None:
+    hwnd = STATE.original_foreground_window
+    if not STATE.original_foreground_window_is_topmost:
+        return
+
+    if hwnd and win32gui.IsWindow(hwnd):
+        win32gui.SetWindowPos(
+            hwnd,
+            win32con.HWND_NOTOPMOST,
+            0,
+            0,
+            0,
+            0,
+            win32con.SWP_NOMOVE
+            | win32con.SWP_NOSIZE
+            | win32con.SWP_NOACTIVATE,
+        )
+
+    STATE.original_foreground_window_is_topmost = False
+
+
+def clear_taskbar_side_effect(hwnd: int, restore_foreground: bool = True) -> None:
+    """Preserve the original two-pass workaround for Windows 10/11 taskbar popups."""
+
+    small_layout = WindowLayout(SMALL_WINDOW_PERCENT, SMALL_WINDOW_PERCENT)
+    minimize_window(hwnd)
+    time.sleep(0.2)
+    position_and_resize_window(hwnd, small_layout)
+    time.sleep(0.2)
+    minimize_window(hwnd)
+    time.sleep(0.2)
+
+    if restore_foreground and STATE.original_foreground_window:
+        time.sleep(0.4)
+        set_original_window_topmost()
+
+
+# ---------------------------------------------------------------------------
+# Plugin behavior
+# ---------------------------------------------------------------------------
+
+
+def wait_for_setup_complete(timeout: float = SETUP_TIMEOUT_SECONDS) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if STATE.setup_complete:
+            return True
+        time.sleep(0.2)
+    return STATE.setup_complete
+
+
+def optimized_layout(layout: WindowLayout) -> WindowLayout:
+    width, height = calculate_largest_aspect_fit(
+        layout.width_percent,
+        layout.height_percent,
+    )
+    return WindowLayout(width, height, layout.horizontal, layout.vertical)
+
+
+def get_overlay_layout(preferences: RequestPreferences) -> WindowLayout:
+    """Return a cached aspect-correct overlay layout."""
+
+    width_changed = (
+        preferences.overlay.width_percent != STATE.previous_overlay_width
+    )
+    height_changed = (
+        preferences.overlay.height_percent != STATE.previous_overlay_height
+    )
+
+    if width_changed or height_changed:
+        (
+            STATE.optimized_overlay_width,
+            STATE.optimized_overlay_height,
+        ) = calculate_largest_aspect_fit(
+            preferences.overlay.width_percent,
+            preferences.overlay.height_percent,
+        )
+        STATE.previous_overlay_width = preferences.overlay.width_percent
+        STATE.previous_overlay_height = preferences.overlay.height_percent
+
+    return WindowLayout(
+        STATE.optimized_overlay_width,
+        STATE.optimized_overlay_height,
+        preferences.overlay.horizontal,
+        preferences.overlay.vertical,
+    )
+
+
+def handle_commercial_state_change(
+    payload: dict[str, Any],
+    preferences: RequestPreferences,
+) -> None:
+    if not wait_for_setup_complete():
+        raise RuntimeError("VLC setup did not complete before the timeout.")
+
+    hwnd = require_vlc_window()
+    is_commercial = as_bool(payload.get("isCommercialState"))
+
+    if is_commercial:
+        LOGGER.info("Starting VLC overlay")
+        position_and_resize_window(hwnd, get_overlay_layout(preferences))
+        time.sleep(0.1)
+        vlc_request("pl_forceresume")
+
+        status = vlc_request()
+        if is_live_media(status):
+            set_vlc_volume(STATE.saved_volume)
+        return
+
+    LOGGER.info("Stopping VLC overlay")
+    status = vlc_request()
+    read_and_store_volume(status)
+
+    if is_live_media(status):
+        set_vlc_volume(0)
+        if preferences.pip_enabled:
+            position_and_resize_window(hwnd, optimized_layout(preferences.pip))
         else:
-            #TODO: somehow globally define hwnd
-            window_title = "VLC" 
-            hwnd = find_window_by_title(window_title)
+            minimize_window(hwnd)
+    else:
+        vlc_request("pl_forcepause")
+        minimize_window(hwnd)
 
-            response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-            data = response.json()
-            set_volume = int(data.get("volume", set_volume_fallback))
-            if set_volume == 0:
-                set_volume = set_volume_fallback
-                
-            if is_live_media(data) is False:
-                print("is_live_media is False")
-                requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-            else:
-                print("is_live_media is True")
-                requests.get(
-                    "http://localhost:8080/requests/status.json",
-                    params={
-                        "command": "volume",
-                        "val": 0,
-                    },
-                    auth=vlc_http_api_auth,
-                    timeout=3,
-                )
-                print("is_pip_mode:")
-                print(is_pip_mode)
-                if is_pip_mode:
-                    pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
-                    position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
-                else:
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                    
-            print("STOP overlay")
 
-    elif request_type == "browser_fullscreen_state_change":
-        is_fullscreen = data["data"]["isFullscreen"] #TODO: set is_fullscreen earlier (maybe have global variable?) and use it for determining whether to do other things
+def handle_fullscreen_state_change(payload: dict[str, Any]) -> None:
+    hwnd = require_vlc_window()
+    is_fullscreen = as_bool(payload.get("isFullscreen"))
 
-        window_title = "VLC"
-        hwnd = find_window_by_title(window_title)
-
-        if is_fullscreen:
-            print("User entered fullscreen on browser")
-            make_borderless(hwnd)
-        else:
-            print("User exited fullscreen on browser")
-            
-            if original_forground_window is not None and is_original_forground_window_topmost:
-                win32gui.SetWindowPos(
-                    original_forground_window,
-                    win32con.HWND_NOTOPMOST,
-                    0, 0, 0, 0,
-                    win32con.SWP_NOMOVE
-                    | win32con.SWP_NOSIZE
-                    | win32con.SWP_NOACTIVATE
-                )
-                
-                is_original_forground_window_topmost = False
-                
-            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-            time.sleep(0.1)
-            remove_topmost(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage)
-            restore_borders(hwnd)
-
-    elif request_type == "init":
-        original_forground_window = win32gui.GetForegroundWindow()
-        print(win32gui.GetWindowText(original_forground_window))
-            
-        my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
-        open_vlc_with_specific_file(my_file_path)
-        time.sleep(1) #TODO: better way to wait or not have to wait at all?
-        print("waiting for playing")
-        wait_for_vlc_playing()
-        time.sleep(0.5) #TODO: dynamically wait for video demensions
-        print("done waiting for playing")
-        window_title = "VLC"
-        hwnd = find_window_by_title(window_title)
-        if hwnd is None:
-            return jsonify({"status": "error", "message": "VLC could not be opened."})
+    if is_fullscreen:
+        LOGGER.info("Browser entered fullscreen")
         make_borderless(hwnd)
+        return
 
-        time.sleep(0.2)
+    LOGGER.info("Browser exited fullscreen")
+    restore_original_window_z_order()
+    minimize_window(hwnd)
+    time.sleep(0.1)
+    remove_topmost(hwnd)
+    restore_borders(hwnd)
 
-        position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early
-        time.sleep(0.2)
-            
-        response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-        data = response.json()
-        set_volume = int(data.get("volume", set_volume_fallback))
-        if set_volume == 0:
-            set_volume = set_volume_fallback
-                
-        if is_live_media(data) is False:
-            requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
-            time.sleep(0.2)
-            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-            time.sleep(0.2)
-            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar for windows 10
-            time.sleep(0.2)
-            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-            time.sleep(0.2)
-                
-            if original_forground_window is not None:
-                time.sleep(0.4)
 
-                win32gui.SetWindowPos(
-                    original_forground_window,
-                    win32con.HWND_TOPMOST,
-                    0, 0, 0, 0,
-                    win32con.SWP_NOMOVE |
-                    win32con.SWP_NOSIZE |
-                    win32con.SWP_NOOWNERZORDER
-                ) # doing this to clear out the taskbar for windows 11
-                
-                is_original_forground_window_topmost = True
-                
+def get_media_url(preferences: dict[str, Any]) -> str:
+    """Extract the plugin's URL preference from the init payload."""
+
+    plugin_preferences = preferences.get("pluginOverlayPreferences", {})
+    values = plugin_preferences.get("preferences", {})
+    media_url = str(values.get("url", "")).strip()
+    if not media_url:
+        raise ValueError("The VLC media URL preference is empty.")
+    return media_url
+
+
+def handle_init(
+    raw_preferences: dict[str, Any],
+    preferences: RequestPreferences,
+) -> dict[str, str]:
+    STATE.setup_complete = False
+    STATE.original_foreground_window = win32gui.GetForegroundWindow()
+
+    if STATE.original_foreground_window:
+        LOGGER.info(
+            "Original foreground window: %s",
+            win32gui.GetWindowText(STATE.original_foreground_window),
+        )
+
+    open_vlc(get_media_url(raw_preferences))
+
+    if not wait_for_vlc_playing():
+        raise RuntimeError("VLC did not begin rendering video before the timeout.")
+
+    # VLC can report playback before its top-level window has appeared.
+    deadline = time.monotonic() + 10.0
+    hwnd: int | None = None
+    while time.monotonic() < deadline and not hwnd:
+        hwnd = get_vlc_window(refresh=True)
+        if not hwnd:
+            time.sleep(0.2)
+
+    if not hwnd:
+        raise RuntimeError("VLC began playing, but its window could not be found.")
+
+    make_borderless(hwnd)
+    time.sleep(0.2)
+
+    # Bring VLC forward briefly so Windows handles the taskbar transition now,
+    # rather than when the first commercial starts.
+    position_and_resize_window(
+        hwnd,
+        WindowLayout(SMALL_WINDOW_PERCENT, SMALL_WINDOW_PERCENT),
+    )
+    time.sleep(0.2)
+
+    status = vlc_request()
+    read_and_store_volume(status)
+
+    if is_live_media(status):
+        set_vlc_volume(0)
+        if preferences.pip_enabled:
+            position_and_resize_window(hwnd, optimized_layout(preferences.pip))
         else:
-            requests.get(
-                "http://localhost:8080/requests/status.json",
-                params={
-                    "command": "volume",
-                    "val": 0,
-                },
-                auth=vlc_http_api_auth,
-                timeout=3,
-            )
-            print("is_pip_mode:")
-            print(is_pip_mode)
-            if is_pip_mode:
-                pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
-                position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
-            else:
-                time.sleep(0.2)
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                time.sleep(0.2)
-                position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar for windows 10
-                time.sleep(0.2)
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                time.sleep(0.2)
+            clear_taskbar_side_effect(hwnd)
+    else:
+        vlc_request("pl_forcepause")
+        clear_taskbar_side_effect(hwnd)
 
-                if original_forground_window is not None:
-                    time.sleep(0.4)
+    STATE.setup_complete = True
+    return {
+        "status": "info",
+        "message": (
+            "Message from VLC Over Commercials plugin: Success! "
+            "Click in this window to return focus and you are good to go!"
+        ),
+    }
 
-                    win32gui.SetWindowPos(
-                        original_forground_window,
-                        win32con.HWND_TOPMOST,
-                        0, 0, 0, 0,
-                        win32con.SWP_NOMOVE |
-                        win32con.SWP_NOSIZE |
-                        win32con.SWP_NOOWNERZORDER
-                    ) # doing this to clear out the taskbar for windows 11
-                
-                    is_original_forground_window_topmost = True
-            
-                
-        is_setup_complete = True
 
-        return jsonify({"status": "info", "message": "Message from VLC Over Commercials plugin: Success! Click in this window to return focus and you are good to go!"})
+def handle_end() -> None:
+    STATE.setup_complete = False
+    restore_original_window_z_order()
 
-    elif request_type == "end":
-        if original_forground_window is not None and is_original_forground_window_topmost:
-            win32gui.SetWindowPos(
-                original_forground_window,
-                win32con.HWND_NOTOPMOST,
-                0, 0, 0, 0,
-                win32con.SWP_NOMOVE
-                | win32con.SWP_NOSIZE
-                | win32con.SWP_NOACTIVATE
-            )
-            
-            is_original_forground_window_topmost = False
-        
-        #TODO: somhow globally define hwnd
-        window_title = "VLC" 
-        hwnd = find_window_by_title(window_title)
-
-        remove_topmost(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage)
+    hwnd = get_vlc_window()
+    if hwnd:
+        remove_topmost(hwnd)
         restore_borders(hwnd)
 
-        response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-        data = response.json()
-                
-        if is_live_media(data):
-            print("is_live_media is True")
-            requests.get(
-                "http://localhost:8080/requests/status.json",
-                params={
-                    "command": "volume",
-                    "val": set_volume,
-                },
-                auth=vlc_http_api_auth,
-                timeout=3,
-            )
+    try:
+        status = vlc_request()
+        if is_live_media(status):
+            set_vlc_volume(STATE.saved_volume)
+        vlc_request("pl_stop")
+    except (requests.RequestException, ValueError) as exc:
+        LOGGER.warning("Could not fully stop VLC through its HTTP API: %s", exc)
+
+    close_window_by_hwnd(hwnd)
+
+    process = STATE.vlc_process
+    if process and process.poll() is None:
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            try:
+                process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+    STATE.vlc_process = None
+    STATE.vlc_hwnd = None
+    LOGGER.info("Extension stopped")
+
+
+# ---------------------------------------------------------------------------
+# Flask routes
+# ---------------------------------------------------------------------------
+
+
+@app.route("/custom-plugin-overlay-api", methods=["POST"])
+def custom_plugin_overlay():
+    try:
+        body = request.get_json(silent=False)
+        if not isinstance(body, dict):
+            raise ValueError("Request body must be a JSON object.")
+
+        request_type = str(body.get("type", "")).strip()
+        payload = body.get("data", {})
+        if not isinstance(payload, dict):
+            raise ValueError("The request data field must be an object.")
+
+        raw_preferences = payload.get("preferences", {})
+        if not isinstance(raw_preferences, dict):
+            raw_preferences = {}
+
+        preferences = RequestPreferences.from_payload(raw_preferences)
+        LOGGER.info("Received request type: %s", request_type)
+
+        if request_type == "commercial_state_change":
+            handle_commercial_state_change(payload, preferences)
+        elif request_type == "browser_fullscreen_state_change":
+            handle_fullscreen_state_change(payload)
+        elif request_type == "init":
+            return jsonify(handle_init(raw_preferences, preferences))
+        elif request_type == "end":
+            handle_end()
         else:
-            print("is_live_media is False")
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": f"Unsupported request type: {request_type!r}",
+                }
+            ), 400
 
-        requests.get("http://localhost:8080/requests/status.json?command=pl_stop", auth=vlc_http_api_auth) #TODO: should use quit?
-        close_window_by_hwnd(hwnd)
+        return jsonify({"status": "ok"})
 
-        if vlc_process and vlc_process.poll() is None:
-            vlc_process.terminate()
-            print("vlc_process.terminate()")
+    except (KeyError, TypeError, ValueError) as exc:
+        LOGGER.warning("Invalid plugin request: %s", exc)
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    except (requests.RequestException, OSError, RuntimeError) as exc:
+        LOGGER.exception("Plugin request failed")
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
-        print("Extension Stopped")
-
-    return jsonify({"status": "ok"})
 
 @app.route("/plugin-manifest", methods=["GET"])
 def plugin_manifest():
-    return jsonify({
-        "type": "plugin_manifest",
-        "timestamp": time.time(),
-        "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
-        "data": {
-            "name": PLUGIN_NAME,
-            "id": PLUGIN_ID,
-            "version": PLUGIN_VERSION,
-            "description": "This plugin will automatically play VLC(TM) over commercials. Have latest version of VLC installed and closed before initiating. VLC is a trademark of the VideoLAN organization. This plugin is not affiliated with VLC or VideoLAN.", #TODO: Update this.
-            "primaryColor": "#E85E00",
-            "secondaryColor": "#f2c7aa",
-            "capabilities": ["overlay"],
-            "preferences": [
-                {
-                    "key": "url",
-                    "label": "Video URL",
-                    "description": "This can be a show/movie stream URL, live stream URL, or a local file URL (E.g. file:///C:/Users/user/Downloads/video.mp4)",
-                    "type": "text",
-                    "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
-                }
-            ]
+    return jsonify(
+        {
+            "type": "plugin_manifest",
+            "timestamp": time.time(),
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
+            "data": {
+                "name": PLUGIN_NAME,
+                "id": PLUGIN_ID,
+                "version": PLUGIN_VERSION,
+                "description": (
+                    "Automatically plays VLC media over commercial breaks. "
+                    "Install the latest VLC version and close VLC before "
+                    "starting the plugin. VLC is a trademark of the VideoLAN "
+                    "organization. This plugin is not affiliated with VLC or "
+                    "VideoLAN."
+                ),
+                "primaryColor": "#E85E00",
+                "secondaryColor": "#f2c7aa",
+                "capabilities": ["overlay"],
+                "preferences": [
+                    {
+                        "key": "url",
+                        "label": "Video URL",
+                        "description": (
+                            "A show/movie stream URL, live-stream URL, or local "
+                            "file URL, such as "
+                            "file:///C:/Users/user/Downloads/video.mp4"
+                        ),
+                        "type": "text",
+                        "default": (
+                            "https://upload.wikimedia.org/wikipedia/commons/"
+                            "8/88/Big_Buck_Bunny_alt.webm"
+                        ),
+                    }
+                ],
+            },
         }
-        
-    })
+    )
+
 
 @app.route("/ping", methods=["GET"])
 def ping():
     return jsonify({"status": "alive"})
 
+
 if __name__ == "__main__":
-    print("API running on http://localhost:64144")
-    app.run(port=64144)
+    LOGGER.info("API running on http://localhost:%s", API_PORT)
+    app.run(host=API_HOST, port=API_PORT, threaded=True)
