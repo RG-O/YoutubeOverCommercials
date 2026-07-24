@@ -19,11 +19,9 @@ PLUGIN_NAME = "VLC Over Commercials"
 PLUGIN_ID = "vlc-over-commercials"
 PLUGIN_VERSION = "1.0.0"
 
-is_vlc_http_api_control_mode = True
 vlc_http_api_auth = ("", "1234")
 my_file_path = "file:///C:/Users/user/Downloads/video.mp4"
 
-#RESUME_FILE = Path("vlc_resume_times.json")
 SCRIPT_DIR = Path(__file__).resolve().parent
 RESUME_FILE = SCRIPT_DIR / "vlc_resume_times.json"
 
@@ -73,20 +71,15 @@ def open_vlc_with_specific_file(file_path):
 
     vlc_process = subprocess.Popen([
         vlc_path,
-        #file_path, #todo: better or worse to open this way?
 
-        # Main UI/interface: no normal VLC window controls
-        #"--intf", "dummy",
         "--qt-start-minimized",
         "--qt-minimal-view",
 
-        # Still enable HTTP remote control
         "--extraintf", "http",
         "--http-password", "1234",
 
-        "--qt-continue=2", # 2 will resume last watched location automatically? 1 will prompt?
+        "--qt-continue=2", # 2 will resume last watched location automatically
 
-        # Optional quality-of-life flags
         "--qt-notification=0",   # Never show media change popup
         "--no-video-title-show",
         "--no-qt-privacy-ask",
@@ -96,7 +89,6 @@ def open_vlc_with_specific_file(file_path):
         "--no-one-instance", #needed to be able to close later? maybe it doesn't help?
         "--no-one-instance-when-started-from-file", #needed to be able to close later? maybe it doesn't help?
 
-        #"--qt-pause-minimized=1", #pause when minimized. or maybe just "--qt-pause-minimized"
         "--loop", #doing this helps get resume last watched actually work
     ])
 
@@ -107,11 +99,6 @@ def open_vlc_with_specific_file(file_path):
     )
 
 def get_vlc_video_dimensions():
-    # url = f"http://{vlc_host}:{vlc_port}/requests/status.json"
-
-    # response = requests.get(url, auth=("", vlc_password), timeout=3)
-    # response.raise_for_status()
-
     response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
 
     data = response.json()
@@ -149,13 +136,14 @@ def get_vlc_video_dimensions():
             if width and height:
                 return int(width), int(height)
 
+
 def wait_for_vlc_playing(timeout=60):
     start = time.time()
 
     last_displayed = None
 
     while time.time() - start < timeout:
-        # TODO: move this two its own function and have fancy timeouts and failure states
+        # TODO: move this call to its own function and have fancy timeouts and failure states
         response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth) #TODO: wait/retry if not succesful?
         status = response.json()
 
@@ -219,74 +207,6 @@ def calculate_largest_aspect_fit(max_width_percent=90, max_height_percent=75):
     return final_width_percent, final_height_percent
 
 
-def get_vlc_current_time():
-    """
-    Returns current playback time in seconds from VLC.
-    Returns 0 if anything fails.
-    """
-    try:
-        response = requests.get(
-            "http://localhost:8080/requests/status.json",
-            auth=vlc_http_api_auth,
-            timeout=3
-        )
-
-        response.raise_for_status()
-
-        return int(response.json().get("time", 0))
-
-    except Exception:
-        return 0
-
-
-def save_video_resume_time(video_path):
-    """
-    Saves VLC's current playback position for video_path.
-    Safe to call immediately before closing VLC.
-    """
-
-    try:
-        current_time = get_vlc_current_time()
-
-        try:
-            with open(RESUME_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            data = {}
-
-        data[str(Path(video_path).resolve())] = current_time
-
-        with open(RESUME_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
-
-    except Exception:
-        pass
-
-
-def get_saved_resume_time(video_path):
-    """
-    Returns previously saved resume time.
-    Returns 0 if:
-      - file doesn't exist
-      - entry doesn't exist
-      - anything fails
-    """
-
-    try:
-        with open(RESUME_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        return int(
-            data.get(
-                str(Path(video_path).resolve()),
-                0
-            )
-        )
-
-    except Exception:
-        return 0
-
-
 def is_live_media(status):
     length = status.get("length", 0)
     print("length:")
@@ -337,7 +257,6 @@ def position_and_resize_window(
     print("x = ", x, ", ", "y = ", y)
 
     # Restore/show window without activating it
-    # win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
     win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
     # Move and resize window
@@ -350,8 +269,6 @@ def position_and_resize_window(
         target_height,
         win32con.SWP_NOACTIVATE,
     )
-
-    #time.sleep(0.05) #TODO: is this necessary?
 
 
 def remove_topmost(hwnd, width_percent=90, height_percent=75):
@@ -370,16 +287,14 @@ def remove_topmost(hwnd, width_percent=90, height_percent=75):
     # removing TOPMOST status so user can easily minimize it, but keeping it on top of the fullscreen browser
     win32gui.SetWindowPos(
         hwnd,
-        #win32con.HWND_TOPMOST,  # Always on top #TODO: remove?
-        #win32con.HWND_TOP,
-        #win32con.HWND_NOTOPMOST, 
         win32con.HWND_BOTTOM,
         x,
         y,
         target_width,
         target_height,
-        win32con.SWP_NOACTIVATE, #TODO: bring other one back?
+        win32con.SWP_NOACTIVATE,
     )
+
 
 def minimize_window(hwnd):
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
@@ -435,27 +350,6 @@ def restore_borders(hwnd):
     )
 
 
-def send_ctrl_h(hwnd):
-    # Press CTRL down
-    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, win32con.VK_CONTROL, 0)
-
-    # Press H down
-    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, ord('H'), 0)
-
-    time.sleep(0.05)
-
-    # Release H
-    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, ord('H'), 0)
-
-    # Release CTRL
-    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, win32con.VK_CONTROL, 0)
-
-
-def send_spacebar(hwnd):
-    win32gui.PostMessage(hwnd, win32con.WM_KEYDOWN, 0x20, 0)  # spacebar down
-    time.sleep(0.05)
-    win32gui.PostMessage(hwnd, win32con.WM_KEYUP, 0x20, 0)  # spacebar up
-
 def close_window_by_hwnd(hwnd):
     """
     Try to close the real window gracefully.
@@ -472,7 +366,6 @@ app = Flask(__name__)
 
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
-    global is_vlc_http_api_control_mode
     global vlc_http_api_auth
     global my_file_path
     global has_optimal_demensions_been_captured
@@ -490,8 +383,6 @@ def custom_plugin_overlay():
     print(request_type)
     preferences = data["data"]["preferences"]
     
-    #is_fullscreen = data["data"].get("isFullscreen", False)
-
     overlay_video_width_percentage = float(preferences["videoOverlayWidth"])
     overlay_video_height_percentage = float(preferences["videoOverlayHeight"])
     overlay_video_location_horizontal = preferences["overlayVideoLocationHorizontal"]
@@ -510,8 +401,9 @@ def custom_plugin_overlay():
 
         if is_commercial:
             print("START overlay")
-            #TODO: somhow globally define hwnd
-            window_title = "VLC"  # Change this to your target window
+            
+            #TODO: somehow globally define hwnd
+            window_title = "VLC" 
             hwnd = find_window_by_title(window_title)
 
             have_demensions_changed = (overlay_video_width_percentage != previous_overlay_video_width_percentage or overlay_video_height_percentage != previous_overlay_video_width_percentage) 
@@ -526,158 +418,32 @@ def custom_plugin_overlay():
                 
             position_and_resize_window(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage, vertical=overlay_video_location_vertical, horizontal=overlay_video_location_horizontal)
             
-            if is_vlc_http_api_control_mode:
-                time.sleep(0.1)
-                requests.get("http://localhost:8080/requests/status.json?command=pl_forceresume", auth=vlc_http_api_auth)
+            time.sleep(0.1)
+            requests.get("http://localhost:8080/requests/status.json?command=pl_forceresume", auth=vlc_http_api_auth)
                 
-                response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-                data = response.json()
+            response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
+            data = response.json()
                 
-                if is_live_media(data):
-                    print("is_live_media is True")
-                    requests.get(
-                        "http://localhost:8080/requests/status.json",
-                        params={
-                            "command": "volume",
-                            "val": set_volume,
-                        },
-                        auth=vlc_http_api_auth,
-                        timeout=3,
-                    )
-                else:
-                    print("is_live_media is False")
+            if is_live_media(data):
+                print("is_live_media is True")
+                requests.get(
+                    "http://localhost:8080/requests/status.json",
+                    params={
+                        "command": "volume",
+                        "val": set_volume,
+                    },
+                    auth=vlc_http_api_auth,
+                    timeout=3,
+                )
             else:
-                time.sleep(0.5)
-                send_spacebar(hwnd)
-
+                print("is_live_media is False")
 
             return jsonify({"status": "ok"})
         else:
-            #TODO: somhow globally define hwnd
-            window_title = "VLC"  # Change this to your target window
+            #TODO: somehow globally define hwnd
+            window_title = "VLC" 
             hwnd = find_window_by_title(window_title)
-            if is_vlc_http_api_control_mode:
-                response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-                data = response.json()
-                set_volume = int(data.get("volume", set_volume_fallback))
-                if set_volume == 0:
-                    set_volume = set_volume_fallback
-                
-                if is_live_media(data) is False:
-                    print("is_live_media is False")
-                    requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                else:
-                    print("is_live_media is True")
-                    requests.get(
-                        "http://localhost:8080/requests/status.json",
-                        params={
-                            "command": "volume",
-                            "val": 0,
-                        },
-                        auth=vlc_http_api_auth,
-                        timeout=3,
-                    )
-                    print("is_pip_mode:")
-                    print(is_pip_mode)
-                    if is_pip_mode:
-                        pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
-                        position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
-                    else:
-                        win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                    
-                #time.sleep(0.2)
-            else:
-                send_spacebar(hwnd)
-                time.sleep(1)
-            
-            print("STOP overlay")
 
-    elif request_type == "browser_fullscreen_state_change":
-        is_fullscreen = data["data"]["isFullscreen"] #TODO: set is_fullscreen earlier (maybe have global variable?) and use it for determining whether to do other things
-
-        window_title = "VLC"  # Change this to your target window
-        hwnd = find_window_by_title(window_title)
-
-        if is_fullscreen:
-            print("User entered fullscreen on browser")
-            make_borderless(hwnd)
-        else:
-            print("User exited fullscreen on browser")
-            
-            if original_forground_window is not None and is_original_forground_window_topmost:
-                win32gui.SetWindowPos(
-                    original_forground_window,
-                    #win32con.HWND_TOPMOST,
-                    win32con.HWND_NOTOPMOST,
-                    #win32con.HWND_TOP,
-                    0, 0, 0, 0,
-                    win32con.SWP_NOMOVE |
-                    win32con.SWP_NOSIZE #|
-                    #win32con.SWP_NOOWNERZORDER
-                    | win32con.SWP_NOACTIVATE
-                )
-                
-                is_original_forground_window_topmost = False
-                
-            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-            time.sleep(0.1)
-            remove_topmost(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage)
-            restore_borders(hwnd)
-
-    elif request_type == "init":
-        print("init")
-        if is_vlc_http_api_control_mode:
-            original_forground_window = win32gui.GetForegroundWindow()
-            print(win32gui.GetWindowText(original_forground_window))
-            
-            #TODO: Do I keep or remove this? I think I'm leaning towards remove since I do it later for non live and it shows the user what is happening instead of the quick flash of the taskbar which looks glitchy
-            # if original_forground_window is not None:
-            #     win32gui.SetWindowPos(
-            #         original_forground_window,
-            #         win32con.HWND_TOPMOST,
-            #         #win32con.HWND_NOTOPMOST,
-            #         #win32con.HWND_TOP,
-            #         0, 0, 0, 0,
-            #         win32con.SWP_NOMOVE |
-            #         win32con.SWP_NOSIZE #|
-            #         #win32con.SWP_NOOWNERZORDER
-            #         | win32con.SWP_NOACTIVATE
-            #     )
-                
-            #     is_original_forground_window_topmost = True
-                
-            #     time.sleep(0.4)
-                
-
-                
-            my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
-            open_vlc_with_specific_file(my_file_path)
-            #requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
-            time.sleep(1) #todo: better way to wait or not have to wait at all?
-            print("waiting for playing")
-            wait_for_vlc_playing()
-            time.sleep(0.5) #TODO: dynamically wait for video demensions
-            print("done waiting for playing")
-            window_title = "VLC"  # Change this to your target window
-            hwnd = find_window_by_title(window_title)
-            if hwnd is None:
-                return jsonify({"status": "error", "message": "VLC could not be opened."}) #TODO: update message
-            make_borderless(hwnd)
-            #print("Extension Initiated. Tip: Click on VLC and hit Ctrl + H to hide VLC UI")
-
-            time.sleep(0.2)
-
-            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early
-            time.sleep(0.2) #todo: better way to wait or not have to wait at all?
-            # resume_seconds = get_saved_resume_time(my_file_path)
-            # requests.get(
-            #     "http://localhost:8080/requests/status.json",
-            #     params={"command": "seek", "val": resume_seconds},
-            #     auth=vlc_http_api_auth
-            # )
-            #time.sleep(2) #todo: better way to wait or not have to wait at all?
-            
             response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
             data = response.json()
             set_volume = int(data.get("volume", set_volume_fallback))
@@ -685,32 +451,11 @@ def custom_plugin_overlay():
                 set_volume = set_volume_fallback
                 
             if is_live_media(data) is False:
+                print("is_live_media is False")
                 requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
-                time.sleep(0.2)
-                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE) #TODO: maybe do have everything show at the beginging and do this?
-                time.sleep(0.2)
-                position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar
-                time.sleep(0.2)
                 win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                time.sleep(0.2)
-                
-                if original_forground_window is not None:
-                    time.sleep(0.4)
-
-                    win32gui.SetWindowPos(
-                        original_forground_window,
-                        win32con.HWND_TOPMOST,
-                        #win32con.HWND_NOTOPMOST,
-                        #win32con.HWND_TOP,
-                        0, 0, 0, 0,
-                        win32con.SWP_NOMOVE |
-                        win32con.SWP_NOSIZE |
-                        win32con.SWP_NOOWNERZORDER
-                    ) # doing this to clear out the taskbar for windows 11
-                
-                    is_original_forground_window_topmost = True
-                
             else:
+                print("is_live_media is True")
                 requests.get(
                     "http://localhost:8080/requests/status.json",
                     params={
@@ -726,92 +471,177 @@ def custom_plugin_overlay():
                     pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
                     position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
                 else:
-                    time.sleep(0.2)
                     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                    time.sleep(0.2)
-                    position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar for windows 10
-                    time.sleep(0.2)
-                    win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
-                    time.sleep(0.2)
+                    
+            print("STOP overlay")
 
-                    if original_forground_window is not None:
-                        time.sleep(0.4)
+    elif request_type == "browser_fullscreen_state_change":
+        is_fullscreen = data["data"]["isFullscreen"] #TODO: set is_fullscreen earlier (maybe have global variable?) and use it for determining whether to do other things
 
-                        win32gui.SetWindowPos(
-                            original_forground_window,
-                            win32con.HWND_TOPMOST,
-                            #win32con.HWND_NOTOPMOST,
-                            #win32con.HWND_TOP,
-                            0, 0, 0, 0,
-                            win32con.SWP_NOMOVE |
-                            win32con.SWP_NOSIZE |
-                            win32con.SWP_NOOWNERZORDER
-                        ) # doing this to clear out the taskbar for windows 11
+        window_title = "VLC"
+        hwnd = find_window_by_title(window_title)
+
+        if is_fullscreen:
+            print("User entered fullscreen on browser")
+            make_borderless(hwnd)
+        else:
+            print("User exited fullscreen on browser")
+            
+            if original_forground_window is not None and is_original_forground_window_topmost:
+                win32gui.SetWindowPos(
+                    original_forground_window,
+                    win32con.HWND_NOTOPMOST,
+                    0, 0, 0, 0,
+                    win32con.SWP_NOMOVE
+                    | win32con.SWP_NOSIZE
+                    | win32con.SWP_NOACTIVATE
+                )
                 
-                        is_original_forground_window_topmost = True
+                is_original_forground_window_topmost = False
+                
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            time.sleep(0.1)
+            remove_topmost(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage)
+            restore_borders(hwnd)
+
+    elif request_type == "init":
+        original_forground_window = win32gui.GetForegroundWindow()
+        print(win32gui.GetWindowText(original_forground_window))
+            
+        my_file_path = preferences["pluginOverlayPreferences"]["preferences"]["url"]
+        open_vlc_with_specific_file(my_file_path)
+        time.sleep(1) #TODO: better way to wait or not have to wait at all?
+        print("waiting for playing")
+        wait_for_vlc_playing()
+        time.sleep(0.5) #TODO: dynamically wait for video demensions
+        print("done waiting for playing")
+        window_title = "VLC"
+        hwnd = find_window_by_title(window_title)
+        if hwnd is None:
+            return jsonify({"status": "error", "message": "VLC could not be opened."})
+        make_borderless(hwnd)
+
+        time.sleep(0.2)
+
+        position_and_resize_window(hwnd, width_percent=10, height_percent=10) # Force to bring forward now to get annoying taskbar showing out of the way early
+        time.sleep(0.2)
+            
+        response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
+        data = response.json()
+        set_volume = int(data.get("volume", set_volume_fallback))
+        if set_volume == 0:
+            set_volume = set_volume_fallback
+                
+        if is_live_media(data) is False:
+            requests.get("http://localhost:8080/requests/status.json?command=pl_forcepause", auth=vlc_http_api_auth)
+            time.sleep(0.2)
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            time.sleep(0.2)
+            position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar for windows 10
+            time.sleep(0.2)
+            win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+            time.sleep(0.2)
+                
+            if original_forground_window is not None:
+                time.sleep(0.4)
+
+                win32gui.SetWindowPos(
+                    original_forground_window,
+                    win32con.HWND_TOPMOST,
+                    0, 0, 0, 0,
+                    win32con.SWP_NOMOVE |
+                    win32con.SWP_NOSIZE |
+                    win32con.SWP_NOOWNERZORDER
+                ) # doing this to clear out the taskbar for windows 11
+                
+                is_original_forground_window_topmost = True
+                
+        else:
+            requests.get(
+                "http://localhost:8080/requests/status.json",
+                params={
+                    "command": "volume",
+                    "val": 0,
+                },
+                auth=vlc_http_api_auth,
+                timeout=3,
+            )
+            print("is_pip_mode:")
+            print(is_pip_mode)
+            if is_pip_mode:
+                pip_optimized_width_percentage, pip_optimized_height_percentage = calculate_largest_aspect_fit(max_width_percent=pip_width_percentage, max_height_percent=pip_height_percentage)
+                position_and_resize_window(hwnd, width_percent=pip_optimized_width_percentage, height_percent=pip_optimized_height_percentage, vertical=pip_location_vertical, horizontal=pip_location_horizontal)
+            else:
+                time.sleep(0.2)
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                time.sleep(0.2)
+                position_and_resize_window(hwnd, width_percent=10, height_percent=10) # need to bring this back and away a second time to clear out the taskbar for windows 10
+                time.sleep(0.2)
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+                time.sleep(0.2)
+
+                if original_forground_window is not None:
+                    time.sleep(0.4)
+
+                    win32gui.SetWindowPos(
+                        original_forground_window,
+                        win32con.HWND_TOPMOST,
+                        0, 0, 0, 0,
+                        win32con.SWP_NOMOVE |
+                        win32con.SWP_NOSIZE |
+                        win32con.SWP_NOOWNERZORDER
+                    ) # doing this to clear out the taskbar for windows 11
+                
+                    is_original_forground_window_topmost = True
             
                 
-            is_setup_complete = True
+        is_setup_complete = True
 
-            return jsonify({"status": "info", "message": "Message from VLC Over Commercials plugin: Success! Click in this window to return focus and you are good to go!"})
-
-        print(data)
+        return jsonify({"status": "info", "message": "Message from VLC Over Commercials plugin: Success! Click in this window to return focus and you are good to go!"})
 
     elif request_type == "end":
-        #TODO: somhow globally define hwnd
-        
         if original_forground_window is not None and is_original_forground_window_topmost:
             win32gui.SetWindowPos(
                 original_forground_window,
-                #win32con.HWND_TOPMOST,
                 win32con.HWND_NOTOPMOST,
-                #win32con.HWND_TOP,
                 0, 0, 0, 0,
-                win32con.SWP_NOMOVE |
-                win32con.SWP_NOSIZE #|
-                #win32con.SWP_NOOWNERZORDER
+                win32con.SWP_NOMOVE
+                | win32con.SWP_NOSIZE
                 | win32con.SWP_NOACTIVATE
             )
             
             is_original_forground_window_topmost = False
         
-        window_title = "VLC"  # Change this to your target window
+        #TODO: somhow globally define hwnd
+        window_title = "VLC" 
         hwnd = find_window_by_title(window_title)
+
         remove_topmost(hwnd, width_percent=optimized_width_percentage, height_percent=optimized_height_percentage)
         restore_borders(hwnd)
 
+        response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
+        data = response.json()
+                
+        if is_live_media(data):
+            print("is_live_media is True")
+            requests.get(
+                "http://localhost:8080/requests/status.json",
+                params={
+                    "command": "volume",
+                    "val": set_volume,
+                },
+                auth=vlc_http_api_auth,
+                timeout=3,
+            )
+        else:
+            print("is_live_media is False")
 
-        if is_vlc_http_api_control_mode:
-            
-            if is_vlc_http_api_control_mode:
-                response = requests.get("http://localhost:8080/requests/status.json", auth=vlc_http_api_auth)
-                data = response.json()
-                
-                if is_live_media(data):
-                    print("is_live_media is True")
-                    requests.get(
-                        "http://localhost:8080/requests/status.json",
-                        params={
-                            "command": "volume",
-                            "val": set_volume,
-                        },
-                        auth=vlc_http_api_auth,
-                        timeout=3,
-                    )
-                else:
-                    print("is_live_media is False")
-            else:
-                time.sleep(0.5)
-                send_spacebar(hwnd)
-                
-            save_video_resume_time(my_file_path)
-            requests.get("http://localhost:8080/requests/status.json?command=pl_stop", auth=vlc_http_api_auth) #todo: should use quit?
-            close_window_by_hwnd(hwnd)
-            #TODO: do I use this instead? or both?
-            if vlc_process and vlc_process.poll() is None:
-                vlc_process.terminate()
-                print("vlc_process.terminate()")
-            #TODO: close and capture stop time?
+        requests.get("http://localhost:8080/requests/status.json?command=pl_stop", auth=vlc_http_api_auth) #TODO: should use quit?
+        close_window_by_hwnd(hwnd)
+
+        if vlc_process and vlc_process.poll() is None:
+            vlc_process.terminate()
+            print("vlc_process.terminate()")
 
         print("Extension Stopped")
 
