@@ -7,6 +7,9 @@ import sounddevice as sd
 from vosk import Model, KaldiRecognizer
 import os
 import re
+import shutil
+import urllib.request
+import zipfile
 
 PORT = 64145
 
@@ -17,7 +20,11 @@ clients = set()
 # --------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "model/vosk-model-small-en-us-0.15")
+MODEL_DIR = os.path.join(BASE_DIR, "model")
+MODEL_NAME = "vosk-model-small-en-us-0.15"
+MODEL_PATH = os.path.join(MODEL_DIR, MODEL_NAME)
+MODEL_URL = f"https://alphacephei.com/vosk/models/{MODEL_NAME}.zip"
+MODEL_ZIP_PATH = os.path.join(MODEL_DIR, f"{MODEL_NAME}.zip")
 
 DEFAULT_COMMERCIAL_PHRASE = "tomato"
 DEFAULT_COMMERCIAL_EMOJI = "\U0001F345"
@@ -41,6 +48,114 @@ current_is_commercial = None
 # --------------------------------------------------
 # Helpers
 # --------------------------------------------------
+
+async def ensure_vosk_model(ws):
+    """Create, download, and extract the Vosk model when it is missing."""
+    if os.path.isdir(MODEL_PATH):
+        return True
+
+    os.makedirs(MODEL_DIR, exist_ok=True)
+
+    await send_status(
+        ws,
+        "Downloading voice model: 0%",
+        f"Vosk model not found at {MODEL_PATH}",
+    )
+
+    loop = asyncio.get_running_loop()
+    last_reported_percent = -1
+
+    def download_progress(block_number, block_size, total_size):
+        """Report download progress from urllib's worker thread."""
+        nonlocal last_reported_percent
+
+        if total_size <= 0:
+            return
+
+        downloaded = block_number * block_size
+        percent = min(100, int(downloaded * 100 / total_size))
+
+        # Updating every 5% avoids flooding the WebSocket with messages.
+        report_percent = min(100, (percent // 5) * 5)
+        if report_percent == last_reported_percent:
+            return
+
+        last_reported_percent = report_percent
+        print(
+            f"\rDownloading Vosk model: {percent:3d}%",
+            end="",
+            flush=True,
+        )
+
+        loop.call_soon_threadsafe(
+            asyncio.create_task,
+            send_status(
+                ws,
+                f"Downloading voice model: {report_percent}%",
+                f"Downloading {MODEL_NAME}",
+            ),
+        )
+
+    try:
+        print(f"Vosk model not found at: {MODEL_PATH}")
+        print(f"Downloading {MODEL_NAME}...")
+
+        # urlretrieve is blocking, so run it outside the asyncio event loop.
+        await asyncio.to_thread(
+            urllib.request.urlretrieve,
+            MODEL_URL,
+            MODEL_ZIP_PATH,
+            download_progress,
+        )
+        print()
+
+        await send_status(
+            ws,
+            "Extracting voice model...",
+            f"Extracting {MODEL_NAME}",
+        )
+        print("Extracting Vosk model...")
+
+        def extract_model():
+            with zipfile.ZipFile(MODEL_ZIP_PATH, "r") as archive:
+                archive.extractall(MODEL_DIR)
+
+        await asyncio.to_thread(extract_model)
+
+        if not os.path.isdir(MODEL_PATH):
+            raise FileNotFoundError(
+                f"The archive was extracted, but {MODEL_PATH} was not created."
+            )
+
+        print("Vosk model is ready.")
+        await send_status(
+            ws,
+            "Voice model downloaded",
+            f"{MODEL_NAME} is ready",
+        )
+        return True
+
+    except Exception as error:
+        print(f"Could not download or extract the Vosk model: {error}")
+        await send_status(
+            ws,
+            "Voice model download failed",
+            str(error),
+        )
+
+        # Remove an incomplete model folder so the next run can retry cleanly.
+        if os.path.isdir(MODEL_PATH):
+            await asyncio.to_thread(shutil.rmtree, MODEL_PATH, True)
+
+        return False
+
+    finally:
+        if os.path.isfile(MODEL_ZIP_PATH):
+            try:
+                os.remove(MODEL_ZIP_PATH)
+            except OSError:
+                pass
+
 
 def normalize_unicode(value):
     """Combine UTF-16 surrogate pairs into normal Unicode characters."""
@@ -192,11 +307,15 @@ async def process_text(ws, text, now, last_trigger_time, source, last_partial_te
 
 async def listen_loop(ws):
     try:
-        if not os.path.exists(MODEL_PATH):
-            print("Model not found:", MODEL_PATH)
+        if not await ensure_vosk_model(ws):
             return
 
         print("Loading Vosk model...")
+        await send_status(
+            ws,
+            "Loading Voice model...",
+            "Loading Vosk model...",
+        )
         model = Model(MODEL_PATH)
 
         recognizer = KaldiRecognizer(model, 16000)
@@ -207,6 +326,11 @@ async def listen_loop(ws):
         while True:
             await listening_active.wait()
             print("Listening started")
+            await send_status(
+                ws,
+                "\U0001F5E3 " + get_all_emojis_for_action("commercial"),
+                "Ready"
+            )
 
             with sd.RawInputStream(
                 samplerate=16000,
