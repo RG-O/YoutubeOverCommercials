@@ -6,6 +6,7 @@ import queue
 import sounddevice as sd
 from vosk import Model, KaldiRecognizer
 import os
+import re
 
 PORT = 64145
 
@@ -18,16 +19,12 @@ clients = set()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model/vosk-model-small-en-us-0.15")
 
-TARGET_PHRASES = {
-    "banana": {
-        "action": "content", 
-        "emoji": "\uD83C\uDF4C",
-        },
-    "tomato": {
-        "action": "commercial", 
-        "emoji": "\uD83C\uDF45"
-        }
-}
+DEFAULT_COMMERCIAL_PHRASE = "tomato"
+DEFAULT_COMMERCIAL_EMOJI = "\U0001F345"
+DEFAULT_CONTENT_PHRASE = "banana"
+DEFAULT_CONTENT_EMOJI = "\U0001F34C"
+
+TARGET_PHRASES = {}
 
 COOLDOWN = 3.0
 
@@ -45,6 +42,63 @@ current_is_commercial = None
 # Helpers
 # --------------------------------------------------
 
+def normalize_unicode(value):
+    """Combine UTF-16 surrogate pairs into normal Unicode characters."""
+    if not isinstance(value, str):
+        return value
+
+    try:
+        return value.encode("utf-16", "surrogatepass").decode("utf-16")
+    except UnicodeError:
+        return value
+
+
+def clean_preference(value, default):
+    """Return a trimmed preference value, or its default when blank/missing."""
+    if not isinstance(value, str):
+        return default
+
+    value = normalize_unicode(value).strip()
+    return value if value else default
+
+
+def apply_preferences(preferences):
+    """Build the active phrase configuration from plugin preferences."""
+    global TARGET_PHRASES
+
+    commercial_phrase = clean_preference(
+        preferences.get("commercial-trigger-phrase"),
+        DEFAULT_COMMERCIAL_PHRASE,
+    ).lower()
+    commercial_emoji = clean_preference(
+        preferences.get("commercial-trigger-emoji"),
+        DEFAULT_COMMERCIAL_EMOJI,
+    )
+    content_phrase = clean_preference(
+        preferences.get("content-trigger-phrase"),
+        DEFAULT_CONTENT_PHRASE,
+    ).lower()
+    content_emoji = clean_preference(
+        preferences.get("content-trigger-emoji"),
+        DEFAULT_CONTENT_EMOJI,
+    )
+
+    TARGET_PHRASES = {
+        commercial_phrase: {
+            "action": "commercial",
+            "emoji": commercial_emoji,
+        },
+        content_phrase: {
+            "action": "content",
+            "emoji": content_emoji,
+        },
+    }
+
+    print("Active voice triggers:")
+    print(f"  Commercial: {commercial_phrase!r} {commercial_emoji}")
+    print(f"  Content:    {content_phrase!r} {content_emoji}")
+
+
 def get_all_emojis_for_action(action):
     return " ".join(
         config["emoji"]
@@ -58,10 +112,17 @@ def audio_callback(indata, frames, time_info, status):
     audio_queue.put(bytes(indata))
 
 def find_trigger_config(text):
-    words = text.split()
-    for phrase, config in TARGET_PHRASES.items():
-        if phrase in words:
-            return phrase, config
+    """Find a configured word or multi-word phrase in recognized speech."""
+    normalized_text = " ".join(text.lower().split())
+
+    # Check longer phrases first in case one trigger is contained in another.
+    sorted_phrases = sorted(TARGET_PHRASES, key=len, reverse=True)
+
+    for phrase in sorted_phrases:
+        pattern = rf"(?<!\w){re.escape(phrase)}(?!\w)"
+        if re.search(pattern, normalized_text):
+            return phrase, TARGET_PHRASES[phrase]
+
     return None, None
 
 async def handle_trigger(ws, phrase, config, now, last_trigger_time, source):
@@ -80,7 +141,7 @@ async def handle_trigger(ws, phrase, config, now, last_trigger_time, source):
 
     print(f"TRIGGERED ({source}):", config["action"])
 
-    display = "\uD83D\uDDE3 \u2705"
+    display = "\U0001F5E3 \u2705"
 
     await send_commercial_state_change(
         ws,
@@ -225,7 +286,17 @@ async def handle_client(websocket):
 async def handle_message(ws, msg):
     global listening_task, current_is_commercial
 
-    message_type = msg["type"]
+    message_type = msg.get("type")
+    data = msg.get("data", {})
+    full_preferences = data.get("preferences", {})
+    custom_trigger_plugin_preferences = full_preferences.get(
+        "pluginTriggerPreferences", {}
+    ).get("preferences", {})
+
+    # Preference values are normally returned with init, but applying them
+    # whenever present also supports preference updates without restarting.
+    if custom_trigger_plugin_preferences:
+        apply_preferences(custom_trigger_plugin_preferences)
 
     if message_type == "plugin_manifest":
         await send_manifest(ws)
@@ -236,7 +307,7 @@ async def handle_message(ws, msg):
 
         await send_status(
             ws,
-            "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial"),
+            "\U0001F5E3 " + get_all_emojis_for_action("commercial"),
             "Ready"
         )
 
@@ -249,10 +320,10 @@ async def handle_message(ws, msg):
     elif message_type == "commercial_state_change":
         current_is_commercial = msg["data"]["isCommercialState"]
 
-        new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("commercial")
+        new_display = "\U0001F5E3 " + get_all_emojis_for_action("commercial")
 
         if current_is_commercial:
-            new_display = "\uD83D\uDDE3 " + get_all_emojis_for_action("content")
+            new_display = "\U0001F5E3 " + get_all_emojis_for_action("content")
 
         await send_status(ws, new_display, "update display")
 
@@ -298,6 +369,36 @@ async def send_manifest(ws):
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional
                 "capabilities": ["detection"], #TODO: delete this?
+                "preferences": [
+                    {
+                        "key": "commercial-trigger-phrase",
+                        "label": "Commercial Trigger Word or Phrase",
+                        "description": "Say this word or phrase to mark a commercial break.",
+                        "type": "text",
+                        "default": DEFAULT_COMMERCIAL_PHRASE,
+                    },
+                    {
+                        "key": "commercial-trigger-emoji",
+                        "label": "Commercial Trigger Emoji",
+                        "description": "Emoji shown while waiting for the commercial trigger.",
+                        "type": "text",
+                        "default": DEFAULT_COMMERCIAL_EMOJI,
+                    },
+                    {
+                        "key": "content-trigger-phrase",
+                        "label": "Content Trigger Word or Phrase",
+                        "description": "Say this word or phrase when regular content resumes.",
+                        "type": "text",
+                        "default": DEFAULT_CONTENT_PHRASE,
+                    },
+                    {
+                        "key": "content-trigger-emoji",
+                        "label": "Content Trigger Emoji",
+                        "description": "Emoji shown while waiting for the content trigger.",
+                        "type": "text",
+                        "default": DEFAULT_CONTENT_EMOJI,
+                    },
+                ], # Optional
             },
             "meta": {
                 "display": "Sending Manifest",
@@ -306,6 +407,10 @@ async def send_manifest(ws):
         }))
     except websockets.exceptions.ConnectionClosed:
         print("send_status send stopped: client disconnected")
+
+
+# Start with defaults until preferences arrive from the extension.
+apply_preferences({})
 
 # --------------------------------------------------
 # Main
