@@ -19,6 +19,7 @@ import requests
 import win32api
 import win32con
 import win32gui
+import win32process
 from flask import Flask, jsonify, request
 
 
@@ -145,36 +146,99 @@ def get_screen_size() -> tuple[int, int]:
     return win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
 
 
-def find_window_by_title(partial_title: str) -> int | None:
-    """Return the first visible window whose title contains partial_title."""
+def find_main_window_for_process(
+    process: subprocess.Popen[Any] | None,
+    timeout: float = 15.0,
+) -> int | None:
+    """Find the main visible top-level window owned by process.
 
-    matches: list[int] = []
-    partial_title_lower = partial_title.lower()
+    This prevents the plugin from accidentally selecting a window belonging
+    to another VLC instance merely because its title contains "VLC".
+    """
 
-    def enum_handler(hwnd: int, _: Any) -> None:
-        if not win32gui.IsWindowVisible(hwnd):
-            return
+    if process is None:
+        return None
 
-        title = win32gui.GetWindowText(hwnd)
-        if partial_title_lower in title.lower():
-            LOGGER.debug("Matched window %s: %s", hwnd, title)
-            matches.append(hwnd)
+    deadline = time.monotonic() + timeout
 
-    win32gui.EnumWindows(enum_handler, None)
-    return matches[0] if matches else None
+    while time.monotonic() < deadline:
+        matches: list[tuple[int, str]] = []
+
+        def enum_handler(hwnd: int, _: Any) -> None:
+            if not win32gui.IsWindow(hwnd):
+                return
+
+            _, window_process_id = win32process.GetWindowThreadProcessId(hwnd)
+            if window_process_id != process.pid:
+                return
+
+            if not win32gui.IsWindowVisible(hwnd):
+                return
+
+            # Ignore child windows and owned helper/dialog windows.
+            if win32gui.GetParent(hwnd):
+                return
+            if win32gui.GetWindow(hwnd, win32con.GW_OWNER):
+                return
+
+            extended_style = win32gui.GetWindowLong(
+                hwnd,
+                win32con.GWL_EXSTYLE,
+            )
+            if extended_style & win32con.WS_EX_TOOLWINDOW:
+                return
+
+            matches.append((hwnd, win32gui.GetWindowText(hwnd).strip()))
+
+        win32gui.EnumWindows(enum_handler, None)
+
+        if matches:
+            # VLC may briefly create more than one top-level Qt window. Prefer
+            # the titled VLC window, then fall back to the first valid match.
+            for hwnd, title in matches:
+                if "vlc" in title.lower():
+                    LOGGER.info(
+                        "Matched VLC window %s to process ID %s: %s",
+                        hwnd,
+                        process.pid,
+                        title,
+                    )
+                    return hwnd
+
+            hwnd, title = matches[0]
+            LOGGER.info(
+                "Matched window %s to VLC process ID %s: %s",
+                hwnd,
+                process.pid,
+                title or "<untitled>",
+            )
+            return hwnd
+
+        if process.poll() is not None:
+            LOGGER.error(
+                "VLC process ID %s exited before its main window appeared.", #TODO: update this message because this isn't always the case?
+                process.pid,
+            )
+            return None
+
+        time.sleep(0.1)
+
+    LOGGER.error(
+        "Could not find a main window for VLC process ID %s.",
+        process.pid,
+    )
+    return None
 
 
-def get_vlc_window(refresh: bool = False) -> int | None:
-    """Return the cached VLC window handle, refreshing it when necessary."""
+def get_vlc_window() -> int | None:
+    """Return only the cached window belonging to this plugin's VLC process."""
 
-    if (
-        not refresh
-        and STATE.vlc_hwnd
-        and win32gui.IsWindow(STATE.vlc_hwnd)
-    ):
+    if STATE.vlc_hwnd and win32gui.IsWindow(STATE.vlc_hwnd):
         return STATE.vlc_hwnd
 
-    STATE.vlc_hwnd = find_window_by_title(VLC_WINDOW_TITLE)
+    # Do not fall back to a title search because that could select a different
+    # VLC instance. Re-resolve the window from the process launched by us.
+    STATE.vlc_hwnd = find_main_window_for_process(STATE.vlc_process, timeout=2.0)
     return STATE.vlc_hwnd
 
 
@@ -690,13 +754,26 @@ def handle_commercial_state_change(
         minimize_window(hwnd)
 
 
-def handle_fullscreen_state_change(payload: dict[str, Any]) -> None:
+def handle_fullscreen_state_change(
+    payload: dict[str, Any],
+    preferences: RequestPreferences,
+) -> None:
     hwnd = require_vlc_window()
     is_fullscreen = as_bool(payload.get("isFullscreen"))
 
     if is_fullscreen:
         LOGGER.info("Browser entered fullscreen")
         make_borderless(hwnd)
+
+        status = vlc_request()
+        read_and_store_volume(status)
+
+        if is_live_media(status):
+            set_vlc_volume(0)
+            if preferences.pip_enabled:
+                LOGGER.info("Setting VLC back to PiP")
+                position_and_resize_window(hwnd, optimized_layout(preferences.pip))
+
         return
 
     LOGGER.info("Browser exited fullscreen")
@@ -736,16 +813,16 @@ def handle_init(
     if not wait_for_vlc_playing():
         raise RuntimeError("VLC did not begin rendering video before the timeout.")
 
-    # VLC can report playback before its top-level window has appeared.
-    deadline = time.monotonic() + 10.0
-    hwnd: int | None = None
-    while time.monotonic() < deadline and not hwnd:
-        hwnd = get_vlc_window(refresh=True)
-        if not hwnd:
-            time.sleep(0.2)
+    # Capture the main window belonging specifically to the VLC process that
+    # this plugin launched.
+    STATE.vlc_hwnd = find_main_window_for_process(STATE.vlc_process)
+    hwnd = STATE.vlc_hwnd
 
     if not hwnd:
-        raise RuntimeError("VLC began playing, but its window could not be found.")
+        raise RuntimeError(
+            "VLC began playing, but the window belonging to the launched "
+            "VLC process could not be found."
+        )
 
     make_borderless(hwnd)
     time.sleep(0.2)
@@ -843,7 +920,7 @@ def custom_plugin_overlay():
         if request_type == "commercial_state_change":
             handle_commercial_state_change(payload, preferences)
         elif request_type == "browser_fullscreen_state_change":
-            handle_fullscreen_state_change(payload)
+            handle_fullscreen_state_change(payload, preferences)
         elif request_type == "init":
             return jsonify(handle_init(raw_preferences, preferences))
         elif request_type == "end":
