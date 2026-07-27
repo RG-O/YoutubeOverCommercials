@@ -2,6 +2,7 @@
 import os
 import re
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -35,6 +36,8 @@ VLC_HTTP_AUTH = ("", VLC_HTTP_PASSWORD)
 DEFAULT_MEDIA_URL = "file:///C:/Users/user/Downloads/video.mp4"
 DEFAULT_VOLUME = 256
 FALLBACK_VOLUME = 205
+FREEZE_TIMEOUT_SECONDS = 20
+FREEZE_CHECK_INTERVAL_SECONDS = 1
 
 
 # -----------------------------------------------------------------------------
@@ -54,6 +57,11 @@ original_foreground_window = None
 is_original_foreground_window_topmost = False
 is_setup_complete = False
 saved_volume = DEFAULT_VOLUME
+current_media_url = None
+
+freeze_monitor_thread = None
+freeze_monitor_stop_event = threading.Event()
+vlc_command_lock = threading.Lock()
 
 
 # -----------------------------------------------------------------------------
@@ -127,14 +135,15 @@ def get_vlc_status(command=None, params=None, timeout=3):
     if command:
         request_params["command"] = command
 
-    response = requests.get(
-        VLC_HTTP_URL,
-        params=request_params,
-        auth=VLC_HTTP_AUTH,
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    return response.json()
+    with vlc_command_lock:
+        response = requests.get(
+            VLC_HTTP_URL,
+            params=request_params,
+            auth=VLC_HTTP_AUTH,
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        return response.json()
 
 
 def send_vlc_command(command, params=None, timeout=3):
@@ -171,10 +180,172 @@ def safely_minimize_window(hwnd):
 # -----------------------------------------------------------------------------
 
 
+def get_media_url_from_preferences(preferences, use_default=False):
+    """Return the configured media URL, or None when it was not supplied."""
+    media_url = (
+        preferences.get("raw", {})
+        .get("pluginOverlayPreferences", {})
+        .get("preferences", {})
+        .get("url")
+    )
+
+    if media_url:
+        return media_url
+
+    return DEFAULT_MEDIA_URL if use_default else None
+
+
+def status_has_video(status):
+    """Return True when VLC reports at least one video stream."""
+    categories = status.get("information", {}).get("category", {})
+
+    for stream_info in categories.values():
+        if not isinstance(stream_info, dict):
+            continue
+
+        if str(stream_info.get("Type", "")).lower() == "video":
+            return True
+
+    return False
+
+
+def switch_vlc_media(media_url, preserve_state=True):
+    """Replace VLC's current media without opening another VLC process."""
+    global current_media_url
+    global previous_overlay_width_percentage
+    global previous_overlay_height_percentage
+
+    if not media_url:
+        return False
+
+    old_status = {}
+    if preserve_state:
+        try:
+            old_status = get_vlc_status()
+        except requests.RequestException:
+            pass
+
+    old_state = old_status.get("state")
+    old_volume = old_status.get("volume")
+
+    print(f"Switching VLC media to: {media_url}")
+    send_vlc_command("pl_stop")
+    send_vlc_command("in_play", {"input": media_url})
+
+    current_media_url = media_url
+    previous_overlay_width_percentage = 0
+    previous_overlay_height_percentage = 0
+
+    wait_for_vlc_playing(timeout=30)
+
+    if old_volume is not None:
+        set_vlc_volume(int(old_volume))
+
+    if preserve_state and old_state == "paused":
+        send_vlc_command("pl_forcepause")
+
+    return True
+
+
+def update_media_url_if_changed(preferences):
+    """Switch media when a later request contains a different URL."""
+    media_url = get_media_url_from_preferences(preferences)
+
+    if not media_url:
+        return False
+
+    if not is_setup_complete or not current_media_url:
+        return False
+
+    if media_url == current_media_url:
+        return False
+
+    return switch_vlc_media(media_url, preserve_state=True)
+
+
+def reset_frozen_media():
+    """Restart the current media after VLC stops displaying new frames."""
+    if not current_media_url:
+        return
+
+    try:
+        status = get_vlc_status()
+        volume = int(status.get("volume", saved_volume))
+
+        print(
+            f"No new VLC frames for {FREEZE_TIMEOUT_SECONDS} seconds. "
+            "Restarting the media."
+        )
+        switch_vlc_media(current_media_url, preserve_state=False)
+        set_vlc_volume(volume)
+    except requests.RequestException as error:
+        print(f"Could not reset frozen VLC media: {error}")
+
+
+def monitor_vlc_for_freezes():
+    """Restart playing media when no new frame appears for too long."""
+    last_displayed_count = None
+    last_frame_time = time.monotonic()
+
+    while not freeze_monitor_stop_event.wait(
+        FREEZE_CHECK_INTERVAL_SECONDS
+    ):
+        if not is_setup_complete or not current_media_url:
+            last_displayed_count = None
+            last_frame_time = time.monotonic()
+            continue
+
+        try:
+            status = get_vlc_status()
+        except requests.RequestException:
+            continue
+
+        if status.get("state") != "playing" or not status_has_video(status):
+            last_displayed_count = None
+            last_frame_time = time.monotonic()
+            continue
+
+        displayed_count = int(
+            status.get("stats", {}).get("displayedpictures", 0) or 0
+        )
+
+        if last_displayed_count is None or displayed_count > last_displayed_count:
+            last_displayed_count = displayed_count
+            last_frame_time = time.monotonic()
+            continue
+
+        if time.monotonic() - last_frame_time >= FREEZE_TIMEOUT_SECONDS:
+            reset_frozen_media()
+            last_displayed_count = None
+            last_frame_time = time.monotonic()
+
+
+def start_freeze_monitor():
+    """Start the freeze-monitor thread once."""
+    global freeze_monitor_thread
+
+    if freeze_monitor_thread and freeze_monitor_thread.is_alive():
+        return
+
+    freeze_monitor_stop_event.clear()
+    freeze_monitor_thread = threading.Thread(
+        target=monitor_vlc_for_freezes,
+        name="vlc-freeze-monitor",
+        daemon=True,
+    )
+    freeze_monitor_thread.start()
+
+
+def stop_freeze_monitor():
+    """Tell the freeze-monitor thread to stop."""
+    freeze_monitor_stop_event.set()
+
+
 def open_vlc_with_media(media_url):
     """Start VLC and remember the main window owned by that process."""
     global vlc_process
     global vlc_window_handle
+    global current_media_url
 
     vlc_path = find_vlc_exe()
     if not vlc_path:
@@ -204,6 +375,7 @@ def open_vlc_with_media(media_url):
     )
 
     print(f"Started VLC process with PID {vlc_process.pid}.")
+    current_media_url = media_url
 
     # VLC's HTTP server may need a moment to start.
     start_time = time.time()
@@ -588,9 +760,9 @@ def show_commercial_overlay(hwnd, preferences):
     time.sleep(0.1)
     send_vlc_command("pl_forceresume")
 
-    status = get_vlc_status()
-    if is_live_media(status):
-        set_vlc_volume(saved_volume)
+    #status = get_vlc_status()
+    #if is_live_media(status):
+    set_vlc_volume(saved_volume)
 
 
 def hide_commercial_overlay(hwnd, preferences):
@@ -623,6 +795,28 @@ def hide_commercial_overlay(hwnd, preferences):
         safely_minimize_window(hwnd)
 
 
+def resume_fullscreen(hwnd, preferences):
+    make_borderless(hwnd)
+
+    status = get_vlc_status()
+
+    if is_live_media(status):
+        set_vlc_volume(0)
+
+        if preferences["is_pip_mode"]:
+            pip_width, pip_height = calculate_largest_aspect_fit(
+                max_width_percent=preferences["pip_width"],
+                max_height_percent=preferences["pip_height"],
+            )
+            position_and_resize_window(
+                hwnd,
+                width_percent=pip_width,
+                height_percent=pip_height,
+                vertical=preferences["pip_vertical"],
+                horizontal=preferences["pip_horizontal"],
+            )
+
+
 def initialize_plugin(preferences):
     global original_foreground_window
     global is_setup_complete
@@ -635,13 +829,7 @@ def initialize_plugin(preferences):
         title = win32gui.GetWindowText(original_foreground_window)
         print(f"Original foreground window: {title}")
 
-    plugin_preferences = (
-        preferences["raw"]
-        .get("pluginOverlayPreferences", {})
-        .get("preferences", {})
-    )
-    media_url = plugin_preferences.get("url", DEFAULT_MEDIA_URL)
-
+    media_url = get_media_url_from_preferences(preferences, use_default=True)
     open_vlc_with_media(media_url)
 
     print("Waiting for VLC to begin playing...")
@@ -669,6 +857,7 @@ def initialize_plugin(preferences):
     if not is_live_media(status):
         send_vlc_command("pl_forcepause")
         time.sleep(0.2)
+        set_vlc_volume(saved_volume) # in case VLC opened with volume as 0, this should set it to the fallback
         hide_vlc_and_clear_taskbar(hwnd)
     else:
         set_vlc_volume(0)
@@ -689,12 +878,16 @@ def initialize_plugin(preferences):
             hide_vlc_and_clear_taskbar(hwnd)
 
     is_setup_complete = True
+    start_freeze_monitor()
 
 
 def end_plugin():
     global vlc_process
     global vlc_window_handle
     global is_setup_complete
+    global current_media_url
+
+    stop_freeze_monitor()
 
     if is_original_foreground_window_topmost:
         set_original_window_topmost(False)
@@ -724,6 +917,7 @@ def end_plugin():
 
     vlc_process = None
     vlc_window_handle = None
+    current_media_url = None
     is_setup_complete = False
     print("Extension stopped.")
 
@@ -765,6 +959,7 @@ def custom_plugin_overlay():
 
             if is_commercial:
                 print("Starting overlay.")
+                update_media_url_if_changed(preferences)
                 show_commercial_overlay(hwnd, preferences)
             else:
                 print("Stopping overlay.")
@@ -778,7 +973,7 @@ def custom_plugin_overlay():
 
             if is_fullscreen:
                 print("User entered browser fullscreen.")
-                make_borderless(hwnd)
+                resume_fullscreen(hwnd, preferences)
             else:
                 print("User exited browser fullscreen.")
 
