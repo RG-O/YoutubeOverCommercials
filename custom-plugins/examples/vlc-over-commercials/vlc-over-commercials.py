@@ -683,20 +683,22 @@ def set_original_window_topmost(make_topmost):
     )
 
     is_original_foreground_window_topmost = make_topmost
+    #TODO: add thread to monitor when original_foreground_window is back to foreground window
 
 
-def hide_vlc_and_clear_taskbar(hwnd, make_original_topmost=True):
+def hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar=True):
     """Use the original two-step minimize behavior for Windows 10 and 11."""
     safely_minimize_window(hwnd)
-    time.sleep(0.2)
-    position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-    time.sleep(0.2)
-    safely_minimize_window(hwnd)
-    time.sleep(0.2)
+    if should_clear_taskbar:
+        time.sleep(0.2)
+        position_and_resize_window(hwnd, width_percent=10, height_percent=10)
+        time.sleep(0.2)
+        safely_minimize_window(hwnd)
+        time.sleep(0.2)
 
-    if make_original_topmost and original_foreground_window:
-        time.sleep(0.4)
-        set_original_window_topmost(True)
+        if original_foreground_window:
+            time.sleep(0.4)
+            set_original_window_topmost(True)
 
 
 # -----------------------------------------------------------------------------
@@ -829,6 +831,13 @@ def initialize_plugin(preferences):
         title = win32gui.GetWindowText(original_foreground_window)
         print(f"Original foreground window: {title}")
 
+    should_clear_taskbar = (
+        preferences.get("raw", {})
+        .get("pluginOverlayPreferences", {})
+        .get("preferences", {})
+        .get("shouldClearTaskbar", False)
+    )
+
     media_url = get_media_url_from_preferences(preferences, use_default=True)
     open_vlc_with_media(media_url)
 
@@ -858,7 +867,7 @@ def initialize_plugin(preferences):
         send_vlc_command("pl_forcepause")
         time.sleep(0.2)
         set_vlc_volume(saved_volume) # in case VLC opened with volume as 0, this should set it to the fallback
-        hide_vlc_and_clear_taskbar(hwnd)
+        hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
     else:
         set_vlc_volume(0)
 
@@ -874,8 +883,9 @@ def initialize_plugin(preferences):
                 vertical=preferences["pip_vertical"],
                 horizontal=preferences["pip_horizontal"],
             )
+            #TODO: add ability to clear taskbar while in pip mode
         else:
-            hide_vlc_and_clear_taskbar(hwnd)
+            hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
 
     is_setup_complete = True
     start_freeze_monitor()
@@ -1057,11 +1067,19 @@ def plugin_manifest():
                             "file:///C:/Users/user/Downloads/video.mp4"
                         ),
                         "type": "text",
-                        "default": (
-                            "https://upload.wikimedia.org/wikipedia/commons/"
-                            "8/88/Big_Buck_Bunny_alt.webm"
+                        "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
+                    },
+                    {
+                        "key": "shouldClearTaskbar",
+                        "label": "Should Attempt to Hide Taskbar",
+                        "description": (
+                            "When VLC opens, it sometimes has the Windows taskbar display. "
+                            "This can quickly be fixed by clicking on the browser stream, "
+                            "but this setting attempts to dismiss it for you to save a click. "
                         ),
-                    }
+                        "type": "checkbox",
+                        "default": False,
+                    },
                 ],
             },
         }
