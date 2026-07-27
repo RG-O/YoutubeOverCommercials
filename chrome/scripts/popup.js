@@ -1392,7 +1392,7 @@ function displayPluginTriggerManifestError() {
     document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
     document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
 
-    if (optionsForm.isPluginOverlayMode.checked) {
+    if (optionsForm.isPluginCommercialTriggerMode.checked) {
         document.getElementById('expand-button').style.color = 'red';
         document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.color = 'red';
     }
