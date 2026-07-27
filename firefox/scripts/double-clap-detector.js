@@ -37,6 +37,7 @@ var wasLastClapMonitorRunSlowErrorConfirmed = false;
 var attackHoldFrames = 3;
 var clapPort = null;
 
+//TODO: update this note
 //note: since firefox handles mic permissions differently and you can't port directly between this script and the content one...
 //the firefox version injects this js directly into the same frame as the content script so it shares all the same variables and functions as the content script...
 //except for the configuration page, that behaves the same way as chrome
@@ -45,12 +46,7 @@ var clapPort = null;
 var isInContentFrame = false;
 if (typeof mainVideoCollection !== 'undefined') {
     isInContentFrame = true;
-} else {
-    let queryString = window.location.search;
-    let urlParams = new URLSearchParams(queryString);
-    window.scriptPurpose = urlParams.get('purpose') ?? 'listen-double-clap'; //note: not established in content.js so do not use for firefox except for confirguration page
-    window.isDebugMode = urlParams.get('debug');
-    window.clapSensitivity = urlParams.get('sensitivity') ?? 40;
+    if (isDebugMode) console.log('double-clap-detector.js running in main content frame.');
 }
 
 //user set preferences:
@@ -80,18 +76,13 @@ const maxSensitivityValues = {
     hfMax: 7400
 };
 
-if (isDebugMode) console.log('double-clap-detector.js running');
-
-
-setClapSensitivity(clapSensitivity);
-
 
 if (isInContentFrame) {
-    prepFoClapMonitor();
+    prepForClapMonitorDetector();
 } else {
     chrome.runtime.onConnect.addListener(p => {
         if (p.name === "clap-detector") {
-            if (isDebugMode) console.log('clap-detector connected');
+            //console.log('clap-detector connected'); //debug-high
             clapPort = p;
             clapPort.onDisconnect.addListener(() => {
                 clapPort = null;
@@ -99,7 +90,11 @@ if (isInContentFrame) {
 
             clapPort.onMessage.addListener(message => {
                 if (message.action === "connected") {
-                    prepFoClapMonitor();
+                    window.scriptPurpose = message.data.scriptPurpose ?? 'listen-double-clap'; //note: not established in content.js so do not use for firefox except for confirguration page //TODO: maybe I could add a global variabl for this in content.js?
+                    window.isDebugMode = message.data.isDebugMode;
+                    window.clapSensitivity = message.data.clapSensitivity ?? 40;
+                    if (isDebugMode) console.log('double-clap-detector.js connected. scriptPurpose = ' + scriptPurpose + ', clapSensitivity = ' + clapSensitivity);
+                    prepForClapMonitorDetector();
                 } else if (message.action === "update-sensitivity") {
                     clapSensitivity = message.clapSensitivity;
                     setClapSensitivity(clapSensitivity);
@@ -133,7 +128,9 @@ function sendToContent(data) {
 }
 
 
-function prepFoClapMonitor() {
+function prepForClapMonitorDetector() {
+    setClapSensitivity(clapSensitivity);
+
     navigator.mediaDevices.getUserMedia({
         audio: {
             channelCount: 2,

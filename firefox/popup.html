@@ -84,7 +84,7 @@
         <div>
             <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
             <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual - Keyboard &#9000;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
-</div>
+        </div>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
                 <b>HOW TO USE:</b><br />
@@ -107,6 +107,46 @@
             </div>
         </div>
 
+        <div>
+            <input type="radio" id="commercialDetectionMode-custom-plugin-trigger" name="commercialDetectionMode" value="custom-plugin-trigger">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">Trigger the extension any way you can dream of with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
+        </div>
+        <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
+            <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
+                <div class="id-field-label">
+                    <label>WebSocket URL:</label>
+                </div>
+                <div class="id-input-row">
+                    <input type="text" name="pluginCommercialTriggerWSURL" id="pluginCommercialTriggerWSURL" data-sync="pluginCommercialTriggerWSURL">
+                    <button id="pull-button-pluginCommercialTriggerWSURL" class="pull-id-button">
+                        &#128260;
+                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                    </button>
+                </div>
+            </div>
+            <div class="custom-plugin-trigger-messaging-container">
+                <div class="custom-plugin-trigger-loading loading-spinner"></div>
+                <div class="custom-plugin-trigger-additional-setup mode-how-to settings-box" style="display: none;">
+                    <b>TECHNICAL SETUP REQUIRED</b><br />
+                    <br />
+                    This mode can be used to code your own plugin to trigger the extension any way you would like! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far, I have built one that allows you to set a keyword or phrase to block or unblock commercials. For example, yell "tomato!" when a commercial starts to block it and then yell "banana!" to unblock when the game is back on!
+                </div>
+                <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
+                    Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
+                </div>
+                <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
+                    <div>
+                        Error reaching plugin WebSocket. Please check to make sure your plugin WS is running and the WS URL above is set correctly and then click the refresh button next to the WS URL above to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
+                    </div>
+                </div>
+                <div class="custom-plugin-trigger-instructions mode-how-to settings-box" style="display: none;">
+                    <b>HOW TO USE:</b><br />
+                    Go to stream, make full screen, and hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate the extension with your plugin.
+                </div>
+            </div>
+        </div>
+
+
 
         <h3>OVERLAY TYPE AND SOURCE</h3>
 
@@ -114,7 +154,7 @@
             <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
             <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
         </div>
-        <div id="yt-playlist" class="id-field-wrapper settings-box">
+        <div id="yt-playlist" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Playlist ID:</label>
             </div>
@@ -131,7 +171,7 @@
             <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
             <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
         </div>
-        <div id="yt-video" class="id-field-wrapper settings-box">
+        <div id="yt-video" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Video ID:</label>
             </div>
@@ -148,7 +188,7 @@
             <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
             <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
         </div>
-        <div id="yt-live" class="id-field-wrapper settings-box">
+        <div id="yt-live" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Live Video ID:</label>
             </div>
@@ -165,7 +205,7 @@
             <input type="radio" id="overlayVideoType-spotify" name="overlayVideoType" value="spotify">
             <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
         </div>
-        <div id="spotify" class="id-field-wrapper settings-box">
+        <div id="spotify" class="id-field-wrapper blue-settings-box settings-box">
             Will prompt you to select playlist from Spotify.<br />
             <span style="color: red;">Note: To use this setting, you must be logged into Spotify on this browser prior to initiating extension.</span>
         </div>
@@ -174,7 +214,7 @@
             <input type="radio" id="overlayVideoType-other-tabs" name="overlayVideoType" value="other-tabs">
             <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 250px; top: -205px; left: -120px;">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
         </div>
-        <div id="other-tabs" class="id-field-wrapper settings-box">
+        <div id="other-tabs" class="id-field-wrapper blue-settings-box settings-box">
             Will mute/unmute audio playing from other tabs.
         </div>
 
@@ -182,7 +222,7 @@
             <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
             <label class="video-type-label" for="overlayVideoType-other-video">Any Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 240px; top: -160px; left: -110px;">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
-        <div id="other-video" class="id-field-wrapper settings-box">
+        <div id="other-video" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Page with Video or MP4 File URL:</label>
             </div>
@@ -199,7 +239,7 @@
             <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
             <label class="video-type-label" for="overlayVideoType-other-live">Any Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 280px; top: -270px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below! Doesn't work from all websites. Troubleshooting Tips: Overlay stream doesn't mute/unmute? - Try checking "Non-YT Video Troubleshoot" toggle in advanced settings, refreshing, and trying again. Overlay stream is zoomed out or not centered within its window? -  Try checking "Non-YT Video Zoom" toggle in advanced settings, refreshing, and trying again. Overlay stream doesn't load at all? - Try finding and installing an ignore x-frame options/header browser extension (at your own risk), refreshing, and trying again.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
-        <div id="other-live" class="id-field-wrapper settings-box">
+        <div id="other-live" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
                 <label>Page with Stream URL:</label>
             </div>
@@ -212,14 +252,61 @@
             </div>
         </div>
 
+        <div>
+            <input type="radio" id="overlayVideoType-custom-plugin-overlay" name="overlayVideoType" value="custom-plugin-overlay">
+            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Have anything you can dream of happen automatically during commercials with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
+        </div>
+        <div id="custom-plugin-overlay" class="id-field-wrapper">
+            <div class="plugin-url-wrapper blue-settings-box settings-box">
+                <div class="id-field-label">
+                    <label>API or WebSocket and URL:</label>
+                </div>
+                <div class="id-input-row" style="margin-bottom: 5px;">
+                    <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
+                    <label for="pluginOverlayFramework-api">API</label>
+                    <input type="text" name="pluginOverlayAPIURL" id="pluginOverlayAPIURL" data-sync="pluginOverlayAPIURL">
+                    <button id="pull-button-pluginOverlayAPIURL" class="pull-id-button">
+                        &#128260;
+                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                    </button>
+                </div>
+                <div class="id-input-row">
+                    <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
+                    <label for="pluginOverlayFramework-ws">WS</label>
+                    <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL" data-sync="pluginOverlayWSURL">
+                    <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">
+                        &#128260;
+                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                    </button>
+                </div>
+            </div>
+            <div class="custom-plugin-overlay-messaging-container">
+                <div class="custom-plugin-overlay-loading loading-spinner"></div>
+                <div class="custom-plugin-overlay-additional-setup mode-how-to settings-box" style="display: none;">
+                    <b>TECHNICAL SETUP REQUIRED</b><br />
+                    <br />
+                    This mode can be used to code your own plugin to do anything you want during commercials! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far I have built one that plays VLC<sup style="font-size: 8px;">TM</sup> on your PC over top of commercials.
+                </div>
+                <div class="custom-plugin-overlay-manifest-success success-box settings-box" style="display: none;">
+                    Plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
+                </div>
+                <div class="custom-plugin-overlay-manifest-error error-box settings-box" style="display: none;">
+                    <div>
+                        Error reaching plugin. Please check to make sure your plugin is running and the plugin URL settings above are set correctly for your plugin and then click the refresh button next to the plugin URL to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div style="padding-bottom: 15px"></div>
 
 
-        <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Advanced Settings</button>
-        <div class="advanced">
-            <h2>ADVANCED SETTINGS</h2>
 
-            <h3>OVERLAY VIDEO/AUDIO</h3>
+        <button id="expand-button" type="button" class="collapsible button" style="margin-top: 20px;">Show Additional Settings</button>
+        <div class="advanced">
+            <h2>ADDITIONAL SETTINGS</h2>
+
+            <h3>OVERLAY OPTIONS</h3>
 
             <div class="general-field auto-dimensions-field-wrapper">
                 <label class="checkbox-label" for="shouldOverlayVideoSizeAndLocationAutoSet">Auto-Set Overlay Video Size and Location</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Pixel Color commercial detection modes only. Automatically sets the overlay video to max width and height without covering selected pixel.</span></span>
@@ -293,7 +380,7 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
+                <label class="checkbox-label" for="isPiPMode">Enable PiP for Live Overlays</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For YT Live and Non-YT Live Stream modes only. Instead of hiding the overlay video when out of commercial, this sets the video in the corner in a sort of Picture in Picture (PiP) mode.</span></span>
                 <input type="checkbox" name="isPiPMode" id="isPiPMode">
             </div>
 
@@ -329,8 +416,53 @@
 
             </div>
 
+            <div class="general-field">
+                <label class="checkbox-label" for="isPluginOverlayMode">Always Call Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the out of the box overlay option set above, you can toggle this on to use a plugin overlay at the same time.</span></span><span class="badge badge-advanced">Advanced</span>
+                <input type="checkbox" name="isPluginOverlayMode" id="isPluginOverlayMode">
+            </div>
+            <div id="custom-plugin-overlay-settings-checkbox-duplicate" style="display: none;">
+                <div class="plugin-url-wrapper blue-settings-box settings-box">
+                    <div class="id-field-label">
+                        <label>API or WebSocket and URL:</label>
+                    </div>
+                    <div class="id-input-row" style="margin-bottom: 5px;">
+                        <input type="radio" id="pluginOverlayFramework-apiDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
+                        <label for="pluginOverlayFramework-api">API</label>
+                        <input type="text" name="pluginOverlayAPIURLDuplicate" id="pluginOverlayAPIURLDuplicate" data-sync="pluginOverlayAPIURL">
+                        <button id="pull-button-pluginOverlayAPIURLDuplicate" class="pull-id-button">
+                            &#128260;
+                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                        </button>
+                    </div>
+                    <div class="id-input-row">
+                        <input type="radio" id="pluginOverlayFramework-wsDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
+                        <label for="pluginOverlayFramework-ws">WS</label>
+                        <input type="text" name="pluginOverlayWSURLDuplicate" id="pluginOverlayWSURLDuplicate" data-sync="pluginOverlayWSURL">
+                        <button id="pull-button-pluginOverlayWSURLDuplicate" class="pull-id-button">
+                            &#128260;
+                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="custom-plugin-overlay-messaging-container">
+                    <div class="custom-plugin-overlay-loading loading-spinner"></div>
+                    <div class="custom-plugin-overlay-additional-setup mode-how-to settings-box" style="display: none;">
+                        <b>TECHNICAL SETUP REQUIRED</b><br />
+                        <br />
+                        This mode can be used to code your own plugin to do anything you want during commercials! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far I have built one that plays VLC on your PC over top of commercials.
+                    </div>
+                    <div class="custom-plugin-overlay-manifest-success success-box settings-box" style="display: none;">
+                        Plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
+                    </div>
+                    <div class="custom-plugin-overlay-manifest-error error-box settings-box" style="display: none;">
+                        <div>
+                            Error reaching plugin. Please check to make sure your plugin is running and the plugin URL settings above are set correctly for your plugin and then click the refresh button next to the plugin URL to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-            <h3>PRIMARY VIDEO/AUDIO</h3>
+            <h3>PRIMARY STREAM</h3>
 
             <div class="general-field">
                 Dimming During Commercials (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">How much percentage to dim primary/background video while overlay video is on top.</span></span>
@@ -348,7 +480,7 @@
             </div>
 
 
-            <h3>AUTOMATIC COMMERCIAL DETECTION</h3>
+            <h3>COMMERCIAL DETECTION</h3>
 
             <div class="general-field">
                 Mismatch Count Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of times in a row the pixel needs to not match its original color at time of selection before declaring a commercial has begun and playing the video overtop of the commercial. NOTE: While in Reverse Pixel Detection Mode, this value is used count matches before declaring commercial break.</span></span>
@@ -365,6 +497,15 @@
                 <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="3" max="88">
             </div>
 
+            <!--TODO: Add color difference demo and slide scale-->
+            <!--<table class="general-field color-difference-demo-table">
+                <tr>
+                    <td class="color-difference-cell-red-shift">DIFFERENCE</td>
+                    <td class="color-difference-cell-green-shift">DIFFERENCE</td>
+                    <td class="color-difference-cell-blue-shift">DIFFERENCE</td>
+                </tr>
+            </table>-->
+
             <div class="general-field">
                 Override Cooldown Time (sec):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
                 <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1">
@@ -374,14 +515,6 @@
                 Audio Level Threshold (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Audio Commercial Detection Mode Only. Level that audio needs to be under before declaring a commercial break.</span></span>
                 <input type="number" name="audioLevelThreshold" id="audioLevelThreshold" min="1" max="100">
             </div>
-
-            <div class="general-field">
-                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays various diagnostic information on screen all the time and adds additional logging to the background.</span></span>
-                <input type="checkbox" name="isDebugMode" id="isDebugMode">
-            </div>
-
-
-            <h3>MANUAL OPERATIONS</h3>
 
             <div class="general-field">
                 <label class="checkbox-label">Always Allow Keyboard Shortcut</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">No matter what mode of commercial detection being used, this extension always allows hitting the extension keyboard shortcut to manually switch back and forth from overlays being played over commercials at any point. This cannot be disabled.</span></span>
@@ -423,6 +556,46 @@
                 </div>
             </div>
 
+            <div class="general-field">
+                <label class="checkbox-label" for="isPluginCommercialTriggerMode">Always Allow Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">In addition to the Commercial Detection Mode you set above, have a back up trigger for the extension with a plugin.</span></span><span class="badge badge-advanced">Advanced</span>
+                <input type="checkbox" name="isPluginCommercialTriggerMode" id="isPluginCommercialTriggerMode">
+            </div>
+            <div id="custom-plugin-trigger-settings-checkbox-duplicate" style="display: none;">
+                <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
+                    <div class="id-field-label">
+                        <label>WebSocket URL:</label>
+                    </div>
+                    <div class="id-input-row">
+                        <input type="text" name="pluginCommercialTriggerWSURLDuplicate" id="pluginCommercialTriggerWSURLDuplicate" data-sync="pluginCommercialTriggerWSURL">
+                        <button id="pull-button-pluginCommercialTriggerWSURLDuplicate" class="pull-id-button">
+                            &#128260;
+                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="custom-plugin-trigger-messaging-container">
+                    <div class="custom-plugin-trigger-loading loading-spinner"></div>
+                    <div class="custom-plugin-trigger-additional-setup mode-how-to settings-box" style="display: none;">
+                        <b>TECHNICAL SETUP REQUIRED</b><br />
+                        <br />
+                        This mode can be used to code your own plugin to trigger the extension any way you would like! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far I have built one that allows you to set a keyword or phrase to block or unblock commercials. Yell "tomato!" when a commercial starts to block it and then yell "banana!" to unblock when the game is back on!
+                    </div>
+                    <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
+                        Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
+                    </div>
+                    <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
+                        <div>
+                            Error reaching plugin WS. Please check to make sure your plugin WS is running and the WS URL above is set correctly and then click the refresh button next to the WS URL above to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="general-field">
+                <label class="checkbox-label" for="isDebugMode">Enable Debug Mode</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Displays various diagnostic information on screen all the time and adds additional logging to the background.</span></span>
+                <input type="checkbox" name="isDebugMode" id="isDebugMode">
+            </div>
+
 
             <h3>SETTING PROFILES</h3>
 
@@ -460,6 +633,50 @@
 
         </div>
     </form>
+
+
+    <div id="plugins-section" class="plugins-section" style="display: none;">
+
+        <div class="plugin-divider">
+            <span>&#128268;</span>
+        </div>
+
+        <h2>YOUR PLUGINS</h2>
+
+        <div id="custom-plugin-trigger-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
+            <div class="plugin-title-container">
+                <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
+                <span id="plugin-version" class="note">Plugin Version</span>
+            </div>
+            <div id="plugin-description" class="plugin-description"></div>
+            <div id="plugin-settings" class="plugin-settings">
+                <div class="plugin-settings-header"><u id="plugin-settings-header">Settings:</u></div>
+            </div>
+        </div>
+
+        <div id="custom-plugin-overlay-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
+            <div class="plugin-title-container">
+                <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
+                <span id="plugin-version" class="note">Plugin Version</span>
+            </div>
+            <div id="plugin-description" class="plugin-description"></div>
+            <div id="plugin-settings" class="plugin-settings">
+                <div class="plugin-settings-header"><u id="plugin-settings-header">Settings:</u></div>
+            </div>
+        </div>
+
+        <div id="custom-plugin-dual-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
+            <div class="plugin-title-container">
+                <h3 id="plugin-title" class="plugin-title">Plugin Title</h3>
+                <span id="plugin-version" class="note">Plugin Version</span>
+            </div>
+            <div id="plugin-description" class="plugin-description"></div>
+            <div id="plugin-settings" class="plugin-settings">
+                <div class="plugin-settings-header"><u id="plugin-settings-header">Settings:</u></div>
+            </div>
+        </div>
+
+    </div>
 
     <div class="sticky-buttons">
         <button class="button" id="save-button">Save & Apply</button>

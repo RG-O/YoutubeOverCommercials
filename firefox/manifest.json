@@ -5,7 +5,7 @@
   "icons": {
     "128": "icon128.png"
   },
-  "version": "4.2",
+  "version": "5.0",
   "permissions": [
     "activeTab",
     "scripting",
@@ -14,7 +14,9 @@
   "host_permissions": [
     "<all_urls>",
     "http://*/*",
-    "https://*/*"
+    "https://*/*",
+    "ws://*/*",
+    "wss://*/*"
   ],
   "commands": {
     "execute_shortcut": {
@@ -57,5 +59,8 @@
     "gecko": {
       "id": "YouTubeOverCommercials@safd787sfa.xyz"
     }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://*:* ws://*:* wss://*:* wss://*:* http://*:* http://*:*"
   }
 }

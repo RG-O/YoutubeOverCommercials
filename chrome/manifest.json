@@ -5,7 +5,7 @@
   "icons": {
     "128": "icon128.png"
   },
-  "version": "4.3",
+  "version": "5.0",
   "permissions": [
     "activeTab",
     "scripting",

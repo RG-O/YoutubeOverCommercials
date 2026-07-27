@@ -4,7 +4,25 @@ var profiles = {};
 var gridCells;
 var pipGridCells;
 var hasPreviouslyInstalledCompanionApp;
+var isCompanionAppCallSuccess = true;
 var hasGrantedMicAccess = false;
+var isLastExtensionInitiatedTabStillOpen;
+var hasPreviouslyInstalledPluginTrigger;
+var hasPreviouslyInstalledPluginOverlay;
+var isPluginTriggerCallSuccess = false;
+var isPluginOverlayCallSuccess = false;
+var hasAlreadyCalledPluginOverlayManifestViaAPI = false;
+var hasAlreadyCalledPluginOverlayManifestViaWS = false;
+var hasAlreadyCalledPluginTriggerManifestViaWS = false;
+var pluginTriggerManifest;
+var pluginOverlayManifest;
+var pluginDualManifest;
+var pluginTriggerPreferences;
+var pluginOverlayPreferences;
+var pluginDualPreferences;
+var allPluginPreferences;
+var hasLoadedDualPluginManifest = false;
+var pluginWSScript;
 
 //variables that currently cannot be updated after initiation of the extension. declaring them here to see if user updates them to see if I should tell them to refresh.
 var overlayVideoType; //note: this variable can sorta change
@@ -15,6 +33,8 @@ var commercialDetectionMode;
 var shouldShuffleYTPlaylist;
 var isDebugMode;
 var isDoubleClapMode;
+var isPluginOverlayMode;
+var isPluginCommercialTriggerMode;
 
 //TODO: I now have such a crazy amount of user set values that are stored/retrieved all over the place, is there a way to create a singular location to manage them?
 //grab all user set values
@@ -59,6 +79,17 @@ chrome.storage.sync.get([
     'isDoubleClapMode',
     'clapSensitivity',
     'isDoubleClapOnlyReturnMode',
+    'isPluginOverlayMode',
+    'isPluginCommercialTriggerMode',
+    'pluginOverlayFramework',
+    'pluginOverlayAPIURL',
+    'pluginOverlayWSURL',
+    'pluginCommercialTriggerWSURL',
+    'hasPreviouslyInstalledPluginTrigger',
+    'hasPreviouslyInstalledPluginOverlay',
+    'pluginTriggerPreferences',
+    'pluginOverlayPreferences',
+    'pluginDualPreferences',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -102,6 +133,12 @@ chrome.storage.sync.get([
     optionsForm.clapSensitivityRange.value = result.clapSensitivity ?? 40;
     optionsForm.clapSensitivity.value = result.clapSensitivity ?? 40;
     optionsForm.isDoubleClapOnlyReturnMode.checked = result.isDoubleClapOnlyReturnMode ?? false;
+    optionsForm.isPluginOverlayMode.checked = result.isPluginOverlayMode ?? false;
+    optionsForm.isPluginCommercialTriggerMode.checked = result.isPluginCommercialTriggerMode ?? false;
+    optionsForm.pluginOverlayFramework.value = result.pluginOverlayFramework ?? 'api';
+    optionsForm.pluginOverlayAPIURL.value = result.pluginOverlayAPIURL ?? 'http://localhost:64144';
+    optionsForm.pluginOverlayWSURL.value = result.pluginOverlayWSURL ?? 'ws://localhost:64146';
+    optionsForm.pluginCommercialTriggerWSURL.value = result.pluginCommercialTriggerWSURL ?? 'ws://localhost:64145';
     //TODO: add default profile here
     //TODO: get url/id to display in dropdown after profile name
     profiles = result.profiles || {};
@@ -117,6 +154,31 @@ chrome.storage.sync.get([
     const firstCommercialTimerDate = result.firstCommercialTimerDate || today;
     const lastCommercialTimerDate = result.lastCommercialTimerDate || today;
     hasPreviouslyInstalledCompanionApp = result.hasPreviouslyInstalledCompanionApp ?? false;
+    hasPreviouslyInstalledPluginTrigger = result.hasPreviouslyInstalledPluginTrigger ?? false;
+    hasPreviouslyInstalledPluginOverlay = result.hasPreviouslyInstalledPluginOverlay ?? false;
+    pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+    pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+    pluginDualPreferences = result.pluginDualPreferences ?? {};
+    allPluginPreferences = [
+        pluginOverlayPreferences,
+        pluginTriggerPreferences,
+        pluginDualPreferences
+    ];
+
+    //setting duplicated fields
+    optionsForm.pluginOverlayFrameworkDuplicate.value = optionsForm.pluginOverlayFramework.value;
+    optionsForm.pluginOverlayAPIURLDuplicate.value = optionsForm.pluginOverlayAPIURL.value;
+    optionsForm.pluginOverlayWSURLDuplicate.value = optionsForm.pluginOverlayWSURL.value;
+    optionsForm.pluginCommercialTriggerWSURLDuplicate.value = optionsForm.pluginCommercialTriggerWSURL.value;
+
+    //Allows me to have certain fields on the popup twice. Only one needs to be the real field.
+    document.querySelectorAll("[data-sync]").forEach(input => {
+        if (input.type === 'radio' || input.type === 'checkbox' || input.type === 'select-one') {
+            input.addEventListener("change", dataSync);
+        } else {
+            input.addEventListener("input", dataSync);
+        }
+    });
 
     document.getElementById(optionsForm.commercialDetectionMode.value).style.display = 'block';
     const modeRadios = document.forms["optionsForm"].elements["commercialDetectionMode"];
@@ -125,6 +187,7 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleAutoDimensionsFieldVisability);
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
         modeRadios[i].addEventListener('change', pingCompanionApp);
+        modeRadios[i].addEventListener('change', getPluginTriggerManifest);
         modeRadios[i].addEventListener('change', enableSaveButton);
         modeRadios[i].addEventListener('change', toggleDoubleClapUI);
     }
@@ -135,6 +198,21 @@ chrome.storage.sync.get([
         videoTypeRadios[i].addEventListener('change', toggleIDFieldVisability);
         videoTypeRadios[i].addEventListener('change', toggleWithIDProfileSaveButtonVisability);
         videoTypeRadios[i].addEventListener('change', updateSaveProfileButtonsText);
+        videoTypeRadios[i].addEventListener('change', getPluginOverlayManifest);
+        videoTypeRadios[i].addEventListener('change', enableSaveButton);
+    }
+
+    const pluginOverlayFrameworkRadios = document.forms["optionsForm"].elements["pluginOverlayFramework"];
+    for (let i = 0, max = pluginOverlayFrameworkRadios.length; i < max; i++) {
+        pluginOverlayFrameworkRadios[i].addEventListener('change', updatePluginOverlayFramework);
+        pluginOverlayFrameworkRadios[i].addEventListener('change', getPluginOverlayManifest);
+    }
+    //TODO: is there a prettier way to do this?
+    const pluginOverlayFrameworkDuplicateRadios = document.forms["optionsForm"].elements["pluginOverlayFrameworkDuplicate"];
+    for (let i = 0, max = pluginOverlayFrameworkDuplicateRadios.length; i < max; i++) {
+        //note: remember that change/input event listeners only listen for user actions, not javascript actions
+        pluginOverlayFrameworkDuplicateRadios[i].addEventListener('change', updatePluginOverlayFramework);
+        pluginOverlayFrameworkDuplicateRadios[i].addEventListener('change', getPluginOverlayManifest);
     }
 
     setTextFieldsToSelectAll();
@@ -145,6 +223,8 @@ chrome.storage.sync.get([
     document.getElementById('isPiPMode').addEventListener('change', togglePiPFieldsVisability);
     optionsForm.profileSelect.addEventListener('change', applyProfile);
     optionsForm.isDoubleClapMode.addEventListener('change', toggleDoubleClapUI);
+    optionsForm.isPluginOverlayMode.addEventListener('change', getPluginOverlayManifest);
+    optionsForm.isPluginCommercialTriggerMode.addEventListener('change', getPluginTriggerManifest);
     document.getElementById("saveProfile").addEventListener("click", function (event) {
         event.preventDefault(); //prevent popup from being reloaded
         saveProfile(false);
@@ -218,7 +298,8 @@ chrome.storage.sync.get([
             cell.classList.add('selected');
         });
     });
-    
+
+    //TODO: combine these somehow
     document.getElementById('pull-button-ytPlaylistID').addEventListener('click', async (event) => {
         event.preventDefault();
         let id = await getIDFromCurrentTab('list');
@@ -259,6 +340,36 @@ chrome.storage.sync.get([
         }
     });
 
+    document.getElementById('pull-button-pluginCommercialTriggerWSURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginTriggerWSManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayAPIURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayAPIManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayWSURL').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayWSManifest();
+    });
+
+    document.getElementById('pull-button-pluginCommercialTriggerWSURLDuplicate').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginTriggerWSManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayAPIURLDuplicate').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayAPIManifest();
+    });
+
+    document.getElementById('pull-button-pluginOverlayWSURLDuplicate').addEventListener('click', async (event) => {
+        event.preventDefault();
+        refreshPluginOverlayWSManifest();
+    });
+
     //clear cache on buy me a coffee image to show updated supporter count
     document.getElementById('buy-me-coffee').src = `https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=${today}&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff`;
 
@@ -280,6 +391,8 @@ chrome.storage.sync.get([
         shouldShuffleYTPlaylist = optionsForm.shouldShuffleYTPlaylist.checked;
         isDebugMode = optionsForm.isDebugMode.checked;
         isDoubleClapMode = optionsForm.isDoubleClapMode.checked;
+        isPluginOverlayMode = optionsForm.isPluginOverlayMode.checked;
+        isPluginCommercialTriggerMode = optionsForm.isPluginCommercialTriggerMode.checked;
     });
 
 });
@@ -319,7 +432,7 @@ document.getElementById("save-button").onclick = function () {
         let overlayHostName;
         if (optionsForm.overlayVideoType.value === "other-video") {
             let otherVideoURLObj = new URL(optionsForm.otherVideoURL.value);
-            if (otherVideoURLObj.pathname.toLowerCase().endsWith('.mp4')) {
+            if (otherVideoURLObj.pathname.toLowerCase().endsWith('.mp4') || otherVideoURLObj.pathname.toLowerCase().endsWith('.mkv')) {
                 //set the overlayHostName to the extension id because if the url is an mp4, it will be inserted onto an extension page
                 overlayHostName = window.location.host; //getting extension id from the extension popup
             } else {
@@ -329,6 +442,35 @@ document.getElementById("save-button").onclick = function () {
             overlayHostName = new URL(optionsForm.otherLiveURL.value).hostname;
         } else {
             overlayHostName = 'www.youtube.com';
+        }
+
+        //capture plugin preferences
+        if (isSetToDualPlugin()) {
+            if (pluginDualManifest) {
+                pluginDualPreferences = capturePluginPreferences(pluginDualManifest, 'custom-plugin-dual-manifest-container');
+            }
+        } else {
+            let areDualPluginPreferencesUpdated = false;
+
+            if (isAnyPluginOverlayMode() && pluginOverlayManifest) {
+                pluginOverlayPreferences = capturePluginPreferences(pluginOverlayManifest, 'custom-plugin-overlay-manifest-container');
+
+                //setting dual plugin settings if the plugin says it is capable in case the plugin expects its settings to be in pluginDualPreferences
+                if (optionsForm.pluginOverlayFramework.value === 'ws' && pluginOverlayManifest?.capabilities.includes("trigger")) {
+                    pluginDualPreferences = { ...pluginOverlayPreferences };
+
+                    areDualPluginPreferencesUpdated = true;
+                }
+            }
+            
+            if (isAnyPluginTriggerMode() && pluginTriggerManifest) {
+                pluginTriggerPreferences = capturePluginPreferences(pluginTriggerManifest, 'custom-plugin-trigger-manifest-container');
+
+                //setting dual plugin settings if the plugin says it is capable in case the plugin expects its settings to be in pluginDualPreferences
+                if (!areDualPluginPreferencesUpdated && pluginTriggerManifest?.capabilities?.includes("overlay")) {
+                    pluginDualPreferences = { ...pluginTriggerPreferences };
+                }
+            }
         }
 
         //save the values to the users chrome profile, close the extension window, and then give them message telling them they might need to refresh
@@ -368,6 +510,15 @@ document.getElementById("save-button").onclick = function () {
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
+            isPluginOverlayMode: optionsForm.isPluginOverlayMode.checked,
+            isPluginCommercialTriggerMode: optionsForm.isPluginCommercialTriggerMode.checked,
+            pluginOverlayFramework: optionsForm.pluginOverlayFramework.value,
+            pluginOverlayAPIURL: optionsForm.pluginOverlayAPIURL.value,
+            pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
+            pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value,
+            pluginTriggerPreferences: pluginTriggerPreferences,
+            pluginOverlayPreferences: pluginOverlayPreferences,
+            pluginDualPreferences: pluginDualPreferences,
         }, function () {
 
             let shouldDirectToMicConfig = false;
@@ -399,7 +550,9 @@ document.getElementById("save-button").onclick = function () {
                 commercialDetectionMode !== optionsForm.commercialDetectionMode.value ||
                 shouldShuffleYTPlaylist !== optionsForm.shouldShuffleYTPlaylist.checked ||
                 isDebugMode !== optionsForm.isDebugMode.checked ||
-                isDoubleClapMode !== optionsForm.isDoubleClapMode.checked
+                isDoubleClapMode !== optionsForm.isDoubleClapMode.checked ||
+                isPluginOverlayMode !== optionsForm.isPluginOverlayMode.checked ||
+                isPluginCommercialTriggerMode !== optionsForm.isPluginCommercialTriggerMode.checked
             ) {
                 shouldShowRefreshMessage = true;
             }
@@ -416,7 +569,6 @@ document.getElementById("save-button").onclick = function () {
                     console.log(error);
                     closePopupOnSave(shouldShowRefreshMessage, shouldDirectToMicConfig);
                 });
-
 
         });
 
@@ -703,6 +855,8 @@ function runAllToggles() {
     enableSaveButton();
     setClapSensitivityRangeField();
     toggleDoubleClapUI();
+    updatePluginOverlayFramework();
+    getPluginManifests();
 }
 
 
@@ -793,6 +947,8 @@ function saveProfile(shouldSaveWithID) {
             isDoubleClapMode: optionsForm.isDoubleClapMode.checked,
             clapSensitivity: optionsForm.clapSensitivity.value,
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
+            isPluginOverlayMode: optionsForm.isPluginOverlayMode.checked,
+            isPluginCommercialTriggerMode: optionsForm.isPluginCommercialTriggerMode.checked,
         };
 
         chrome.storage.sync.set({ profiles }, () => {
@@ -854,6 +1010,8 @@ function applyProfile() {
             if (typeof profiles[selectedProfile].isDoubleClapMode !== 'undefined') { optionsForm.isDoubleClapMode.checked = profiles[selectedProfile].isDoubleClapMode; }
             if (typeof profiles[selectedProfile].clapSensitivity !== 'undefined') { optionsForm.clapSensitivity.value = profiles[selectedProfile].clapSensitivity; }
             if (typeof profiles[selectedProfile].isDoubleClapOnlyReturnMode !== 'undefined') { optionsForm.isDoubleClapOnlyReturnMode.checked = profiles[selectedProfile].isDoubleClapOnlyReturnMode; }
+            if (typeof profiles[selectedProfile].isPluginOverlayMode !== 'undefined') { optionsForm.isPluginOverlayMode.checked = profiles[selectedProfile].isPluginOverlayMode; }
+            if (typeof profiles[selectedProfile].isPluginCommercialTriggerMode !== 'undefined') { optionsForm.isPluginCommercialTriggerMode.checked = profiles[selectedProfile].isPluginCommercialTriggerMode; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();
@@ -976,6 +1134,7 @@ function grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, t
 
 function pingCompanionApp() {
     if (optionsForm.commercialDetectionMode.value === 'auto-pixel-advanced-logo') {
+        isCompanionAppCallSuccess = false;
         document.getElementById('companion-app-loading').style.display = 'block';
         document.getElementById('save-button').disabled = true;
         document.getElementById('companion-app-ping-error').style.display = 'none'; //here for when retriggered from error
@@ -995,6 +1154,7 @@ function pingCompanionApp() {
 
 
 function displayPingCompanionAppSuccess(version) {
+    isCompanionAppCallSuccess = true;
     document.getElementById('companion-app-loading').style.display = 'none';
     document.getElementById('companion-app-additional-setup').style.display = 'none';
     document.getElementById('companion-app-ping-error').style.display = 'none';
@@ -1002,7 +1162,7 @@ function displayPingCompanionAppSuccess(version) {
     document.getElementById('companion-app-ping-success').textContent = `Verified Advanced Logo Analyzer companion app version ${version} (latest) is running properly on this machine.`;
     document.getElementById('companion-app-ping-success').style.display = 'block';
     document.getElementById('companion-app-instructions').style.display = 'block';
-    document.getElementById('save-button').disabled = false;
+    enableSaveButton();
 
     if (!hasPreviouslyInstalledCompanionApp) {
         //setting values to recommended settings for this mode //TODO: better way for UX for this?
@@ -1017,6 +1177,7 @@ function displayPingCompanionAppSuccess(version) {
 
 
 function displayPingCompanionAppError() {
+    isCompanionAppCallSuccess = false;
     //TODO: maybe let users save with warning instead of blocking them
     document.getElementById('companion-app-loading').style.display = 'none';
     document.getElementById('companion-app-ping-success').style.display = 'none';
@@ -1032,8 +1193,766 @@ function displayPingCompanionAppError() {
 }
 
 
+function getPluginManifests() {
+    if (isAnyPluginOverlayMode()) {
+        getPluginOverlayManifest();
+    }
+
+    if (isAnyPluginTriggerMode()) {
+        getPluginTriggerManifest();
+    }
+}
+
+
+function getPluginOverlayManifest() {
+    if (isAnyPluginOverlayMode()) {
+        document.getElementById('save-button').disabled = true;
+        displayClass('custom-plugin-overlay-messaging-container');
+
+        if (optionsForm.overlayVideoType.value !== 'custom-plugin-overlay' && optionsForm.isPluginOverlayMode.checked) {
+            document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'block';
+        } else {
+            document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'none';
+        }
+
+        if (optionsForm.pluginOverlayFramework.value === 'api' && !hasAlreadyCalledPluginOverlayManifestViaAPI) {
+            isPluginOverlayCallSuccess = false;
+
+            showPluginOverlayLoading();
+            getPluginOverlayManifestViaAPI();
+        } else if (optionsForm.pluginOverlayFramework.value === 'ws' && !hasAlreadyCalledPluginOverlayManifestViaWS) {
+            isPluginOverlayCallSuccess = false;
+
+            showPluginOverlayLoading();
+            getPluginManifestsViaWS();
+        } else {
+            enableSaveButton();
+
+            if (isPluginOverlayCallSuccess) {
+                document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'block';
+            }
+        }
+    } else {
+        enableSaveButton();
+        hideClass('custom-plugin-overlay-messaging-container');
+        document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'none';
+        document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
+        document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
+
+        if (hasLoadedDualPluginManifest && isPluginTriggerCallSuccess) {
+            document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'block';
+        }
+    }
+}
+
+
+function displayPluginOverlayManifestSuccess(manifest) {
+    isPluginOverlayCallSuccess = true;
+
+    hideClass('custom-plugin-overlay-loading');
+    hideClass('custom-plugin-overlay-additional-setup');
+    hideClass('custom-plugin-overlay-manifest-error');
+
+    displayClass('plugins-section');
+    displayClass('custom-plugin-overlay-manifest-success');
+
+    enableSaveButton();
+
+    if (isSetToDualPlugin()) {
+        if (!hasLoadedDualPluginManifest) {
+            //TODO: move this to chrome.runtime.onMessage.addListener and then I no longer need hasLoadedDualPluginManifest?
+            loadDualPluginManifest(manifest);
+        }
+    } else {
+        pluginOverlayManifest = manifest;
+
+        document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
+
+        const pluginOverlayManifestContainerElm = document.getElementById('custom-plugin-overlay-manifest-container');
+        pluginOverlayManifestContainerElm.style.display = 'block';
+        
+        //clearing preferences if different plugin used last time.
+        let previousPluginOverlayPreferences = getLatestPluginPreferences(pluginOverlayManifest.id);
+        displayPluginManifest(pluginOverlayManifestContainerElm, pluginOverlayManifest, previousPluginOverlayPreferences);
+    }
+
+    if (!hasPreviouslyInstalledPluginOverlay) {
+        //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledPluginOverlay = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledPluginOverlay: hasPreviouslyInstalledPluginOverlay });
+    }
+}
+
+
+function displayPluginOverlayManifestError() {
+    isPluginOverlayCallSuccess = false;
+
+    hideClass('custom-plugin-overlay-loading');
+    hideClass('custom-plugin-overlay-manifest-success');
+    document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
+    document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
+
+    if (optionsForm.isPluginOverlayMode.checked) {
+        document.getElementById('expand-button').style.color = 'red';
+        document.querySelector('label[for="isPluginOverlayMode"]').style.color = 'red';
+    }
+
+    if (hasPreviouslyInstalledPluginOverlay) {
+        displayClass('custom-plugin-overlay-manifest-error');
+        //hideClass('custom-plugin-overlay-additional-setup'); //777
+        displayClass('custom-plugin-overlay-additional-setup'); //777
+    } else {
+        hideClass('custom-plugin-overlay-manifest-error');
+        displayClass('custom-plugin-overlay-additional-setup');
+    }
+}
+
+
+function getPluginTriggerManifest() {
+    if (isAnyPluginTriggerMode()) {
+        document.getElementById('save-button').disabled = true;
+        displayClass('custom-plugin-trigger-messaging-container');
+
+        if (optionsForm.commercialDetectionMode.value !== 'custom-plugin-trigger' && optionsForm.isPluginCommercialTriggerMode.checked) {
+            document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'block';
+        } else {
+            document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'none';
+        }
+
+        if (!hasAlreadyCalledPluginTriggerManifestViaWS) {
+            isPluginTriggerCallSuccess = false;
+
+            showPluginTriggerLoading();
+            getPluginManifestsViaWS();
+        } else {
+            enableSaveButton();
+
+            if (isPluginTriggerCallSuccess) {
+                document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'block';
+            }
+        }
+    } else {
+        enableSaveButton();
+        hideClass('custom-plugin-trigger-messaging-container');
+        document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'none';
+        document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
+        document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
+
+        if (hasLoadedDualPluginManifest && isPluginOverlayCallSuccess) {
+            document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'block';
+        }
+    }
+}
+
+
+function displayPluginTriggerManifestSuccess(manifest) {
+    isPluginTriggerCallSuccess = true;
+
+    hideClass('custom-plugin-trigger-loading');
+    hideClass('custom-plugin-trigger-additional-setup');
+    hideClass('custom-plugin-trigger-manifest-error');
+
+    displayClass('plugins-section');
+    displayClass('custom-plugin-trigger-manifest-success');
+    displayClass('custom-plugin-trigger-instructions');
+
+    enableSaveButton();
+
+    if (isSetToDualPlugin()) {
+        //TODO: move this to chrome.runtime.onMessage.addListener?
+        if (!hasLoadedDualPluginManifest) {
+            loadDualPluginManifest(manifest);
+        }
+    } else {
+        pluginTriggerManifest = manifest;
+
+        document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
+
+        const pluginTriggerManifestContainerElm = document.getElementById('custom-plugin-trigger-manifest-container');
+        pluginTriggerManifestContainerElm.style.display = 'block';
+
+        //clearing preferences if different plugin used last time.
+        let previousPluginTriggerPreferences = getLatestPluginPreferences(pluginTriggerManifest.id);
+        displayPluginManifest(pluginTriggerManifestContainerElm, pluginTriggerManifest, previousPluginTriggerPreferences);
+    }
+
+    if (!hasPreviouslyInstalledPluginTrigger) {
+        //knowing for next time if user has previously installed app to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledPluginTrigger = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledPluginTrigger: hasPreviouslyInstalledPluginTrigger });
+    }
+}
+
+
+function displayPluginTriggerManifestError() {
+    isPluginTriggerCallSuccess = false;
+
+    hideClass('custom-plugin-trigger-loading');
+    hideClass('custom-plugin-trigger-instructions');
+    hideClass('custom-plugin-trigger-manifest-success');
+    document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
+    document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
+
+    if (optionsForm.isPluginCommercialTriggerMode.checked) {
+        document.getElementById('expand-button').style.color = 'red';
+        document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.color = 'red';
+    }
+
+    if (hasPreviouslyInstalledPluginOverlay) {
+        displayClass('custom-plugin-trigger-manifest-error');
+        //hideClass('custom-plugin-trigger-additional-setup'); //777
+        displayClass('custom-plugin-trigger-additional-setup'); //777
+    } else {
+        hideClass('custom-plugin-trigger-manifest-error');
+        displayClass('custom-plugin-trigger-additional-setup');
+    }
+}
+
+
+function showPluginOverlayLoading() {
+    displayClass('custom-plugin-overlay-loading');
+    hideClass('custom-plugin-overlay-manifest-error');
+    hideClass('custom-plugin-overlay-manifest-success');
+    hideClass('custom-plugin-overlay-additional-setup');
+}
+
+
+function showPluginTriggerLoading() {
+    displayClass('custom-plugin-trigger-loading');
+    hideClass('custom-plugin-trigger-manifest-error');
+    hideClass('custom-plugin-trigger-manifest-success');
+    hideClass('custom-plugin-trigger-instructions');
+    hideClass('custom-plugin-trigger-additional-setup');
+}
+
+
+function loadDualPluginManifest(manifest) {
+    hasLoadedDualPluginManifest = true;
+
+    //TODO: should I use { ...manifest } when assigning these?
+    pluginOverlayManifest = manifest;
+    pluginTriggerManifest = manifest;
+    pluginDualManifest = manifest;
+
+    const pluginOverlayManifestContainerElm = document.getElementById('custom-plugin-overlay-manifest-container');
+    const pluginTriggerManifestContainerElm = document.getElementById('custom-plugin-trigger-manifest-container');
+    pluginOverlayManifestContainerElm.style.display = 'none';
+    pluginTriggerManifestContainerElm.style.display = 'none';
+
+    const pluginDualManifestContainerElm = document.getElementById('custom-plugin-dual-manifest-container');
+    pluginDualManifestContainerElm.style.display = 'block';
+
+    //set most most recent save to this plugin as pluginDualPreferences, it doesn't necessarly had to have been used as a dual plugin last time it was saved
+    let previousPluginDualPreferences = getLatestPluginPreferences(pluginDualManifest.id);
+
+    displayPluginManifest(pluginDualManifestContainerElm, pluginDualManifest, previousPluginDualPreferences);
+    //adding to all 3 in case user switches off dual
+    displayPluginManifest(pluginOverlayManifestContainerElm, pluginOverlayManifest, previousPluginDualPreferences);
+    displayPluginManifest(pluginTriggerManifestContainerElm, pluginTriggerManifest, previousPluginDualPreferences);
+}
+
+
+//get most recent save of plugin preferences. doing it this way so user can switch back and forth as using a dual plugin
+function getLatestPluginPreferences(id) {
+    const result = allPluginPreferences
+        .filter(pluginPreferences => pluginPreferences.id === id)
+        .reduce((latest, current) => {
+            if (!latest || current.lastSavedTimestamp >= latest.lastSavedTimestamp) {
+                return current;
+            }
+
+            return latest;
+        }, null);
+
+    return result ?? {};
+}
+
+
+function isAnyPluginOverlayMode() {
+    return !!(optionsForm.overlayVideoType.value === 'custom-plugin-overlay' || optionsForm.isPluginOverlayMode.checked)
+}
+
+
+function isAnyPluginTriggerMode() {
+    return !!(optionsForm.commercialDetectionMode.value === 'custom-plugin-trigger' || optionsForm.isPluginCommercialTriggerMode.checked)
+}
+
+
+function isSetToDualPlugin() {
+    return !!(
+        optionsForm.pluginOverlayFramework.value === 'ws' &&
+        optionsForm.pluginOverlayWSURL.value === optionsForm.pluginCommercialTriggerWSURL.value &&
+        isAnyPluginOverlayMode() &&
+        isAnyPluginTriggerMode()
+    )
+}
+
+
+function refreshPluginOverlayAPIManifest() {
+    hasAlreadyCalledPluginOverlayManifestViaAPI = false;
+    hasLoadedDualPluginManifest = false;
+    getPluginOverlayManifest();
+}
+
+
+function refreshPluginOverlayWSManifest() {
+    hasAlreadyCalledPluginOverlayManifestViaWS = false;
+    hasLoadedDualPluginManifest = false;
+    getPluginOverlayManifest();
+}
+
+
+function refreshPluginTriggerWSManifest() {
+    hasAlreadyCalledPluginTriggerManifestViaWS = false;
+    hasLoadedDualPluginManifest = false;
+    getPluginTriggerManifest();
+}
+
+
+function getPluginOverlayManifestViaAPI() {
+    hasAlreadyCalledPluginOverlayManifestViaAPI = true;
+
+    fetch(optionsForm.pluginOverlayAPIURL.value + "/plugin-manifest")
+        .then(response => response.json())
+        .then((response) => {
+            if (optionsForm.pluginOverlayFramework.value === 'api') {
+                displayPluginOverlayManifestSuccess(response.data);
+            }
+            
+        })
+        .catch((error) => {
+            console.log(error);
+            if (optionsForm.pluginOverlayFramework.value === 'api') {
+                displayPluginOverlayManifestError();
+            }
+        });
+}
+
+
+function getPluginManifestsViaWS() {
+    let isPluginOverlayModeTemp = false;
+    if (
+        isAnyPluginOverlayMode() &&
+        optionsForm.pluginOverlayFramework.value === 'ws' &&
+        !hasAlreadyCalledPluginOverlayManifestViaWS
+    ) {
+        isPluginOverlayModeTemp = true;
+        hasAlreadyCalledPluginOverlayManifestViaWS = true;
+    }
+
+    let isPluginCommercialTriggerModeTemp = false;
+    if (
+        isAnyPluginTriggerMode() &&
+        !hasAlreadyCalledPluginTriggerManifestViaWS
+    ) {
+        isPluginCommercialTriggerModeTemp = true;
+        hasAlreadyCalledPluginTriggerManifestViaWS = true;
+    }
+
+    if (isPluginOverlayModeTemp || isPluginCommercialTriggerModeTemp) {
+        const payload = {
+            type: "plugin_manifest",
+            timestamp: Date.now(),
+            data: {
+                preferences: {
+                    isPluginOverlayMode: isPluginOverlayModeTemp,
+                    pluginOverlayFramework: 'ws',
+                    pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
+                    isPluginCommercialTriggerMode: isPluginCommercialTriggerModeTemp, //TODO: add real value here to do them both at the same time if I can?
+                    pluginCommercialTriggerFramework: 'ws',
+                    pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value, //TODO: add real value here to do them both at the same time if I can?
+                },
+                utilities: {
+                    isFirefox: isFirefox,
+                    isFirefoxPopup: isFirefox,
+                }
+            },
+            meta: {
+                wsOpenedBy: 'popup',
+            },
+        };
+
+        if (isFirefox) {
+            if (!pluginWSScript) {
+                pluginWSScript = document.createElement('script');
+                pluginWSScript.src = "/scripts/plugin-ws-client.js";
+                //pluginWSScript.type = "module";
+                document.body.appendChild(pluginWSScript);
+                pluginWSScript.addEventListener('load', function () {
+                    ws.initWSPlugins(payload);
+                });
+            } else {
+                ws.initWSPlugins(payload);
+            }
+        } else {
+            chrome.runtime.sendMessage({
+                action: "chrome-connect-to-ws-plugins",
+                payload: payload,
+            });
+        }
+    }
+}
+
+
 function enableSaveButton() {
-    if (optionsForm.commercialDetectionMode.value !== 'auto-pixel-advanced-logo') {
+    if (
+        (optionsForm.commercialDetectionMode.value !== 'auto-pixel-advanced-logo' || isCompanionAppCallSuccess) &&
+        ((optionsForm.overlayVideoType.value !== 'custom-plugin-overlay' && !optionsForm.isPluginOverlayMode.checked) || isPluginOverlayCallSuccess) &&
+        ((optionsForm.commercialDetectionMode.value !== 'custom-plugin-trigger' && !optionsForm.isPluginCommercialTriggerMode.checked) || isPluginTriggerCallSuccess)
+    ) {
         document.getElementById('save-button').disabled = false;
-    } //else enabled by function above with successful ping
+    }
+
+    if (!optionsForm.isPluginOverlayMode.checked || isPluginOverlayCallSuccess) {
+        document.querySelector('label[for="isPluginOverlayMode"]').style.removeProperty('color');
+    }
+
+    if (!optionsForm.isPluginCommercialTriggerMode.checked || isPluginTriggerCallSuccess) {
+        document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.removeProperty('color');
+    }
+
+    if (
+        (!optionsForm.isPluginOverlayMode.checked || isPluginOverlayCallSuccess) &&
+        (!optionsForm.isPluginCommercialTriggerMode.checked || isPluginTriggerCallSuccess)
+    ) {
+        document.getElementById('expand-button').style.removeProperty('color');
+    }
+}
+
+
+function updatePluginOverlayFramework() {
+    //resetting when these change
+    hasAlreadyCalledPluginOverlayManifestViaAPI = false;
+    hasAlreadyCalledPluginOverlayManifestViaWS = false;
+    hasLoadedDualPluginManifest = false;
+
+    const apiSelected = document.getElementById("pluginOverlayFramework-api").checked;
+
+    document.getElementById("pluginOverlayAPIURL").disabled = !apiSelected;
+    document.getElementById("pull-button-pluginOverlayAPIURL").disabled = !apiSelected;
+
+    document.getElementById("pluginOverlayWSURL").disabled = apiSelected;
+    document.getElementById("pull-button-pluginOverlayWSURL").disabled = apiSelected;
+
+    //TODO: is there a prettier way to do this?
+    const apiSelectedDuplicate = document.getElementById("pluginOverlayFramework-apiDuplicate").checked;
+
+    document.getElementById("pluginOverlayAPIURLDuplicate").disabled = !apiSelectedDuplicate;
+    document.getElementById("pull-button-pluginOverlayAPIURLDuplicate").disabled = !apiSelectedDuplicate;
+
+    document.getElementById("pluginOverlayWSURLDuplicate").disabled = apiSelectedDuplicate;
+    document.getElementById("pull-button-pluginOverlayWSURLDuplicate").disabled = apiSelectedDuplicate;
+}
+
+
+function displayPluginManifest(container, manifest, preferences = {}) {
+    //TODO: rename various variables
+    const savedValues = preferences.preferences ?? {};
+
+    if (manifest.secondaryColor) {
+        const { r, g, b } = hexToRgb(manifest.secondaryColor);
+        if (!isLightColor(r, g, b)) {
+            container.style.color = '#fff' //white
+        }
+    }
+    container.style.backgroundColor = manifest.secondaryColor ?? "#dadcdc"; //greyblue
+
+    const title = container.querySelector("#plugin-title");
+    title.textContent = manifest.name;
+    title.style.color = manifest.primaryColor ?? "#000"; //black
+
+    const version = container.querySelector("#plugin-version");
+    version.textContent = manifest.version;
+
+    const description = container.querySelector("#plugin-description");
+    if (manifest.description) {
+        description.textContent = manifest.description;
+    } else {
+        description.remove();
+    }
+
+    const settings = container.querySelector("#plugin-settings");
+    settings.replaceChildren(settings.firstElementChild); //clearing out settings except for settings header
+
+    if (manifest.preferences) {
+        //const settingsHeader = container.querySelector("#plugin-settings-header");
+        //settingsHeader.textContent = manifest.name + " Settings:"
+
+        manifest.preferences.forEach(field => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "general-field";
+
+            const label = document.createElement("label");
+            label.textContent = field.label;
+
+            let input;
+
+            switch (field.type) {
+                case "text":
+                case "number":
+                    input = document.createElement("input");
+                    input.type = field.type;
+                    input.value = savedValues[field.key] ?? field.default ?? "";
+                    input.dataset.key = field.key;
+                    break;
+
+                case "checkbox":
+                    label.htmlFor = field.key;
+                    input = document.createElement("input");
+                    input.type = "checkbox";
+                    input.style.accentColor = manifest.primaryColor ?? "#12384d";
+                    input.id = field.key;
+                    input.name = field.key;
+                    input.checked = savedValues[field.key] ?? field.default ?? false;
+                    input.dataset.key = field.key;
+                    wrapper.appendChild(input);
+                    break;
+
+                case "radio":
+                    input = document.createElement("div");
+                    const selectedValue = getValidOptionValue(
+                        savedValues[field.key],
+                        field.options,
+                        field.default
+                    );
+                    field.options.forEach(opt => {
+                        const radioWrapper = document.createElement("div");
+                        const radio = document.createElement("input");
+                        radio.type = "radio";
+                        input.style.accentColor = manifest.primaryColor ?? "#12384d";
+                        radio.name = field.key;
+                        radio.value = opt.value;
+                        radio.checked = opt.value === selectedValue;
+                        radio.dataset.key = field.key;
+                        const radioLabel = document.createElement("label");
+                        radioLabel.textContent = opt.label;
+                        radioWrapper.appendChild(radio);
+                        radioWrapper.appendChild(radioLabel);
+                        input.appendChild(radioWrapper);
+                    });
+                    break;
+
+                case "select":
+                    input = document.createElement("select");
+                    field.options.forEach(opt => {
+                        const option = document.createElement("option");
+                        option.value = opt.value;
+                        option.textContent = opt.label;
+                        input.appendChild(option);
+                    });
+                    input.value = getValidOptionValue(
+                        savedValues[field.key],
+                        field.options,
+                        field.default
+                    );
+                    input.dataset.key = field.key;
+                    break;
+
+                case "textarea":
+                    input = document.createElement("textarea");
+                    input.value = savedValues[field.key] ?? field.default ?? "";
+                    input.dataset.key = field.key;
+                    break;
+            }
+
+            wrapper.appendChild(label);
+            if (field.description) {
+                const description = document.createElement("div");
+                description.className = "note";
+                description.textContent = field.description;
+                wrapper.appendChild(description);
+            }
+            if (field.type !== "checkbox") {
+                wrapper.appendChild(input); //doing this earlier for checkbox
+            }
+            settings.appendChild(wrapper);
+        });
+    } else {
+        settings.remove();
+    }
+}
+
+
+function capturePluginPreferences(pluginManifest, pluginManifestContainerElmID) {
+    const preferences = {};
+    const pluginManifestContainerElm = document.getElementById(pluginManifestContainerElmID);
+
+    pluginManifestContainerElm.querySelectorAll("[data-key]").forEach(input => {
+        if (input.type === "radio") {
+            if (input.checked) {
+                preferences[input.dataset.key] = input.value;
+            }
+        } else if (input.type === "checkbox") {
+            preferences[input.dataset.key] = input.checked;
+        } else {
+            preferences[input.dataset.key] = input.value;
+        }
+    });
+
+    return {
+        id: pluginManifest.id,
+        version: pluginManifest.version,
+        lastSavedTimestamp: Date.now(),
+        preferences: preferences,
+    }
+}
+
+
+function getValidOptionValue(savedValue, options, defaultValue) {
+    if (options.some(opt => opt.value === savedValue)) {
+        return savedValue;
+    }
+
+    if (options.some(opt => opt.value === defaultValue)) {
+        return defaultValue;
+    }
+
+    return options[0]?.value ?? "";
+}
+
+
+function hexToRgb(hex) {
+    hex = hex.replace(/^#/, "");
+
+    if (hex.length === 3) {
+        hex = hex.split("").map(c => c + c).join("");
+    }
+
+    return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16)
+    };
+}
+
+
+function isLightColor(r, g, b) {
+    return (r * 0.299 + g * 0.587 + b * 0.114) > 150
+}
+
+
+function displayClass(className) {
+    const elements = document.getElementsByClassName(className);
+
+    for (const element of elements) {
+        element.style.display = 'block';
+    }
+}
+
+
+function hideClass(className) {
+    const elements = document.getElementsByClassName(className);
+
+    for (const element of elements) {
+        element.style.display = 'none';
+    }
+}
+
+
+function closeChromeOffscreenDoc(pluginCommercialTriggerWSOpenedBy, pluginOverlayWSOpenedBy, dualWSOpenedBy, totalWSConnectionsInQueue) {
+    if (!isFirefox) {
+        //do not want to close offscreen if it is currently in use by the other plugins //TODO: check if currently in use by mic as well
+        if (
+            pluginCommercialTriggerWSOpenedBy !== 'content' &&
+            pluginOverlayWSOpenedBy !== 'content' &&
+            dualWSOpenedBy !== 'content' &&
+            totalWSConnectionsInQueue <= 0
+        ) {
+            chrome.runtime.sendMessage({
+                target: "offscreen",
+                action: "close"
+            });
+        }
+    }
+}
+
+
+function dataSync(event) {
+    const input = event.target;
+    const key = input.dataset.sync;
+
+    document.querySelectorAll(`[data-sync="${key}"]`).forEach(other => {
+        if (other === input) return;
+        if (input.id === other.id) return;
+
+        switch (input.type) {
+            case "radio":
+                //TODO: clean this up
+                if (other.value === input.value) {
+                    if (input.checked) {
+                        if (!other.checked) {
+                            other.checked = true;
+                        }
+                    } else {
+                        if (other.checked) {
+                            other.checked = false;
+                        }
+                    }
+                }
+                break;
+
+            case "checkbox":
+                other.checked = input.checked;
+                break;
+
+            default:
+                other.value = input.value;
+        }
+    });
+}
+
+
+browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action == 'forward_message_from_plugin_ws') {
+        handlePluginWSMessage(message);
+    }
+});
+
+
+function handlePluginWSMessage(message) {
+    if (message.sender === "trigger-plugin") {
+        if (message.connectionState === "failed") {
+            hasAlreadyCalledPluginTriggerManifestViaWS = true;
+            displayPluginTriggerManifestError();
+            closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+        } else if (message.connectionState === "connected") {
+            if (message.payload.type === "plugin_manifest") {
+                hasAlreadyCalledPluginTriggerManifestViaWS = true;
+                displayPluginTriggerManifestSuccess(message.payload.data);
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+            }
+        } //else ignore all other connectionStates
+    } else if (message.sender === "overlay-plugin") {
+        if (message.connectionState === "failed") {
+            if (optionsForm.pluginOverlayFramework.value === 'ws') {
+                hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                displayPluginOverlayManifestError();
+            }
+            closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+        } else if (message.connectionState === "connected") {
+            if (message.payload.type === "plugin_manifest") {
+                if (optionsForm.pluginOverlayFramework.value === 'ws') {
+                    hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                    displayPluginOverlayManifestSuccess(message.payload.data);
+                }
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+            }
+        } //else ignore all other connectionStates
+    } else if (message.sender === "dual-plugin") {
+        if (message.connectionState === "failed") {
+            hasAlreadyCalledPluginTriggerManifestViaWS = true;
+            hasAlreadyCalledPluginOverlayManifestViaWS = true;
+            displayPluginTriggerManifestError();
+            displayPluginOverlayManifestError();
+            closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+        } else if (message.connectionState === "connected") {
+            if (message.payload.type === "plugin_manifest") {
+                hasAlreadyCalledPluginTriggerManifestViaWS = true;
+                hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                displayPluginTriggerManifestSuccess(message.payload.data);
+                displayPluginOverlayManifestSuccess(message.payload.data);
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+            }
+        } //else ignore all other connectionStates
+    }
 }
