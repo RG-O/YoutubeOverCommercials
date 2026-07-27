@@ -241,7 +241,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             files: ["scripts/double-clap-detector.js"]
         });
 
+    } else if (message.action === "firefox-connect-to-ws-plugins") {
+
+        chrome.scripting.executeScript({
+            target: { tabId: sender.tab.id, frameIds: [0] },
+            func: (payload) => {
+                window.__extensionConfig = { payload };
+            },
+            args: [ message.payload ],
+        })
+            .then(() => {
+                return chrome.scripting.executeScript({
+                    target: { tabId: sender.tab.id, frameIds: [0] }, //note: always injecting in top frame to avoid any iframe sandbox permission restrictions
+                    files: ["scripts/plugin-ws-client.js"],
+                });
+            })
+
+    } else if (message.action === "firefox-forward-message-to-plugins") {
+
+        chrome.tabs.sendMessage(
+            sender.tab.id,
+            {
+                target: "plugin-ws",
+                action: "send-message-to-plugins",
+                payload: message.payload,
+            },
+            { frameId: 0 },
+        );
+
     }
+
 });
 
 

@@ -73,6 +73,9 @@ class WSClient {
 
 const ws = {
     isInContentFrame: typeof mainVideoCollection !== 'undefined',
+    isFirefox: false,
+    isFirefoxPopup: false,
+    firefoxInitConfig: window.__extensionConfig,
     isPluginCommercialTriggerWS: false,
     isPluginOverlayWS: false,
     isDualWS: false,
@@ -88,12 +91,13 @@ const ws = {
         ws.isPluginCommercialTriggerWS = (payload.data.preferences.isPluginCommercialTriggerMode && payload.data.preferences.pluginCommercialTriggerFramework === 'ws');
         ws.isPluginOverlayWS = (payload.data.preferences.isPluginOverlayMode && payload.data.preferences.pluginOverlayFramework === 'ws');
         ws.isDualWS = (ws.isPluginCommercialTriggerWS && ws.isPluginOverlayWS && payload.data.preferences.pluginCommercialTriggerWSURL === payload.data.preferences.pluginOverlayWSURL);
+        ws.isFirefox = payload.data.utilities.isFirefox ?? false;
+        ws.isFirefoxPopup = payload.data.utilities.isFirefoxPopup ?? false;
 
         if (ws.hasPluginCommercialTriggerWSConnected || ws.hasPluginOverlayWSConnected || ws.hasDualWSConnected) {
             ws.sendMessageToWSPlugins(payload);
         }
 
-        //TODO: allow for switching WS URLs
         if (ws.isPluginCommercialTriggerWS && !ws.isDualWS && !ws.hasPluginCommercialTriggerWSConnected) {
             ws.totalWSConnectionsInQueue++;
             ws.pluginCommercialTriggerWSOpenedBy = payload.meta.wsOpenedBy;
@@ -181,16 +185,12 @@ const ws = {
         triggerWS.connect();
     },
     handleTriggerMessage(msg) {
-        if (ws.isInContentFrame) {
-            console.log(ws.isInContentFrame); //TODO: something for firefox
-        } else {
-            ws.forwardMessageFromPluginWSClient(
-                msg,
-                "trigger-plugin",
-                "connected",
-                "Trigger plugin connected",
-            );
-        }
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "trigger-plugin",
+            "connected",
+            "Trigger plugin connected",
+        );
     },
     sendToTrigger(payload) {
         if (!triggerWS || !triggerWS.connected) {
@@ -256,16 +256,12 @@ const ws = {
         overlayWS.connect();
     },
     handleOverlayMessage(msg) {
-        if (ws.isInContentFrame) {
-            console.log(ws.isInContentFrame); //TODO: something for firefox
-        } else {
-            ws.forwardMessageFromPluginWSClient(
-                msg,
-                "overlay-plugin",
-                "connected",
-                "Overlay plugin connected",
-            );
-        }
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "overlay-plugin",
+            "connected",
+            "Overlay plugin connected",
+        );
     },
     sendToOverlay(payload) {
         if (!overlayWS || !overlayWS.connected) {
@@ -331,16 +327,12 @@ const ws = {
         dualWS.connect();
     },
     handleDualMessage(msg) {
-        if (ws.isInContentFrame) {
-            console.log(ws.isInContentFrame); //TODO: something for firefox
-        } else {
-            ws.forwardMessageFromPluginWSClient(
-                msg,
-                "dual-plugin",
-                "connected",
-                "Dual plugin connected",
-            );
-        }
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "dual-plugin",
+            "connected",
+            "Dual plugin connected",
+        );
     },
     sendToDual(payload) {
         if (!dualWS || !dualWS.connected) {
@@ -357,7 +349,7 @@ const ws = {
         dualWS.send(payload);
     },
     forwardMessageFromPluginWSClient(payload, sender, connectionState, connectionMessage) {
-        chrome.runtime.sendMessage({
+        let message = {
             action: "forward_message_from_plugin_ws",
             payload: payload,
             source: "plugin",
@@ -368,6 +360,18 @@ const ws = {
             pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
             dualWSOpenedBy: ws.dualWSOpenedBy,
             totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
-        });
+            isFirefox: ws.isFirefox,
+        }
+
+        if (ws.isFirefoxPopup) {
+            handlePluginWSMessage(message);
+        } else {
+            chrome.runtime.sendMessage(message);
+        }
     }
+}
+
+
+if (ws.firefoxInitConfig) {
+    ws.initWSPlugins(ws.firefoxInitConfig.payload);
 }

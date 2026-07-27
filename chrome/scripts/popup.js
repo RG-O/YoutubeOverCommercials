@@ -22,6 +22,7 @@ var pluginOverlayPreferences;
 var pluginDualPreferences;
 var allPluginPreferences;
 var hasLoadedDualPluginManifest = false;
+var pluginWSScript;
 
 //variables that currently cannot be updated after initiation of the extension. declaring them here to see if user updates them to see if I should tell them to refresh.
 var overlayVideoType; //note: this variable can sorta change
@@ -1298,8 +1299,7 @@ function displayPluginOverlayManifestError() {
 
     if (hasPreviouslyInstalledPluginOverlay) {
         displayClass('custom-plugin-overlay-manifest-error');
-        //hideClass('custom-plugin-overlay-additional-setup'); //777
-        displayClass('custom-plugin-overlay-additional-setup'); //777
+        hideClass('custom-plugin-overlay-additional-setup');
     } else {
         hideClass('custom-plugin-overlay-manifest-error');
         displayClass('custom-plugin-overlay-additional-setup');
@@ -1397,10 +1397,9 @@ function displayPluginTriggerManifestError() {
         document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.color = 'red';
     }
 
-    if (hasPreviouslyInstalledPluginOverlay) {
+    if (hasPreviouslyInstalledPluginTrigger) {
         displayClass('custom-plugin-trigger-manifest-error');
-        //hideClass('custom-plugin-trigger-additional-setup'); //777
-        displayClass('custom-plugin-trigger-additional-setup'); //777
+        hideClass('custom-plugin-trigger-additional-setup');
     } else {
         hideClass('custom-plugin-trigger-manifest-error');
         displayClass('custom-plugin-trigger-additional-setup');
@@ -1559,7 +1558,11 @@ function getPluginManifestsViaWS() {
                     pluginOverlayWSURL: optionsForm.pluginOverlayWSURL.value,
                     isPluginCommercialTriggerMode: isPluginCommercialTriggerModeTemp, //TODO: add real value here to do them both at the same time if I can?
                     pluginCommercialTriggerFramework: 'ws',
-                    pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value //TODO: add real value here to do them both at the same time if I can?
+                    pluginCommercialTriggerWSURL: optionsForm.pluginCommercialTriggerWSURL.value, //TODO: add real value here to do them both at the same time if I can?
+                },
+                utilities: {
+                    isFirefox: isFirefox,
+                    isFirefoxPopup: isFirefox,
                 }
             },
             meta: {
@@ -1568,7 +1571,17 @@ function getPluginManifestsViaWS() {
         };
 
         if (isFirefox) {
-            //TODO: setup firefox
+            if (!pluginWSScript) {
+                pluginWSScript = document.createElement('script');
+                pluginWSScript.src = "/scripts/plugin-ws-client.js";
+                //pluginWSScript.type = "module";
+                document.body.appendChild(pluginWSScript);
+                pluginWSScript.addEventListener('load', function () {
+                    ws.initWSPlugins(payload);
+                });
+            } else {
+                ws.initWSPlugins(payload);
+            }
         } else {
             chrome.runtime.sendMessage({
                 action: "chrome-connect-to-ws-plugins",
@@ -1889,50 +1902,55 @@ function dataSync(event) {
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action == 'forward_message_from_plugin_ws') {
-        if (message.sender === "trigger-plugin") {
-            if (message.connectionState === "failed") {
-                hasAlreadyCalledPluginTriggerManifestViaWS = true;
-                displayPluginTriggerManifestError();
-                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
-            } else if (message.connectionState === "connected") {
-                if (message.payload.type === "plugin_manifest") {
-                    hasAlreadyCalledPluginTriggerManifestViaWS = true;
-                    displayPluginTriggerManifestSuccess(message.payload.data);
-                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
-                }
-            } //else ignore all other connectionStates
-        } else if (message.sender === "overlay-plugin") {
-            if (message.connectionState === "failed") {
-                if (optionsForm.pluginOverlayFramework.value === 'ws') {
-                    hasAlreadyCalledPluginOverlayManifestViaWS = true;
-                    displayPluginOverlayManifestError();
-                }
-                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
-            } else if (message.connectionState === "connected") {
-                if (message.payload.type === "plugin_manifest") {
-                    if (optionsForm.pluginOverlayFramework.value === 'ws') {
-                        hasAlreadyCalledPluginOverlayManifestViaWS = true;
-                        displayPluginOverlayManifestSuccess(message.payload.data);
-                    }
-                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
-                }
-            } //else ignore all other connectionStates
-        } else if (message.sender === "dual-plugin") {
-            if (message.connectionState === "failed") {
-                hasAlreadyCalledPluginTriggerManifestViaWS = true;
-                hasAlreadyCalledPluginOverlayManifestViaWS = true;
-                displayPluginTriggerManifestError();
-                displayPluginOverlayManifestError();
-                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
-            } else if (message.connectionState === "connected") {
-                if (message.payload.type === "plugin_manifest") {
-                    hasAlreadyCalledPluginTriggerManifestViaWS = true;
-                    hasAlreadyCalledPluginOverlayManifestViaWS = true;
-                    displayPluginTriggerManifestSuccess(message.payload.data);
-                    displayPluginOverlayManifestSuccess(message.payload.data);
-                    closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
-                }
-            } //else ignore all other connectionStates
-        }
+        handlePluginWSMessage(message);
     }
 });
+
+
+function handlePluginWSMessage(message) {
+    if (message.sender === "trigger-plugin") {
+        if (message.connectionState === "failed") {
+            hasAlreadyCalledPluginTriggerManifestViaWS = true;
+            displayPluginTriggerManifestError();
+            closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+        } else if (message.connectionState === "connected") {
+            if (message.payload.type === "plugin_manifest") {
+                hasAlreadyCalledPluginTriggerManifestViaWS = true;
+                displayPluginTriggerManifestSuccess(message.payload.data);
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+            }
+        } //else ignore all other connectionStates
+    } else if (message.sender === "overlay-plugin") {
+        if (message.connectionState === "failed") {
+            if (optionsForm.pluginOverlayFramework.value === 'ws') {
+                hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                displayPluginOverlayManifestError();
+            }
+            closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+        } else if (message.connectionState === "connected") {
+            if (message.payload.type === "plugin_manifest") {
+                if (optionsForm.pluginOverlayFramework.value === 'ws') {
+                    hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                    displayPluginOverlayManifestSuccess(message.payload.data);
+                }
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+            }
+        } //else ignore all other connectionStates
+    } else if (message.sender === "dual-plugin") {
+        if (message.connectionState === "failed") {
+            hasAlreadyCalledPluginTriggerManifestViaWS = true;
+            hasAlreadyCalledPluginOverlayManifestViaWS = true;
+            displayPluginTriggerManifestError();
+            displayPluginOverlayManifestError();
+            closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+        } else if (message.connectionState === "connected") {
+            if (message.payload.type === "plugin_manifest") {
+                hasAlreadyCalledPluginTriggerManifestViaWS = true;
+                hasAlreadyCalledPluginOverlayManifestViaWS = true;
+                displayPluginTriggerManifestSuccess(message.payload.data);
+                displayPluginOverlayManifestSuccess(message.payload.data);
+                closeChromeOffscreenDoc(message.pluginCommercialTriggerWSOpenedBy, message.pluginOverlayWSOpenedBy, message.dualWSOpenedBy, message.totalWSConnectionsInQueue);
+            }
+        } //else ignore all other connectionStates
+    }
+}

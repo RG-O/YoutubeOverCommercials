@@ -1,9 +1,4 @@
 
-//TODO: put all in here
-const utilities = {
-
-}
-
 var isFirefox = false; //******************** remember to also update in background.js, overlay.js, and mic-settings-for-double-clap.js //TODO: can I pass this value somehow?
 
 //utility variables
@@ -486,6 +481,7 @@ function sendMessageToPlugins(type) {
     const utilities = {
         TODO: "TODO: have this be all",
         triggerOfLastCommercialStateChange: triggerOfLastCommercialStateChange,
+        isFirefox: isFirefox,
     }
 
     //TODO: remove this and use above
@@ -558,20 +554,28 @@ function sendMessageToPlugins(type) {
     //TODO: check value if still connected
     if (isPluginCommercialTriggerMode || pluginOverlayFramework === 'ws') {
         if (type === "init") {
+            chrome.runtime.sendMessage({
+                action: `${isFirefox ? "firefox" : "chrome"}-connect-to-ws-plugins`,
+                payload: payload,
+            });
+        } else {
             if (isFirefox) {
-                //TODO: setup firefox
+                if (ws?.isFirefox) {
+                    ws.sendMessageToWSPlugins(payload);
+                } else {
+                    chrome.runtime.sendMessage({
+                        target: "plugin-ws",
+                        action: "firefox-forward-message-to-plugins",
+                        payload: payload,
+                    });
+                }
             } else {
                 chrome.runtime.sendMessage({
-                    action: "chrome-connect-to-ws-plugins",
+                    target: "plugin-ws",
+                    action: "send-message-to-plugins",
                     payload: payload,
                 });
             }
-        } else {
-            chrome.runtime.sendMessage({
-                target: "plugin-ws",
-                action: "send-message-to-plugins",
-                payload: payload,
-            });
         }
     }
 }
@@ -1026,45 +1030,6 @@ chrome.runtime.onMessage.addListener(function (message) {
     }
 
 });
-
-
-//777 //TODO: move to own script
-function connectToLocalWebSocket() {
-    socket = new WebSocket("ws://localhost:8765");
-
-    socket.onopen = () => {
-        console.log("Connected to Python");
-    };
-
-    socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log("Gesture received:", data);
-
-        //TODO: make extension care less about specifics, make things more general
-        //TODO: make way to receive just logobox updates
-        //TODO: commercial change request should also allow an optional logobox, so should on connection?
-        if (data.type === "gesture" && data.gesture === "Thumb_Up" && isCommercialState) {
-            manualCommercialModeToggle();
-        } else if (data.type === "gesture" && data.gesture === "Thumb_Down" && !isCommercialState) {
-            manualCommercialModeToggle();
-        } else {
-            console.log("nah");
-        }
-
-    };
-
-    //TODO: send to python every time commercial state changes, etc.
-
-    socket.onclose = () => {
-        console.log("Disconnected. Reconnecting...");
-        setTimeout(connectToLocalWebSocket, 1000);
-    };
-
-    socket.onerror = (err) => {
-        console.error("WebSocket error:", err);
-        socket.close();
-    };
-}
 
 
 function manualCommercialModeToggle() {
