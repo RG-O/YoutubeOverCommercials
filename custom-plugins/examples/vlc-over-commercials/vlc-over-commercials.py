@@ -1008,6 +1008,7 @@ def custom_plugin_overlay():
                         "Message from VLC Over Commercials plugin: Success! "
                         "Click in this window to return focus and you are good to go!"
                     ),
+                    "messageDisplayTime": 7000,
                 }
             )
 

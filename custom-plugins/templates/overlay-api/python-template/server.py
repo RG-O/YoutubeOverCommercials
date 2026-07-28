@@ -50,8 +50,8 @@ def custom_plugin_overlay():
 
     return jsonify({"status": "ok"})
     # If error or info you would like to display over main video on browser:
-    # return jsonify({"status": "error", "message": "Error message goes here."})
-    # return jsonify({"status": "info", "message": "Informational message goes here."})
+    # return jsonify({"status": "error", "message": "Error message goes here.", "messageDisplayTime": 0})
+    # return jsonify({"status": "info", "message": "Informational message goes here.", "messageDisplayTime": 7000})
 
 @app.route("/plugin-manifest", methods=["GET"])
 def plugin_manifest():

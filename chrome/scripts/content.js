@@ -425,14 +425,20 @@ function potentiallyIntrusiveSetup() {
             chrome.runtime.sendMessage({ action: "open_spotify" });
             window.addEventListener('beforeunload', closeSpotify);
         }, spotifyDelay);
+        //note: pluginInitiation() called later when spotify mode used
+    } else {
+        pluginInitiation();
     }
+}
 
+
+function pluginInitiation() {
     if (isPluginCommercialTriggerMode) {
         pluginCommercialTriggerInitiation();
     }
 
     if (isPluginOverlayMode) {
-        pluginOverlayInitiation(); //TODO: check for WS match up here?
+        pluginOverlayInitiation();
     }
 }
 
@@ -533,18 +539,8 @@ function sendMessageToPlugins(type) {
             if (!response.wasSuccessfulCall) {
                 //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
                 addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
-
-                //TODO, add this to addMessageAlertToMainVideo
-                setTimeout(() => {
-                    removeElementsByClass('ytoc-main-video-message-alert');
-                }, 7000);
             } else if (response.pluginOverlayAPIResponse.status !== "ok" && response.pluginOverlayAPIResponse.message) {
-                addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.message);
-
-                //TODO, add this to addMessageAlertToMainVideo
-                setTimeout(() => {
-                    removeElementsByClass('ytoc-main-video-message-alert');
-                }, 7000);
+                addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.message, response.pluginOverlayAPIResponse?.status, response.pluginOverlayAPIResponse?.messageDisplayTime);
             } else if (isDebugMode) {
                 console.log(response);
             }
@@ -1093,7 +1089,7 @@ function setNotFullscreenAlerts() {
 
     if (!fullScreenAlertSet) {
 
-        addMessageAlertToMainVideo('Video must be full screen for Live Commercial Blocker extension to work.');
+        addMessageAlertToMainVideo("Video must be full screen for Live Commercial Blocker extension to work.", "error", 0);
         fullScreenAlertSet = true;
 
     }
@@ -1105,33 +1101,74 @@ function setNotFullscreenAlerts() {
 //TODO: rename this and set fullScreenAlertSet elsewhere?
 function removeNotFullscreenAlerts() {
 
-    removeElementsByClass('ytoc-main-video-message-alert');
+    clearMainVideoMessages();
     fullScreenAlertSet = false;
 
 }
 
 
-//sets specific message over top of every video on the page
-function addMessageAlertToMainVideo(message) {
-
-    if (document.getElementsByTagName('video')[0]) {
-
-        let potentialVideos = document.getElementsByTagName('video');
-
-        for (let i = 0; i < potentialVideos.length; i++) {
-
-            let elm = document.createElement('div');
-            elm.className = "ytoc-main-video-message-alert";
-            elm.textContent = message;
-
-            let insertLocation = potentialVideos[i].parentNode;
-            insertLocation = insertLocation.parentNode;
-            insertLocation.insertBefore(elm, null);
-
-        }
-
+function addMessageAlertToMainVideo(
+    message,
+    type = "error",
+    timeout = 7000,
+) {
+    const videos = document.querySelectorAll("video");
+    
+    let color = "rgb(140, 179, 210)";
+    if (type === "error") {
+        color = "red";
     }
 
+    videos.forEach((video) => {
+        const insertLocation = video.parentNode?.parentNode;
+
+        if (!insertLocation) {
+            return;
+        }
+
+        const currentPosition = window.getComputedStyle(insertLocation).position;
+
+        if (currentPosition === "static") {
+            insertLocation.style.position = "relative";
+        }
+
+        let messageContainer = insertLocation.querySelector(
+            ":scope > .ytoc-main-video-message-alert-container"
+        );
+
+        if (!messageContainer) {
+            messageContainer = document.createElement("div");
+            messageContainer.className = "ytoc-main-video-message-alert-container";
+
+            insertLocation.appendChild(messageContainer);
+        }
+
+        const alert = document.createElement("div");
+        alert.className = "ytoc-main-video-message-alert";
+        alert.textContent = message;
+        alert.style.color = color;
+
+        messageContainer.appendChild(alert);
+
+        // A timeout of 0, null, or undefined keeps the message visible.
+        if (Number(timeout) > 0) {
+            setTimeout(() => {
+                alert.remove();
+
+                // Remove the empty container after the final alert disappears.
+                if (!messageContainer.hasChildNodes()) {
+                    messageContainer.remove();
+                }
+            }, Number(timeout));
+        }
+    });
+}
+
+
+function clearMainVideoMessages() {
+    document
+        .querySelectorAll(".ytoc-main-video-message-alert-container")
+        .forEach(container => container.remove());
 }
 
 
@@ -1700,7 +1737,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
     if (!document.fullscreenElement) {
         //TODO: somehow work to not trigger the othe exit fullscreen trigger during mask building
-        removeElementsByClass('ytoc-main-video-message-alert');
+        clearMainVideoMessages();
         shutdownAdvancedLogoAnalysis('Logo analysis canceled prior to completion due to exiting fullscreen. Please resume full screen and try again. This message will soon disappear.');
         return;
     }
@@ -2027,10 +2064,7 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
 //TODO: Somehow use a variation of this for all auto-pixel modes to let users reselect pixel without refreshing tab
 function shutdownAdvancedLogoAnalysis(message) {
-    addMessageAlertToMainVideo(message);
-    setTimeout(() => {
-        removeElementsByClass('ytoc-main-video-message-alert');
-    }, 9000);
+    addMessageAlertToMainVideo(message, "error", 9000);
 
     pauseAutoMode(false);
 
@@ -2621,7 +2655,7 @@ function fullscreenChanged() {
 
     } else if (document.fullscreenElement) {
 
-        removeElementsByClass('ytoc-main-video-message-alert');
+        clearMainVideoMessages();
 
         if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
             resumeAutoMode();
@@ -2670,23 +2704,8 @@ function pauseAutoMode(shouldDisplayMessage) {
         pauseListeningToTab();
     }
     
-
     if (shouldDisplayMessage) {
-        let pauseMessage = 'Live Commercial Blocker extension paused. Set video back to fullscreen to resume.';
-        if (overlayVideoType === 'spotify') {
-            pauseMessage += ' Or refresh page to exit extension and remove message.';
-        } else {
-            pauseMessage += ' This message will disappear shortly.';
-        }
-        addMessageAlertToMainVideo(pauseMessage);
-
-        //TODO: add removal timeout directly to addMessageAlertToMainVideo to make all messages disappear?
-        //TODO: get this working for the spotify mode without accidentally removing the success message after user chooses spotify playlist
-        if (overlayVideoType !== 'spotify') {
-            setTimeout(() => {
-                removeElementsByClass('ytoc-main-video-message-alert');
-            }, 9000);
-        }
+        addMessageAlertToMainVideo("Live Commercial Blocker extension paused. Set video back to fullscreen to resume. This message will disappear shortly.", "info", 9000);
     }
 }
 
@@ -2727,10 +2746,6 @@ function abortPixelSelection() {
         abortMessage = 'Selection aborted! Hit keyboard shortcut to start again. This message will disappear shortly.';
     }
     addMessageAlertToMainVideo(abortMessage);
-
-    setTimeout(() => {
-        removeElementsByClass('ytoc-main-video-message-alert');
-    }, 7000);
 }
 
 
@@ -2792,9 +2807,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             return;
         }
 
-        //TODO: add removeElementsByClass('ytoc-main-video-message-alert') into addMessageAlertToMainVideo() function
-        removeElementsByClass('ytoc-main-video-message-alert');
-        addMessageAlertToMainVideo('Success! You may now resume fullscreen and enjoy :)');
+        clearMainVideoMessages();
+        addMessageAlertToMainVideo("Success! You may now resume fullscreen and enjoy :)", "info", 0);
+
+        document.addEventListener('fullscreenchange', () => {
+            pluginInitiation();
+        }, { once: true });
 
     } else if (message.action == 'content_update_preferences') {
 
@@ -2995,7 +3013,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                 }
 
-                //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
 
             });
@@ -3076,33 +3093,37 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         } else if (message.sender === "overlay-plugin") {
 
             let messageToDisplay = "Blank message from overlay plugin.";
-            let messageDisplayTime = 6000;
+            let messageDisplayTime = 2000;
+            let messageType;
 
             if (message.connectionState !== "connected") {
                 messageToDisplay = message.connectionMessage;
                 if (message.connectionState === "started") {
                     totalFailedOverlayWSConnectAttempts = 0;
-                    messageDisplayTime = 2000;
+                    messageType = "info";
                 }
                 if (message.connectionState === "failed") {
                     totalFailedOverlayWSConnectAttempts++;
+                    messageType = "error";
                 }
             } else {
                 totalFailedOverlayWSConnectAttempts = 0;
                 if (message.payload?.meta?.display) {
                     messageToDisplay = message.payload.meta.display;
+
+                    if (message.payload?.meta?.messageDisplayTime) {
+                        messageDisplayTime = message.payload.meta.messageDisplayTime;
+                    }
+
+                    if (message.payload?.meta?.messageType) {
+                        messageType = message.payload.meta.messageType;
+                    }
                 }
             }
 
             //stop bugging user after a few failures
             if (totalFailedOverlayWSConnectAttempts <= 2) {
-                removeElementsByClass('ytoc-main-video-message-alert');
-                addMessageAlertToMainVideo(messageToDisplay);
-
-                //TODO, add this to addMessageAlertToMainVideo
-                setTimeout(() => {
-                    removeElementsByClass('ytoc-main-video-message-alert');
-                }, messageDisplayTime);
+                addMessageAlertToMainVideo(messageToDisplay, messageType, messageDisplayTime);
             }
 
             if (isDebugMode && message.payload?.meta?.debug) {

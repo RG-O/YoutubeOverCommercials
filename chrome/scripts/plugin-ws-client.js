@@ -216,7 +216,7 @@ const ws = {
                 null,
                 "overlay-plugin",
                 "started",
-                "Overly plugin connected",
+                "Overlay plugin connected",
             );
 
             overlayWS.send(payload);
@@ -287,7 +287,7 @@ const ws = {
                 null,
                 "dual-plugin",
                 "started",
-                "Overly plugin connected",
+                "Overlay plugin connected",
             );
 
             dualWS.send(payload);

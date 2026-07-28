@@ -61,7 +61,7 @@ async def handle_message(ws, msg):
 
         print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
 
-async def send_status(ws, display, debug):
+async def send_status(ws, display, debug, display_type="info", display_time=7000):
     try:
         await ws.send(json.dumps({
             "type": "status",
@@ -70,6 +70,8 @@ async def send_status(ws, display, debug):
             "data": {},
             "meta": {
                 "display": display,
+                "displayType": display_type, # optional - "info" for blue and "error" for red.
+                "displayTime": display_time, # optional - time until message disapears. disapears after 7 seconds if not sent.
                 "debug": debug,
             },
         }))
