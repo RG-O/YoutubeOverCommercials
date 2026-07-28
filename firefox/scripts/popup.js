@@ -1299,8 +1299,7 @@ function displayPluginOverlayManifestError() {
 
     if (hasPreviouslyInstalledPluginOverlay) {
         displayClass('custom-plugin-overlay-manifest-error');
-        //hideClass('custom-plugin-overlay-additional-setup'); //777
-        displayClass('custom-plugin-overlay-additional-setup'); //777
+        hideClass('custom-plugin-overlay-additional-setup');
     } else {
         hideClass('custom-plugin-overlay-manifest-error');
         displayClass('custom-plugin-overlay-additional-setup');
@@ -1398,10 +1397,9 @@ function displayPluginTriggerManifestError() {
         document.querySelector('label[for="isPluginCommercialTriggerMode"]').style.color = 'red';
     }
 
-    if (hasPreviouslyInstalledPluginOverlay) {
+    if (hasPreviouslyInstalledPluginTrigger) {
         displayClass('custom-plugin-trigger-manifest-error');
-        //hideClass('custom-plugin-trigger-additional-setup'); //777
-        displayClass('custom-plugin-trigger-additional-setup'); //777
+        hideClass('custom-plugin-trigger-additional-setup');
     } else {
         hideClass('custom-plugin-trigger-manifest-error');
         displayClass('custom-plugin-trigger-additional-setup');
@@ -1902,7 +1900,7 @@ function dataSync(event) {
 }
 
 
-browser.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (message.action == 'forward_message_from_plugin_ws') {
         handlePluginWSMessage(message);
     }

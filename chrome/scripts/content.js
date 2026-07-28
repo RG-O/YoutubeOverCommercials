@@ -539,7 +539,7 @@ function sendMessageToPlugins(type) {
             if (!response.wasSuccessfulCall) {
                 //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
                 addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
-            } else if (response.pluginOverlayAPIResponse.status !== "ok" && response.pluginOverlayAPIResponse.message) {
+            } else if (response.pluginOverlayAPIResponse?.status !== "ok" && response.pluginOverlayAPIResponse?.message) {
                 addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.message, response.pluginOverlayAPIResponse?.status, response.pluginOverlayAPIResponse?.messageDisplayTime);
             } else if (isDebugMode) {
                 console.log(response);

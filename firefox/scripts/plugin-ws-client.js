@@ -74,6 +74,7 @@ class WSClient {
 const ws = {
     isInContentFrame: typeof mainVideoCollection !== 'undefined',
     isFirefox: false,
+    isFirefoxPopup: false,
     firefoxInitConfig: window.__extensionConfig,
     isPluginCommercialTriggerWS: false,
     isPluginOverlayWS: false,
@@ -184,16 +185,12 @@ const ws = {
         triggerWS.connect();
     },
     handleTriggerMessage(msg) {
-        //if (ws.isInContentFrame) {
-        //    console.log(ws.isInContentFrame); //TODO: something for firefox
-        //} else {
-            ws.forwardMessageFromPluginWSClient(
-                msg,
-                "trigger-plugin",
-                "connected",
-                "Trigger plugin connected",
-            );
-        //}
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "trigger-plugin",
+            "connected",
+            "Trigger plugin connected",
+        );
     },
     sendToTrigger(payload) {
         if (!triggerWS || !triggerWS.connected) {
@@ -219,7 +216,7 @@ const ws = {
                 null,
                 "overlay-plugin",
                 "started",
-                "Overly plugin connected",
+                "Overlay plugin connected",
             );
 
             overlayWS.send(payload);
@@ -259,16 +256,12 @@ const ws = {
         overlayWS.connect();
     },
     handleOverlayMessage(msg) {
-        //if (ws.isInContentFrame) {
-        //    console.log(ws.isInContentFrame); //TODO: something for firefox
-        //} else {
-            ws.forwardMessageFromPluginWSClient(
-                msg,
-                "overlay-plugin",
-                "connected",
-                "Overlay plugin connected",
-            );
-        //}
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "overlay-plugin",
+            "connected",
+            "Overlay plugin connected",
+        );
     },
     sendToOverlay(payload) {
         if (!overlayWS || !overlayWS.connected) {
@@ -294,7 +287,7 @@ const ws = {
                 null,
                 "dual-plugin",
                 "started",
-                "Overly plugin connected",
+                "Overlay plugin connected",
             );
 
             dualWS.send(payload);
@@ -334,16 +327,12 @@ const ws = {
         dualWS.connect();
     },
     handleDualMessage(msg) {
-        //if (ws.isInContentFrame) {
-        //    console.log(ws.isInContentFrame); //TODO: something for firefox
-        //} else {
-            ws.forwardMessageFromPluginWSClient(
-                msg,
-                "dual-plugin",
-                "connected",
-                "Dual plugin connected",
-            );
-        //}
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "dual-plugin",
+            "connected",
+            "Dual plugin connected",
+        );
     },
     sendToDual(payload) {
         if (!dualWS || !dualWS.connected) {
