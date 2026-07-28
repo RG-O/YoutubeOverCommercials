@@ -14,7 +14,8 @@ var selectedPixel = null;
 var isAutoModeFirstCommercial = true;
 var mismatchCount = 0;
 var matchCount = 0;
-var cooldownCountRemaining = 8; //set to 8 for an initial cooldown so video won't display right away
+var cooldownCountRemaining = 10; //set to 10 for an initial cooldown so video won't display right away
+var utilityCooldownTime = 10;
 var monitorIntervalID;
 var originalPixelColor;
 var windowDimensions;
@@ -41,6 +42,14 @@ var audioLevelThresholdLine;
 var windowWidth;
 var windowHeight;
 var selectedPixelGridLocation;
+var triggerOfLastCommercialStateChange = 'none';
+var pluginCommercialTriggerIndicatorContainer;
+var pluginCommercialTriggerIndicator;
+var pluginCommercialTriggerDebugOverlay;
+var totalFailedCommercialTriggerWSConnectAttempts = 0;
+var totalFailedOverlayWSConnectAttempts = 0;
+var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
+var havePluginsBeenInitiated = false;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -81,6 +90,11 @@ var clapIndicatorResetTimer = null;
 var doubleClapDetectorIFrameContainer;
 var clapPort;
 
+//TODO: put all in here
+const preferences = {
+
+}
+
 //user set preferences (either directly or indirectly)
 var overlayVideoType;
 var ytPlaylistID;
@@ -116,6 +130,16 @@ var shouldShuffleYTPlaylist;
 var isDoubleClapMode;
 var clapSensitivity;
 var isDoubleClapOnlyReturnMode;
+var isPluginOverlayMode;
+var pluginOverlayFramework;
+var pluginOverlayAPIURL;
+var pluginOverlayWSURL;
+var isPluginCommercialTriggerMode;
+var pluginCommercialTriggerWSURL;
+var isAnyPluginMode;
+var pluginTriggerPreferences;
+var pluginOverlayPreferences;
+var pluginDualPreferences;
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -127,8 +151,6 @@ function setOverlayVideo() {
     if (insertLocation.nodeName == 'HTML') {
         insertLocation = document.getElementsByTagName('body')[0];
     }
-
-    addOverlayFade(insertLocation);
 
     overlayVideo = document.createElement('div');
     overlayVideo.className = "ytoc-overlay-video";
@@ -215,9 +237,15 @@ function removeOverlayVideo() {
 
 
 //adding an overlay to darken the main/background video during commercials if user has chosen to do so
-function addOverlayFade(insertLocation) {
+function addOverlayFade() {
 
     if (mainVideoFade > 0) {
+
+        //TODO: add check to make sure user is still in full screen and if not to break and resut isFirstRun
+        let insertLocation = document.fullscreenElement;
+        if (insertLocation.nodeName == 'HTML') {
+            insertLocation = document.getElementsByTagName('body')[0];
+        }
 
         overlayScreen = document.createElement('div');
 
@@ -325,12 +353,25 @@ function initialRun() {
     removeNotFullscreenAlerts();
 
     if (!isAudioOnlyOverlay) {
-        setOverlayVideo();
+        if (overlayVideoType !== 'custom-plugin-overlay') {
+            setOverlayVideo();
+        }
+        addOverlayFade();
     }
 
-    if (commercialDetectionMode.indexOf('auto') < 0 && commercialDetectionMode !== 'manual-clap') {
-        //note: this is called earlier for manual-clap
+    let pluginOverlayFirstChangeDelay = 0;
+
+    if (commercialDetectionMode === 'manual') {
+        document.addEventListener('fullscreenchange', fullscreenChanged);
         potentiallyIntrusiveSetup();
+        //giving time between init and change state
+        pluginOverlayFirstChangeDelay = 2000;
+    }
+
+    if (isAnyPluginMode) {
+        setTimeout(() => {
+            sendPluginsCommercialState();
+        }, pluginOverlayFirstChangeDelay);
     }
 
     muteMainVideo();
@@ -367,23 +408,172 @@ function initialRun() {
 }
 
 
-//things that should be done very shortly after initiating the extension as to not bother the user later. the auto modes each have their own way of kicking off the things in here. //TODO: could the auto modes all use this function?
+//setup that could disrupt the user by either giving them a permissions prompt or switching tabs
 function potentiallyIntrusiveSetup() {
+    let spotifyDelay = 0;
+
     if (isDoubleClapMode) {
         //Note: this happens elsewhere in manual clap and auto modes
-        prepFoClapMonitor();
+        prepForClapMonitorContent();
+
+        //add delay for switching over to spotify to give mic permissions prompt time to display if need be
+        spotifyDelay = 1000;
     }
 
+    if (overlayVideoType === 'spotify') {
+        setTimeout(() => {
+            chrome.runtime.sendMessage({ action: "open_spotify" });
+            window.addEventListener('beforeunload', closeSpotify);
+        }, spotifyDelay);
+        //note: pluginInitiation() called later when spotify mode used
+    } else {
+        pluginInitiation();
+    }
+}
 
-    if (overlayVideoType == 'spotify') {
-        //Note: this happens elsewhere in auto modes
-        chrome.runtime.sendMessage({ action: "open_spotify" });
-        window.addEventListener('beforeunload', closeSpotify);
+
+function pluginInitiation() {
+    if (isPluginCommercialTriggerMode) {
+        pluginCommercialTriggerInitiation();
     }
 
-    //TODO: should this be moved above opening spotify?
-    //Note: this happens in pixelSelection() in auto mode
-    document.addEventListener('fullscreenchange', fullscreenChanged);
+    if (isPluginOverlayMode) {
+        pluginOverlayInitiation();
+    }
+}
+
+
+function pluginCommercialTriggerInitiation() {
+    initiatePluginCommercialTriggerIndicator();
+    if (!havePluginsBeenInitiated) {
+        havePluginsBeenInitiated = true; //TODO: have this be smarter and know if either initiations were not successful
+        sendMessageToPlugins("init");
+    }
+    document.addEventListener('fullscreenchange', fullscreenChanged); //TODO: do this here?
+    window.addEventListener('beforeunload', closeChromeOffscreenDoc);
+}
+
+
+function pluginOverlayInitiation() {
+    if (!havePluginsBeenInitiated) {
+        havePluginsBeenInitiated = true; //TODO: have this be smarter and know if either initiations were not successful
+        sendMessageToPlugins("init");
+    }
+    window.addEventListener('beforeunload', pluginOverlayEnd);
+}
+
+
+function pluginOverlayEnd() {
+    if (pluginOverlayFramework === 'api') {
+        sendMessageToPlugins("end");
+    } else {
+        closeChromeOffscreenDoc();
+    }
+}
+
+
+function sendPluginsFullscreenState() {
+    sendMessageToPlugins("browser_fullscreen_state_change");
+}
+
+
+function sendPluginsCommercialState() {
+    sendMessageToPlugins("commercial_state_change");
+}
+
+
+function sendMessageToPlugins(type) {
+    //TODO: remove this and use above //TODO: maybe don't send all utilities? just some?
+    const utilities = {
+        TODO: "TODO: have this be all",
+        triggerOfLastCommercialStateChange: triggerOfLastCommercialStateChange,
+        isFirefox: isFirefox,
+    }
+
+    //TODO: remove this and use above
+    const preferences = {
+        videoOverlayWidth: videoOverlayWidth,
+        videoOverlayHeight: videoOverlayHeight,
+        overlayVideoLocationHorizontal: overlayVideoLocationHorizontal,
+        overlayVideoLocationVertical: overlayVideoLocationVertical,
+        isPiPMode: isPiPMode,
+        pipLocationHorizontal: pipLocationHorizontal,
+        pipLocationVertical: pipLocationVertical,
+        pipHeight: pipHeight,
+        pipWidth: pipWidth,
+        shouldOverlayVideoSizeAndLocationAutoSet: shouldOverlayVideoSizeAndLocationAutoSet,
+        isPluginOverlayMode: isPluginOverlayMode,
+        pluginOverlayFramework: pluginOverlayFramework,
+        pluginOverlayAPIURL: pluginOverlayAPIURL,
+        pluginOverlayWSURL: pluginOverlayWSURL,
+        isPluginCommercialTriggerMode: isPluginCommercialTriggerMode,
+        pluginCommercialTriggerFramework: pluginCommercialTriggerFramework,
+        pluginCommercialTriggerWSURL: pluginCommercialTriggerWSURL,
+        isAnyPluginMode: isAnyPluginMode,
+        isDebugMode: isDebugMode,
+        pluginTriggerPreferences: pluginTriggerPreferences,
+        pluginOverlayPreferences: pluginOverlayPreferences,
+        pluginDualPreferences: pluginDualPreferences,
+    }
+
+    const payload = {
+        type: type,
+        timestamp: Date.now(),
+        data: {
+            isCommercialState: isCommercialState,
+            isFullscreen: !!document.fullscreenElement,
+            utilities: utilities,
+            preferences: preferences,
+        },
+        meta: {
+            wsOpenedBy: 'content',
+        },
+    };
+
+    if (isPluginOverlayMode && pluginOverlayFramework === 'api') {
+        chrome.runtime.sendMessage({
+            action: "call_custom_plugin_overlay_api",
+            pluginOverlayAPIURL: pluginOverlayAPIURL,
+            payload: payload,
+        }, function (response) {
+            if (!response.wasSuccessfulCall) {
+                //TODO: have this be dynamic for connecting versus subsequent calls and maybe swallow when it isn't overlayVideoType !== 'custom-plugin-overlay'?
+                addMessageAlertToMainVideo("Issue connecting to or using your custom plugin API. See console for more info. After fixing, refresh and re-initiate extension to try again.");
+            } else if (response.pluginOverlayAPIResponse?.status !== "ok" && response.pluginOverlayAPIResponse?.message) {
+                addMessageAlertToMainVideo(response.pluginOverlayAPIResponse.message, response.pluginOverlayAPIResponse?.status, response.pluginOverlayAPIResponse?.messageDisplayTime);
+            } else if (isDebugMode) {
+                console.log(response);
+            }
+        });
+    }
+
+    //TODO: check value if still connected
+    if (isPluginCommercialTriggerMode || pluginOverlayFramework === 'ws') {
+        if (type === "init") {
+            chrome.runtime.sendMessage({
+                action: `${isFirefox ? "firefox" : "chrome"}-connect-to-ws-plugins`,
+                payload: payload,
+            });
+        } else {
+            if (isFirefox) {
+                if (ws?.isFirefox) {
+                    ws.sendMessageToWSPlugins(payload);
+                } else {
+                    chrome.runtime.sendMessage({
+                        target: "plugin-ws",
+                        action: "firefox-forward-message-to-plugins",
+                        payload: payload,
+                    });
+                }
+            } else {
+                chrome.runtime.sendMessage({
+                    target: "plugin-ws",
+                    action: "send-message-to-plugins",
+                    payload: payload,
+                });
+            }
+        }
+    }
 }
 
 
@@ -499,15 +689,25 @@ function endCommercialMode() {
 
     } else {
 
-        chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
+        if (overlayVideoType !== 'custom-plugin-overlay') {
 
-        if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
-            enterPiPMode();
-        } else {
-            hideOverlayVideo();
+            chrome.runtime.sendMessage({ action: "execute_overlay_video_non_commercial_state" });
+
+            if (isPiPMode && isLiveOverlayVideo && document.fullscreenElement) {
+                enterPiPMode();
+            } else {
+                hideOverlayVideo();
+            }
+
         }
 
         hideOverlayFade();
+
+    }
+
+    if (isAnyPluginMode) {
+
+        sendPluginsCommercialState();
 
     }
 
@@ -520,7 +720,8 @@ function endCommercialMode() {
 //switches to commercial state which means showing the overlay video and muting the main/background video
 function startCommercialMode() {
 
-    if ((commercialDetectionMode.indexOf('auto') >= 0 || commercialDetectionMode === 'manual-clap') && isAutoModeFirstCommercial) {
+    //TODO: create a new var signlaing 'manual-clap' or 'custom-plugin-trigger'
+    if ((commercialDetectionMode.indexOf('auto') >= 0 || commercialDetectionMode === 'manual-clap' || commercialDetectionMode === 'custom-plugin-trigger') && isAutoModeFirstCommercial) {
 
         //check again if in full screen in case user exited
         if (document.fullscreenElement) {
@@ -529,7 +730,7 @@ function startCommercialMode() {
 
             isAutoModeFirstCommercial = false;
             //setting cooldown time so video has a chance to play for the first time, also needed for overlay video audio to shift to other tab in auto-audio mode
-            cooldownCountRemaining = 8;
+            cooldownCountRemaining = utilityCooldownTime;
             initialRun();
 
         } else {
@@ -540,21 +741,31 @@ function startCommercialMode() {
 
         isCommercialState = true;
 
-        if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
+        if (isAudioOnlyOverlay) {
 
             chrome.runtime.sendMessage({ action: "execute_music_commercial_state" });
 
         } else {
 
-            chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
+            if (overlayVideoType !== 'custom-plugin-overlay') {
+
+                chrome.runtime.sendMessage({ action: "execute_overlay_video_commercial_state" });
+
+                if (isPiPMode && isLiveOverlayVideo) {
+                    resetOverlayVideoSizeAndLocation();
+                }
+
+                showOverlayVideo();
+
+            }
 
             showOverlayFade();
 
-            if (isPiPMode && isLiveOverlayVideo) {
-                resetOverlayVideoSizeAndLocation();
-            }
+        }
 
-            showOverlayVideo();
+        if (isAnyPluginMode) {
+
+            sendPluginsCommercialState();
 
         }
 
@@ -626,16 +837,30 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'isDoubleClapMode',
                             'clapSensitivity',
                             'isDoubleClapOnlyReturnMode',
+                            'isPluginOverlayMode',
+                            'isPluginCommercialTriggerMode',
+                            'pluginOverlayFramework',
+                            'pluginOverlayAPIURL',
+                            'pluginOverlayWSURL',
+                            'pluginCommercialTriggerWSURL',
+                            'pluginTriggerPreferences',
+                            'pluginOverlayPreferences',
+                            'pluginDualPreferences',
                         ], (result) => {
 
                             //set them to default if not set by user yet
                             overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
+                            isPluginOverlayMode = result.isPluginOverlayMode ?? false;
                             if (overlayVideoType == 'spotify' || overlayVideoType == 'other-tabs') {
                                 isAudioOnlyOverlay = true;
                                 isLiveOverlayVideo = false;
                             } else if (overlayVideoType == 'yt-live' || overlayVideoType == 'other-live') {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = true;
+                            } else if (overlayVideoType === 'custom-plugin-overlay') {
+                                isAudioOnlyOverlay = false;
+                                isLiveOverlayVideo = false; //TODO: should I do this?
+                                isPluginOverlayMode = true; 
                             } else {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false;
@@ -656,10 +881,17 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
                             }
                             commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
-                            //adjusting to updated settings for people that have already downloaded the extension (people set to opposite pixel mode will need to reselect in updated settings) //TODO: has it been long enough to be safe to delete?
-                            if (commercialDetectionMode === 'auto') {
-                                commercialDetectionMode = 'auto-pixel-normal';
+                            isPluginCommercialTriggerMode = result.isPluginCommercialTriggerMode ?? false;
+                            if (commercialDetectionMode === 'custom-plugin-trigger') {
+                                isPluginCommercialTriggerMode = true;
                             }
+                            if (isPluginOverlayMode || isPluginCommercialTriggerMode) {
+                                isAnyPluginMode = true;
+                            }
+                            pluginOverlayFramework = result.pluginOverlayFramework ?? 'api';
+                            pluginOverlayAPIURL = result.pluginOverlayAPIURL ?? 'http://localhost:64144';
+                            pluginOverlayWSURL = result.pluginOverlayWSURL ?? 'ws://localhost:64146';
+                            pluginCommercialTriggerWSURL = result.pluginCommercialTriggerWSURL ?? 'ws://localhost:64145';
                             shouldOverlayVideoSizeAndLocationAutoSet = result.shouldOverlayVideoSizeAndLocationAutoSet ?? false;
                             if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
                                 shouldOverlayVideoSizeAndLocationAutoSet = false;
@@ -696,6 +928,9 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isDoubleClapOnlyReturnMode = false;
                             }
                             clapSensitivity = result.clapSensitivity ?? 40;
+                            pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+                            pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+                            pluginDualPreferences = result.pluginDualPreferences ?? {};
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -753,13 +988,14 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                 }
 
-                            } else if (commercialDetectionMode == 'manual-clap') {
+                            } else if (commercialDetectionMode == 'manual-clap' || commercialDetectionMode == 'custom-plugin-trigger') {
 
                                 potentiallyIntrusiveSetup();
 
                             } else {
                                 //manual mode start
-                                
+
+                                triggerOfLastCommercialStateChange = 'manual-keyboard';
                                 initialRun();
 
                             }
@@ -782,6 +1018,7 @@ chrome.runtime.onMessage.addListener(function (message) {
             abortPixelSelection();
         } else {
 
+            triggerOfLastCommercialStateChange = 'manual-keyboard';
             manualCommercialModeToggle();
 
         }
@@ -852,7 +1089,7 @@ function setNotFullscreenAlerts() {
 
     if (!fullScreenAlertSet) {
 
-        addMessageAlertToMainVideo('Video must be full screen for Live Commercial Blocker extension to work.');
+        addMessageAlertToMainVideo("Video must be full screen for Live Commercial Blocker extension to work.", "error", 0);
         fullScreenAlertSet = true;
 
     }
@@ -864,33 +1101,74 @@ function setNotFullscreenAlerts() {
 //TODO: rename this and set fullScreenAlertSet elsewhere?
 function removeNotFullscreenAlerts() {
 
-    removeElementsByClass('ytoc-main-video-message-alert');
+    clearMainVideoMessages();
     fullScreenAlertSet = false;
 
 }
 
 
-//sets specific message over top of every video on the page
-function addMessageAlertToMainVideo(message) {
-
-    if (document.getElementsByTagName('video')[0]) {
-
-        let potentialVideos = document.getElementsByTagName('video');
-
-        for (let i = 0; i < potentialVideos.length; i++) {
-
-            let elm = document.createElement('div');
-            elm.className = "ytoc-main-video-message-alert";
-            elm.textContent = message;
-
-            let insertLocation = potentialVideos[i].parentNode;
-            insertLocation = insertLocation.parentNode;
-            insertLocation.insertBefore(elm, null);
-
-        }
-
+function addMessageAlertToMainVideo(
+    message,
+    type = "error",
+    timeout = 7000,
+) {
+    const videos = document.querySelectorAll("video");
+    
+    let color = "rgb(140, 179, 210)";
+    if (type === "error") {
+        color = "red";
     }
 
+    videos.forEach((video) => {
+        const insertLocation = video.parentNode?.parentNode;
+
+        if (!insertLocation) {
+            return;
+        }
+
+        const currentPosition = window.getComputedStyle(insertLocation).position;
+
+        if (currentPosition === "static") {
+            insertLocation.style.position = "relative";
+        }
+
+        let messageContainer = insertLocation.querySelector(
+            ":scope > .ytoc-main-video-message-alert-container"
+        );
+
+        if (!messageContainer) {
+            messageContainer = document.createElement("div");
+            messageContainer.className = "ytoc-main-video-message-alert-container";
+
+            insertLocation.appendChild(messageContainer);
+        }
+
+        const alert = document.createElement("div");
+        alert.className = "ytoc-main-video-message-alert";
+        alert.textContent = message;
+        alert.style.color = color;
+
+        messageContainer.appendChild(alert);
+
+        // A timeout of 0, null, or undefined keeps the message visible.
+        if (Number(timeout) > 0) {
+            setTimeout(() => {
+                alert.remove();
+
+                // Remove the empty container after the final alert disappears.
+                if (!messageContainer.hasChildNodes()) {
+                    messageContainer.remove();
+                }
+            }, Number(timeout));
+        }
+    });
+}
+
+
+function clearMainVideoMessages() {
+    document
+        .querySelectorAll(".ytoc-main-video-message-alert-container")
+        .forEach(container => container.remove());
 }
 
 
@@ -930,7 +1208,7 @@ function setBlockersAndPixelSelectionInstructions() {
         htmlElement.addEventListener('click', blockHandler, true);
     }
 
-    if (isPiPMode && isLiveOverlayVideo) {
+    if (isPiPMode && isLiveOverlayVideo && overlayVideoType !== 'custom-plugin-overlay') {
 
         pipBlocker = document.createElement('div');
         pipBlocker.className = "ytoc-overlay-instructions";
@@ -958,7 +1236,14 @@ function setBlockersAndPixelSelectionInstructions() {
     insertLocationFullscreenElm.insertBefore(overlayInstructions, null);
     overlayInstructions.style.visibility = "visible";
     //overlayInstructions.style.setProperty("border", "3px red solid", "important");
-    setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+
+    //setting instructions small in the middle when only plugin overlay is used since it shouldn't block any pixels
+    if (overlayVideoType === 'custom-plugin-overlay') {
+        setOverlaySizeAndLocation(overlayInstructions, 40, 40, "middle", "middle", "0");
+    } else {
+        setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
+    }
+    
 
     let iFrame = document.createElement('iframe');
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
@@ -1107,7 +1392,7 @@ function captureOriginalPixelColor(selectedPixel) {
 
         logoBox.style.backgroundColor = "rgba(" + originalPixelColor.r + ", " + originalPixelColor.g + ", " + originalPixelColor.b + ", 1)";
         //deciding whether to set text as white or black based on background color
-        if ((originalPixelColor.r * 0.299 + originalPixelColor.g * 0.587 + originalPixelColor.b * 0.114) > 150) {
+        if (isLightColor(originalPixelColor.r, originalPixelColor.g, originalPixelColor.b)) {
             logoBox.style.color = "rgba(0, 0, 0, 1)";
         } else {
             logoBox.style.color = "rgba(255, 255, 255, 1)";
@@ -1115,27 +1400,21 @@ function captureOriginalPixelColor(selectedPixel) {
 
         //wait a sec to remove pixel selected message and replace with logo to let the user read message
         setTimeout(() => {
+
             initialLogoBoxTextUpdate();
             if (!isDebugMode) { logoBox.style.display = 'none'; }
             removeElementsByClass('ytoc-selection-indicator');
+
+            //wait another sec for potentially intrusive setup
+            setTimeout(() => {
+                potentiallyIntrusiveSetup();
+            }, 1000);
+
         }, 2000);
 
-        if (overlayVideoType == 'spotify') {
-            //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
-            setTimeout(() => {
-                chrome.runtime.sendMessage({ action: "open_spotify" });
-                window.addEventListener('beforeunload', closeSpotify);
-            }, 2000);
-        } else if (overlayVideoType == 'other-tabs') {
+        if (overlayVideoType == 'other-tabs') {
             //if user has extension set to other-tabs, mute the other tabs now
             chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
-        }
-
-        if (isDoubleClapMode) {
-            //TODO: is it better that I'm doing this before spotify?
-            setTimeout(() => {
-                prepFoClapMonitor();
-            }, 1000);
         }
 
         pixelColorMatchMonitor(originalPixelColor, selectedPixel);
@@ -1207,6 +1486,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
 
                         if (isDebugMode) { console.log('commercial detected'); }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         startCommercialMode();
 
                         if (overlayVideoType == 'spotify') {
@@ -1263,6 +1543,7 @@ function pixelColorMatchMonitor(originalPixelColor, selectedPixel) {
                             }
                         }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         endCommercialMode();
 
                     }
@@ -1342,6 +1623,11 @@ function getPixelColor(coordinates) {
 
     });
 
+}
+
+
+function isLightColor(r, g, b) {
+    return (r * 0.299 + g * 0.587 + b * 0.114) > 150
 }
 
 
@@ -1451,7 +1737,7 @@ function buildLogoMask(advancedLogoSelectionTopLeftLocation, advancedLogoSelecti
 
     if (!document.fullscreenElement) {
         //TODO: somehow work to not trigger the othe exit fullscreen trigger during mask building
-        removeElementsByClass('ytoc-main-video-message-alert');
+        clearMainVideoMessages();
         shutdownAdvancedLogoAnalysis('Logo analysis canceled prior to completion due to exiting fullscreen. Please resume full screen and try again. This message will soon disappear.');
         return;
     }
@@ -1552,20 +1838,10 @@ function prepForAdvancedLogoMonitor(logoAnalysisResponse, delay, advancedLogoSel
         advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
     }, delay);
 
-    if (overlayVideoType == 'spotify') {
-        //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
-        setTimeout(() => {
-            chrome.runtime.sendMessage({ action: "open_spotify" });
-            window.addEventListener('beforeunload', closeSpotify);
-        }, delay + 2000);
-    }
-
-    if (isDoubleClapMode) {
-        //TODO: is it better that I'm doing this before spotify?
-        setTimeout(() => {
-            prepFoClapMonitor();
-        }, 1000);
-    }
+    //wait a sec for potentially intrusive setup
+    setTimeout(() => {
+        potentiallyIntrusiveSetup();
+    }, 1000);
 }
 
 
@@ -1663,6 +1939,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                     if (!isCommercialState) {
                         if (isDebugMode) { console.log('commercial detected'); }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         startCommercialMode();
 
                         if (overlayVideoType === 'spotify') {
@@ -1714,6 +1991,7 @@ function advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoS
                             }
                         }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         endCommercialMode();
                     }
                     //TODO: find out if this is better inside the if above or here, especially as it relates to manual switching during auto mode. or does it need done at all?
@@ -1786,10 +2064,7 @@ function getAdvancedLogoAnalysis(coordinates, dimensions, request) {
 
 //TODO: Somehow use a variation of this for all auto-pixel modes to let users reselect pixel without refreshing tab
 function shutdownAdvancedLogoAnalysis(message) {
-    addMessageAlertToMainVideo(message);
-    setTimeout(() => {
-        removeElementsByClass('ytoc-main-video-message-alert');
-    }, 9000);
+    addMessageAlertToMainVideo(message, "error", 9000);
 
     pauseAutoMode(false);
 
@@ -1805,7 +2080,7 @@ function shutdownAdvancedLogoAnalysis(message) {
     removeClickAndUIBlockers();
 
     //complete reset
-    cooldownCountRemaining = 8;
+    cooldownCountRemaining = utilityCooldownTime;
     advancedLogoMaskCollectionSamples = 0;
     selectedPixel = false;
     isAutoModeInitiated = false;
@@ -1878,23 +2153,15 @@ function prepForAudioMonitor() {
 
     document.addEventListener('fullscreenchange', fullscreenChanged);
 
-    if (overlayVideoType == 'spotify') {
-        //if user has extension set to spotify, open spotify now and prompt the user to choose music to play
-        setTimeout(() => {
-            chrome.runtime.sendMessage({ action: "open_spotify" });
-            window.addEventListener('beforeunload', closeSpotify);
-        }, 2000);
-    } else if (overlayVideoType == 'other-tabs') {
+    if (overlayVideoType == 'other-tabs') {
         //if user has extension set to other-tabs, mute the other tabs now
         chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
     }
 
-    if (isDoubleClapMode) {
-        //TODO: is it better that I'm doing this before spotify?
-        setTimeout(() => {
-            prepFoClapMonitor();
-        }, 1000);
-    }
+    //wait a sec for potentially intrusive setup
+    setTimeout(() => {
+        potentiallyIntrusiveSetup();
+    }, 1000);
 
     audioThresholdMonitor();
 
@@ -2003,6 +2270,7 @@ function audioThresholdMonitor() {
 
                         if (isDebugMode) { console.log('commercial detected'); }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         startCommercialMode();
 
                         logoBox.textContent = logoBoxText;
@@ -2050,6 +2318,7 @@ function audioThresholdMonitor() {
                             }
                         }
 
+                        triggerOfLastCommercialStateChange = String(commercialDetectionMode);
                         endCommercialMode();
 
                     }
@@ -2103,6 +2372,7 @@ function getAudioLevel() {
     });
 
 }
+
 
 function setAudioLevelBar(level) {
     audioLevelBar.style.height = level + '%';
@@ -2226,7 +2496,7 @@ function startViewingTab(windowDimensions) {
     if (!isFirefox) {
 
         chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions });
-        window.addEventListener('beforeunload', stopViewingTab);
+        window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
     }
 
@@ -2238,7 +2508,7 @@ function startListeningToTab() {
     if (!isFirefox) {
 
         chrome.runtime.sendMessage({ action: "chrome-view-tab-audio" });
-        window.addEventListener('beforeunload', stopViewingTab);
+        window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
     } else {
 
@@ -2286,7 +2556,7 @@ function startListeningToTab() {
 }
 
 
-function stopViewingTab() {
+function closeChromeOffscreenDoc() {
 
     if (!isFirefox) {
 
@@ -2297,14 +2567,13 @@ function stopViewingTab() {
         });
 
         //TODO: is removing this even listener necessary?
-        window.removeEventListener('beforeunload', stopViewingTab);
+        window.removeEventListener('beforeunload', closeChromeOffscreenDoc);
 
     }
 
 }
 
 
-//note: should use stopViewingTab() instead to close offscreen
 function pauseViewingTab() {
 
     if (!isFirefox) {
@@ -2319,7 +2588,21 @@ function pauseViewingTab() {
 }
 
 
-//note: does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
+function pauseListeningToTab() {
+
+    if (!isFirefox) {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "stop-listening"
+        });
+
+    }
+
+}
+
+
+//note: this does not work. to resume viewing or listening just "start" again. It will check if offscreen doc already open before creating a new one and then pass start message which works better to resume
 function resumeViewingTab() {
 
     if (!isFirefox) {
@@ -2352,6 +2635,7 @@ function fullscreenChanged() {
 
         if (isCommercialState) {
             if (!isAudioOnlyOverlay) {
+                triggerOfLastCommercialStateChange = "fullscreen-exit";
                 endCommercialMode();
             } else {
                 //don't want to count while not actively checking when the commercials end 
@@ -2371,7 +2655,7 @@ function fullscreenChanged() {
 
     } else if (document.fullscreenElement) {
 
-        removeElementsByClass('ytoc-main-video-message-alert');
+        clearMainVideoMessages();
 
         if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
             resumeAutoMode();
@@ -2393,6 +2677,17 @@ function fullscreenChanged() {
 
     }
 
+    if (isAnyPluginMode) {
+        //giving slight delay on send if commercial so exit commercial and exit fullscreen aren't sent at same exact time
+        let sendDelay = isCommercialState ? 1000 : 0;
+
+        setTimeout(() => {
+            sendPluginsFullscreenState();
+        }, sendDelay);
+    } else {
+        console.log(isAnyPluginMode);
+    }
+
 }
 
 
@@ -2403,24 +2698,14 @@ function pauseAutoMode(shouldDisplayMessage) {
         clearInterval(monitorIntervalID);
     }
 
-    stopViewingTab();
-
+    if (commercialDetectionMode !== 'auto-audio') {
+        pauseViewingTab();
+    } else {
+        pauseListeningToTab();
+    }
+    
     if (shouldDisplayMessage) {
-        let pauseMessage = 'Live Commercial Blocker extension paused. Set video back to fullscreen to resume.';
-        if (overlayVideoType === 'spotify') {
-            pauseMessage += ' Or refresh page to exit extension and remove message.';
-        } else {
-            pauseMessage += ' This message will disappear shortly.';
-        }
-        addMessageAlertToMainVideo(pauseMessage);
-
-        //TODO: add removal timeout directly to addMessageAlertToMainVideo to make all messages disappear?
-        //TODO: get this working for the spotify mode without accidentally removing the success message after user chooses spotify playlist
-        if (overlayVideoType !== 'spotify') {
-            setTimeout(() => {
-                removeElementsByClass('ytoc-main-video-message-alert');
-            }, 9000);
-        }
+        addMessageAlertToMainVideo("Live Commercial Blocker extension paused. Set video back to fullscreen to resume. This message will disappear shortly.", "info", 9000);
     }
 }
 
@@ -2431,7 +2716,7 @@ function resumeAutoMode() {
         startViewingTab(windowDimensions);
         //give a sec for tab viewing to start
         setTimeout(() => {
-            cooldownCountRemaining = 8; //give a chance for video UI to go away
+            cooldownCountRemaining = utilityCooldownTime; //give a chance for video UI to go away
             if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
                 isAdvancedLogoMonitorPaused = false;
                 advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
@@ -2451,7 +2736,7 @@ function abortPixelSelection() {
     isAutoModeInitiated = false;
 
     removeBlockersListenersAndPixelSelectionInstructions();
-    stopViewingTab();
+    closeChromeOffscreenDoc();
     document.removeEventListener('fullscreenchange', abortPixelSelection);
 
     let abortMessage;
@@ -2461,10 +2746,6 @@ function abortPixelSelection() {
         abortMessage = 'Selection aborted! Hit keyboard shortcut to start again. This message will disappear shortly.';
     }
     addMessageAlertToMainVideo(abortMessage);
-
-    setTimeout(() => {
-        removeElementsByClass('ytoc-main-video-message-alert');
-    }, 7000);
 }
 
 
@@ -2526,9 +2807,12 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             return;
         }
 
-        //TODO: add removeElementsByClass('ytoc-main-video-message-alert') into addMessageAlertToMainVideo() function
-        removeElementsByClass('ytoc-main-video-message-alert');
-        addMessageAlertToMainVideo('Success! You may now resume fullscreen and enjoy :)');
+        clearMainVideoMessages();
+        addMessageAlertToMainVideo("Success! You may now resume fullscreen and enjoy :)", "info", 0);
+
+        document.addEventListener('fullscreenchange', () => {
+            pluginInitiation();
+        }, { once: true });
 
     } else if (message.action == 'content_update_preferences') {
 
@@ -2574,6 +2858,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 //'isDoubleClapMode',
                 'clapSensitivity',
                 'isDoubleClapOnlyReturnMode',
+                //'isPluginOverlayMode',
+                //'isPluginCommercialTriggerMode',
+                //'pluginOverlayFramework',
+                //'pluginOverlayAPIURL',
+                //'pluginOverlayWSURL',
+                //'pluginCommercialTriggerWSURL',
+                'pluginTriggerPreferences',
+                'pluginOverlayPreferences',
+                'pluginDualPreferences',
             ], (result) => {
 
                 //set them to default if not set by user yet
@@ -2601,6 +2894,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     isDoubleClapOnlyReturnMode = false;
                 }
                 clapSensitivity = result.clapSensitivity ?? 40;
+                pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+                pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+                pluginDualPreferences = result.pluginDualPreferences ?? {};
 
                 if (audioLevelThresholdLine) {
                     audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
@@ -2707,35 +3003,137 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                     }
 
+                    //TODO: clean up this and directly above as this update logic is getting pretty complicated
+                    if (!result.shouldOverlayVideoSizeAndLocationAutoSet && isPluginOverlayMode) {
+                        overlayVideoLocationHorizontal = result.overlayVideoLocationHorizontal ?? 'middle';
+                        overlayVideoLocationVertical = result.overlayVideoLocationVertical ?? 'middle';
+                        videoOverlayWidth = result.videoOverlayWidth ?? 75;
+                        videoOverlayHeight = result.videoOverlayHeight ?? 75;
+                    }
+
                 }
 
-                //removeElementsByClass('ytoc-main-video-message-alert');
                 //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
 
             });
 
         } //else do not update preferences because this gets updated on first run anyway
 
-    } else if (message.action == 'add_clap_detector_iframe') {
+    } else if (message.action == 'message_from_plugin_ws') {
 
-        if (!inIFrame()) {
-            //as this won't be ran in the same frame that this was called from, it is safest to grab these preferences fresh
-            chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
-                let clapSensitivity = result.clapSensitivity ?? 40;
-                let isDebugMode = result.isDebugMode ?? false;
-
-                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
-            });
-
+        //ignore this message if not in necessary frame
+        if (!mainVideoCollection) {
+            return;
         }
 
-    } else if (message.action == 'close_clap_detector_iframe') {
+        if (isDebugMode) console.log(message);
 
-        if (!inIFrame()) {
-            closeDoubleClapDetectorIFrame();
+        if (message.sender === "trigger-plugin" || message.sender === "dual-plugin") {
+
+            if (message.connectionState !== "connected") {
+                if (message.connectionState === "failed") {
+                    totalFailedCommercialTriggerWSConnectAttempts++;
+                }
+                if (pluginCommercialTriggerIndicator && totalFailedCommercialTriggerWSConnectAttempts <= 3) {
+                    pluginCommercialTriggerIndicator.textContent = message.connectionMessage;
+                }
+                return;
+            } else {
+                totalFailedCommercialTriggerWSConnectAttempts = 0;
+            }
+
+            if (message.payload?.meta?.display) {
+                if (pluginCommercialTriggerIndicator) {
+                    pluginCommercialTriggerIndicator.textContent = message.payload.meta.display;
+                }
+            }
+
+            if (message.payload.type === "commercial_state_change") {
+                if (typeof message.payload.data.isCommercial !== "undefined") {
+                    if (message.payload.data.isCommercial && !isCommercialState) {
+                        triggerOfLastCommercialStateChange = String(message.source);
+                        manualCommercialModeToggle();
+                    } else if (!message.payload.data.isCommercial && isCommercialState) {
+                        triggerOfLastCommercialStateChange = String(message.source);
+                        manualCommercialModeToggle();
+                    } else if (isDebugMode) {
+                        console.log("Commercial state plugin WS Sent was state that extension was already in.");
+                    }
+                } else {
+                    console.log("Error: Message type of commercial_state_change sent without data.isCommercial");
+                }
+            } else if (message.payload.type === "auto_commercial_blocked_state_change") {
+                if (typeof message.payload.data.isAutoCommercialBlocked !== "undefined") {
+                    if (message.payload.data.isAutoCommercialBlocked) {
+                        cooldownCountRemaining = 10000000; //TODO: figure out better way to do this
+                    } else {
+                        cooldownCountRemaining = 3; //TODO: figure out better way to do this
+                    }
+                } else {
+                    console.log("Error: Message type of auto_commercial_blocked_state_change sent without data.isAutoCommercialBlocked");
+                }
+            }
+
+            if (isDebugMode && message.payload?.meta?.debug) {
+                if (message.payload.meta.debug.startsWith("data:image/")) {
+                    //TODO: better way to do this?
+                    let previousDebugImage = pluginCommercialTriggerDebugOverlay.getElementsByTagName('img')[0];
+                    if (previousDebugImage) previousDebugImage.remove();
+                    pluginCommercialTriggerDebugOverlay.innerText = "";
+
+                    let debugImage = document.createElement('img');
+                    debugImage.src = message.payload.meta.debug;
+                    pluginCommercialTriggerDebugOverlay.appendChild(debugImage);
+                } else {
+                    pluginCommercialTriggerDebugOverlay.innerText = message.payload.meta.debug;
+                }
+                console.log(message.payload.meta.debug);
+            }
+
+        } else if (message.sender === "overlay-plugin") {
+
+            let messageToDisplay = "Blank message from overlay plugin.";
+            let messageDisplayTime = 2000;
+            let messageType;
+
+            if (message.connectionState !== "connected") {
+                messageToDisplay = message.connectionMessage;
+                if (message.connectionState === "started") {
+                    totalFailedOverlayWSConnectAttempts = 0;
+                    messageType = "info";
+                }
+                if (message.connectionState === "failed") {
+                    totalFailedOverlayWSConnectAttempts++;
+                    messageType = "error";
+                }
+            } else {
+                totalFailedOverlayWSConnectAttempts = 0;
+                if (message.payload?.meta?.display) {
+                    messageToDisplay = message.payload.meta.display;
+
+                    if (message.payload?.meta?.messageDisplayTime) {
+                        messageDisplayTime = message.payload.meta.messageDisplayTime;
+                    }
+
+                    if (message.payload?.meta?.messageType) {
+                        messageType = message.payload.meta.messageType;
+                    }
+                }
+            }
+
+            //stop bugging user after a few failures
+            if (totalFailedOverlayWSConnectAttempts <= 2) {
+                addMessageAlertToMainVideo(messageToDisplay, messageType, messageDisplayTime);
+            }
+
+            if (isDebugMode && message.payload?.meta?.debug) {
+                console.log(message.payload.meta.debug);
+            }
+
         }
 
     }
+
 });
 
 
@@ -2879,56 +3277,20 @@ function stopCommercialTimer() {
 }
 
 
-function prepFoClapMonitor() {
+function prepForClapMonitorContent() {
     initiateClapIndicator();
 
     if (isFirefox) {
         chrome.runtime.sendMessage({ action: "firefox-inject-clap-detector" });
     } else {
-        if (commercialDetectionMode === 'manual-clap') {
-            chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
-            window.addEventListener('beforeunload', stopViewingTab);
-        } else {
-            //TODO: figure out closing/pausing offscreen doc for other modes so I can use offscreen doc here, as well. Note: only one offscreen doc can be open at a time
-            if (inIFrame()) {
-                //request to open in top level frame to avoid any iframe sandbox permission restrictions, etc.
-                chrome.runtime.sendMessage({ action: "chrome-initiate-clap-detector-iframe" });
-            } else {
-                addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode);
-            }
-            
-        }
+        chrome.runtime.sendMessage({ action: "chrome-listen-microphone" });
+        window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
         launchClapPort();
     }
-}
 
-
-function addDoubleClapDetectorIFrame(clapSensitivity, isDebugMode) {
-    let insertLocation = document.getElementsByTagName('body')[0];
-
-    doubleClapDetectorIFrameContainer = document.createElement('div');
-    doubleClapDetectorIFrameContainer.id = 'lcb-double-clap-detector-iframe-container';
-    doubleClapDetectorIFrameContainer.style.display = "none";
-    insertLocation.appendChild(doubleClapDetectorIFrameContainer);
-
-    let iFrame = document.createElement('iframe');
-    iFrame.style.display = "none";
-    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap&sensitivity=') + clapSensitivity;
-    if (isDebugMode) {
-        iFrameSource += '&debug=true';
-    }
-    iFrame.src = iFrameSource;
-    iFrame.allow = "microphone;";
-
-    doubleClapDetectorIFrameContainer.appendChild(iFrame);
-}
-
-
-function closeDoubleClapDetectorIFrame() {
-    if (doubleClapDetectorIFrameContainer) {
-        doubleClapDetectorIFrameContainer.remove();
-    }
+    //note: according to my googling, if this is ignored if already added
+    document.addEventListener('fullscreenchange', fullscreenChanged);
 }
 
 
@@ -2940,7 +3302,14 @@ function launchClapPort() {
         
         setTimeout(() => {
             try {
-                clapPort.postMessage({ action: "connected" });
+                clapPort.postMessage({
+                    action: "connected",
+                    data: {
+                        scriptPurpose: 'listen-double-clap', //TODO: maybe I could add a global variabl for this in content.js?
+                        isDebugMode: isDebugMode,
+                        clapSensitivity: clapSensitivity,
+                    }
+                });
                 clapPortConnectionSuccess();
             } catch {
                 if (isDebugMode) console.log('clapPort not ready, trying again.');
@@ -2981,9 +3350,9 @@ function micPermissionSuccess(inUseMicName) {
 
 
 function micPermissionError() {
-    setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue.'); // microphone and two warning triangles
+    setClapIndicator('\uD83C\uDFA4 \u26A0 \u26A0 Microphone access issue. May need refresh after granting access.'); // microphone and two warning triangles
     if (commercialDetectionMode === 'manual-clap') {
-        stopViewingTab();
+        closeChromeOffscreenDoc(); //TODO: should I pause here instead?
     } else {
         if (inIFrame()) {
             chrome.runtime.sendMessage({ action: "chrome-close-clap-detector-iframe" });
@@ -3021,6 +3390,7 @@ function doubleClapCommercialModeToggle() {
     if (isDoubleClapOnlyReturnMode && !isCommercialState) {
         setClapIndicator('\uD83C\uDFA4 \uD83D\uDEAB \uD83D\uDEAB', 1000); //microphone and two prohibited sign emojis
     } else {
+        triggerOfLastCommercialStateChange = 'manual-clap';
         manualCommercialModeToggle();
     }
 }
@@ -3169,7 +3539,7 @@ function initiateClapIndicator() {
 
     doubleClapIndicator = document.createElement('div');
     doubleClapIndicator.innerText = 'Loading clap detector...';
-    
+
     if (commercialDetectionMode === 'manual-clap') {
         let additionalWrapper = document.createElement('div');
         additionalWrapper.style.display = 'flex';
@@ -3193,7 +3563,7 @@ function initiateClapIndicator() {
     if (isDebugMode) {
         clapDebugOverlay = document.createElement('div');
         clapDebugOverlay.classList = 'double-clap-debug-overlay';
-        
+
         waveCtx = createCanvas('wave', 280, 80, clapDebugOverlay);
         attackCtx = createCanvas('attack', 280, 50, clapDebugOverlay);
         hfCtx = createCanvas('hf', 280, 50, clapDebugOverlay);
@@ -3211,6 +3581,79 @@ function initiateClapIndicator() {
     }
 
     insertLocation.insertBefore(doubleClapIndicatorContainer, null);
+}
+
+
+//TODO: have this and initiateClapIndicator share a helper function
+function initiatePluginCommercialTriggerIndicator() {
+    //TODO: add check to make sure user is still in fullscreen mode
+    let insertLocation = document.fullscreenElement;
+    if (insertLocation.nodeName == 'HTML') {
+        insertLocation = document.getElementsByTagName('body')[0];
+    }
+
+    //TODO: move to own function
+    pluginCommercialTriggerIndicatorContainer = document.createElement('div');
+    pluginCommercialTriggerIndicatorContainer.classList = 'double-clap-indicator-container';
+
+    let otherOverlayLocations = [
+        { horizontal: overlayVideoLocationHorizontal, vertical: overlayVideoLocationVertical },
+    ];
+    if (isPiPMode && isLiveOverlayVideo) {
+        otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
+    }
+    if (commercialDetectionMode === 'auto-audio') {
+        //TODO: figure out timing on this so I can use real values here
+        //otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
+        otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
+    }
+    if (isDoubleClapMode) {
+        //TODO: figure out using real values here
+        otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
+    }
+    const pluginCommercialTriggerIndicatorContainerLocation = getFreeCorner(otherOverlayLocations);
+
+    setOverlaySizeAndLocation(pluginCommercialTriggerIndicatorContainer, false, false, pluginCommercialTriggerIndicatorContainerLocation.horizontal, pluginCommercialTriggerIndicatorContainerLocation.vertical, "10px");
+
+    pluginCommercialTriggerIndicator = document.createElement('div');
+    pluginCommercialTriggerIndicator.innerText = 'Loading plugin...';
+
+    if (commercialDetectionMode === 'manual-clap') {
+        let additionalWrapper = document.createElement('div');
+        additionalWrapper.style.display = 'flex';
+        additionalWrapper.style.gap = '5px';
+        pluginCommercialTriggerIndicatorContainer.appendChild(additionalWrapper);
+
+        additionalWrapper.appendChild(pluginCommercialTriggerIndicator);
+
+        logoBox = document.createElement('div');
+        logoBox.style.display = 'none';
+        if (pluginCommercialTriggerIndicatorContainerLocation.horizontal === 'right') {
+            additionalWrapper.insertBefore(logoBox, pluginCommercialTriggerIndicator);
+        } else {
+            additionalWrapper.appendChild(logoBox);
+        }
+        initialLogoBoxTextUpdate();
+    } else {
+        pluginCommercialTriggerIndicatorContainer.appendChild(pluginCommercialTriggerIndicator);
+    }
+
+    if (isDebugMode) {
+        pluginCommercialTriggerDebugOverlay = document.createElement('div');
+        pluginCommercialTriggerDebugOverlay.classList = 'double-clap-debug-overlay';
+
+        if (pluginCommercialTriggerIndicatorContainerLocation.horizontal === 'right') {
+            pluginCommercialTriggerIndicatorContainer.style.textAlign = 'right';
+        }
+
+        if (pluginCommercialTriggerIndicatorContainerLocation.vertical === 'bottom') {
+            pluginCommercialTriggerIndicatorContainer.insertBefore(pluginCommercialTriggerDebugOverlay, pluginCommercialTriggerIndicator);
+        } else {
+            pluginCommercialTriggerIndicatorContainer.appendChild(pluginCommercialTriggerDebugOverlay);
+        }
+    }
+
+    insertLocation.insertBefore(pluginCommercialTriggerIndicatorContainer, null);
 }
 
 

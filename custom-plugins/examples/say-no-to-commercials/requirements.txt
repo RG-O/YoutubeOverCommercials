@@ -1,0 +1,3 @@
+vosk
+websockets
+sounddevice

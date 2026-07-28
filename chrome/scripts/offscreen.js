@@ -10,7 +10,7 @@ var audioSource;
 var audioAnalyzer;
 var audioDataArray;
 var isAudioConnected = false;
-
+var pluginWSScript;
 
 chrome.runtime.onMessage.addListener(function (message) {
     if (message.target == 'offscreen') {
@@ -26,10 +26,11 @@ chrome.runtime.onMessage.addListener(function (message) {
         } else if (message.action == 'start-listening-microphone') {
             insertDoubleClapDetectorScript();
         } else if (message.action == 'stop-viewing') {
-            //not currently being used, as offscreen is just closed and reopened in order to pause and resume viewing tab
-            stopViewing();
+            stopViewing(true);
+        } else if (message.action == 'stop-listening') {
+            stopViewing(false);
         } else if (message.action == 'resume-viewing') {
-            //does not currently work, need to close and reopen offscreen in order to pause and resume viewing tab
+            //does not currently work, start-viewing works to resume
             startViewing(constraints);
         } else if (message.action == 'disconnect-tab-audio') {
             if (isAudioConnected) {
@@ -37,10 +38,13 @@ chrome.runtime.onMessage.addListener(function (message) {
                 isAudioConnected = false;
             }
         } else if (message.action == 'connect-tab-audio') {
+            //TODO: set pluginCommercialTriggerWSOpenedBy, pluginOverlayWSOpenedBy, and dualWSOpenedBy here so offscreen isn't closed after grabbing manifests
             if (!isAudioConnected) {
                 audioSource.connect(audioContext.destination);
                 isAudioConnected = true;
             }
+        } else if (message.action == 'connect-to-ws-plugins') {
+            launchPluginWSScript(message.payload);
         } else if (message.action == 'close') {
             window.close();
         }
@@ -109,6 +113,22 @@ function insertDoubleClapDetectorScript() {
         script.src = "/scripts/double-clap-detector.js";
         document.body.appendChild(script);
     }, 100);
+}
+
+
+function launchPluginWSScript(payload) {
+    //TODO: figure out if overlay or trigger or both
+    if (!pluginWSScript) {
+        pluginWSScript = document.createElement('script');
+        pluginWSScript.src = "/scripts/plugin-ws-client.js";
+        //pluginWSScript.type = "module";
+        document.body.appendChild(pluginWSScript);
+        pluginWSScript.addEventListener('load', function () {
+            ws.initWSPlugins(payload);
+        });
+    } else {
+        ws.initWSPlugins(payload);
+    }
 }
 
 
@@ -197,21 +217,24 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 });
 
 
-function stopViewing() {
+function stopViewing(isVideo) {
 
     if (viewing) {
 
         viewing = false;
 
-        //TODO: is pausing really necessary at all here?
-        videoElement.pause();
+        if (isVideo) {
+            //TODO: is pausing really necessary at all here?
+            videoElement.pause();
+            videoElement.remove();
+        }
 
         media.getTracks().forEach(function (track) {
             track.stop();
-            //track.enabled = false;
+            track.enabled = false;
         });
 
-        //media = undefined;
+        media = undefined;
 
     }
 

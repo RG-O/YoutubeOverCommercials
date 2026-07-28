@@ -234,14 +234,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             { frameId: 0 }, //note: always injecting in top frame to avoid any iframe sandbox permission restrictions
         );
 
-    } else if (message.action === "chrome-close-clap-detector-iframe") {
-
-        chrome.tabs.sendMessage(
-            sender.tab.id,
-            { action: "close_clap_detector_iframe" },
-            { frameId: 0 },
-        );
-
     } else if (message.action === "firefox-inject-clap-detector") {
 
         chrome.scripting.executeScript({
@@ -249,7 +241,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             files: ["scripts/double-clap-detector.js"]
         });
 
+    } else if (message.action === "firefox-connect-to-ws-plugins") {
+
+        chrome.scripting.executeScript({
+            target: { tabId: sender.tab.id, frameIds: [0] },
+            func: (payload) => {
+                window.__extensionConfig = { payload };
+            },
+            args: [ message.payload ],
+        })
+            .then(() => {
+                return chrome.scripting.executeScript({
+                    target: { tabId: sender.tab.id, frameIds: [0] }, //note: always injecting in top frame to avoid any iframe sandbox permission restrictions
+                    files: ["scripts/plugin-ws-client.js"],
+                });
+            })
+
+    } else if (message.action === "firefox-forward-message-to-plugins") {
+
+        chrome.tabs.sendMessage(
+            sender.tab.id,
+            {
+                target: "plugin-ws",
+                action: "send-message-to-plugins",
+                payload: message.payload,
+            },
+            { frameId: 0 },
+        );
+
     }
+
 });
 
 
@@ -266,17 +287,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         chromeListenToMicrophone();
 
+    } else if (message.action === "chrome-connect-to-ws-plugins") {
+
+        chromeConnectToPluginCommercialTriggerWS(message.payload);
+
     }
 });
 
 
 async function chromeViewTab(message, sender) {
 
-    await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: ['USER_MEDIA'],
-        justification: 'Recording tab in order to extract user selected pixel color'
-    });
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA'],
+        'Recording tab in order to extract user selected pixel color'
+    );
 
     const streamId = await chrome.tabCapture.getMediaStreamId({
         targetTabId: sender.tab.id
@@ -308,11 +333,11 @@ async function chromeViewTab(message, sender) {
 
 async function chromeListenToTab(message, sender) {
 
-    await chrome.offscreen.createDocument({
-        url: 'offscreen.html',
-        reasons: ['USER_MEDIA', 'AUDIO_PLAYBACK'],
-        justification: 'Recording tab in order to extract audio'
-    });
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA', 'AUDIO_PLAYBACK'],
+        'Recording tab in order to extract audio'
+    );
 
     const streamId = await chrome.tabCapture.getMediaStreamId({
         targetTabId: sender.tab.id
@@ -337,26 +362,58 @@ async function chromeListenToTab(message, sender) {
 }
 
 
-function chromeListenToMicrophone() {
-    chrome.storage.sync.get(['clapSensitivity', 'isDebugMode'], (result) => {
-        let clapSensitivity = result.clapSensitivity ?? 30;
-        let isDebugMode = result.isDebugMode ?? false;
+async function chromeListenToMicrophone() {
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA'],
+        'Listening to microphone to detect user claps'
+    );
 
-        let offscreenURL = 'offscreen.html?purpose=listen-double-clap&sensitivity=' + clapSensitivity;
-        if (isDebugMode) {
-            offscreenURL += '&debug=true';
-        }
-        chrome.offscreen.createDocument({
-            url: offscreenURL,
-            reasons: ['USER_MEDIA'],
-            justification: 'Listening to microphone to detect user claps'
-        }, function () {
-            chrome.runtime.sendMessage({
-                target: 'offscreen',
-                action: 'start-listening-microphone',
-            });
-        });
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'start-listening-microphone',
     });
+}
+
+
+async function chromeConnectToPluginCommercialTriggerWS(payload) {
+    await setupOffscreenDocument(
+        'offscreen.html',
+        ['USER_MEDIA'],
+        'Communicating with WebSockets to use extension with plugins',
+    );
+
+    chrome.runtime.sendMessage({
+        target: 'offscreen',
+        action: 'connect-to-ws-plugins',
+        payload: payload,
+    });
+}
+
+
+let creating; //note: it is fine in this case to have a global variable in service worker since it doesn't really need to last very long
+async function setupOffscreenDocument(path, reasons, justification) {
+    const offscreenUrl = chrome.runtime.getURL(path);
+    const existingContexts = await chrome.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+        documentUrls: [offscreenUrl]
+    });
+
+    if (existingContexts.length > 0) {
+        return;
+    }
+
+    if (creating) {
+        await creating;
+    } else {
+        creating = chrome.offscreen.createDocument({
+            url: path,
+            reasons: reasons,
+            justification: justification,
+        });
+        await creating;
+        creating = null;
+    }
 }
 
 
@@ -454,6 +511,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         });
 
+    } else if (message.action === "forward_message_from_plugin_ws") {
+
+        chrome.storage.sync.get(['mainVideoTabID'], (result) => {
+
+            if (result.mainVideoTabID) {
+
+                chrome.tabs.query({}, function (tabs) {
+
+                    let exists = tabs.some(tab => tab.id === result.mainVideoTabID);
+                    if (exists) {
+
+                        chrome.tabs.sendMessage(result.mainVideoTabID, {
+                            action: "message_from_plugin_ws",
+                            payload: message.payload,
+                            source: message.source,
+                            sender: message.sender,
+                            connectionState: message.connectionState,
+                            connectionMessage: message.connectionMessage,
+                        });
+
+                    }
+
+                });
+
+            }
+
+        });
+
     }
 });
 
@@ -504,4 +589,25 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     //return true to indicate that the response will be sent asynchronously
     return true;
     
+});
+
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "call_custom_plugin_overlay_api") {
+        fetch(`${message.pluginOverlayAPIURL}/custom-plugin-overlay-api`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(message.payload)
+        })
+            .then(response => response.json())
+            .then(pluginOverlayAPIResponse => {
+                sendResponse({ pluginOverlayAPIResponse: pluginOverlayAPIResponse, wasSuccessfulCall: true });
+            })
+            .catch(error => {
+                sendResponse({ wasSuccessfulCall: false, error: error });
+            });
+    }
+
+    //return true to indicate that the response will be sent asynchronously
+    return true;
 });

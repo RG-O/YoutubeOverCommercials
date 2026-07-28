@@ -22,6 +22,8 @@ let queryString = window.location.search;
 let urlParams = new URLSearchParams(queryString);
 let pageOpenReason = urlParams.get('page-open-reason') ?? 'unknown';
 
+var clapSensitivity;
+
 document.addEventListener('DOMContentLoaded', function () {
     getStartedButton = document.getElementById("get-started-button");
     getStartedButton.onclick = function () {
@@ -101,7 +103,7 @@ function prepFoClapMonitor() {
         getStartedButton.disabled = true;
         document.getElementById('loading-spinner').style.display = 'block';
 
-        let clapSensitivity = result.clapSensitivity ?? 40;
+        clapSensitivity = result.clapSensitivity ?? 40;
         form.clapSensitivityRange.value = clapSensitivity;
         form.clapSensitivity.value = clapSensitivity;
         addDoubleClapDetectorIFrame(clapSensitivity);
@@ -120,7 +122,7 @@ function addDoubleClapDetectorIFrame(clapSensitivity) {
     let iFrame = document.createElement('iframe');
     //iFrame.style.visibility = "hidden";
     iFrame.style.display = "none";
-    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap-configure&debug=true&sensitivity=') + clapSensitivity;
+    let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html?purpose=listen-double-clap-configure'); //warning: still need purpose here for instructions.js
     iFrame.src = iFrameSource;
     iFrame.allow = "microphone;";
 
@@ -141,7 +143,14 @@ function launchClapPort() {
         //TODO: can I estiblish the port from the other file since I always know that comes second?
         clapPort = chrome.runtime.connect({ name: "clap-detector" });
 
-        clapPort.postMessage({ action: "connected" });
+        clapPort.postMessage({
+            action: "connected",
+            data: {
+                scriptPurpose: 'listen-double-clap-configure', //note: not established in content.js so do not use for firefox except for confirguration page
+                isDebugMode: true,
+                clapSensitivity: clapSensitivity,
+            }
+        });
 
         clapPort.onMessage.addListener(message => {
             if (message.action === "update-clap-indicator") {
