@@ -137,6 +137,10 @@ All commercial detection is performed locally on your computer.
 
 # Changelog
 
+## Version 5.0
+
+- Add ability to connect to custom plugins
+
 ## Version 4.2
 
 - Fixed YouTube 153 error occurring on some sites
