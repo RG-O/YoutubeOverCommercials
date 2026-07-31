@@ -8,7 +8,7 @@ This plugin can be used to automatically play anything with VLC(TM) over top of 
 
 1. Have the newest version of VLC installed on your PC.
 1. Have Live Commercial Blocker extension installed and enabled on your browser. 
-([installation instructions](../README.md#installation))
+([installation instructions](/README.md#installation))
 1. Have Python 3.13+ installed. ([Python For Beginners](https://www.python.org/about/gettingstarted/))
 
 ### Setup
