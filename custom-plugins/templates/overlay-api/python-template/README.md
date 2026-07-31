@@ -8,7 +8,7 @@ extension calls when a commercial trigger and other status updates occur.
 ### Prerequisites
 
 1. Have Live Commercial Blocker extension installed and enabled on your browser. 
-([installation instructions](../README.md#installation))
+([installation instructions](/README.md#installation))
 1. Have Python 3.13+ installed. ([Python For Beginners](https://www.python.org/about/gettingstarted/))
 
 ### Setup

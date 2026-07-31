@@ -8,7 +8,7 @@ over top of commercials.
 ### Prerequisites
 
 1. Have Live Commercial Blocker extension installed and enabled on your browser. 
-([installation instructions](../README.md#installation))
+([installation instructions](/#installation))
 1. Have Python 3.13+ installed. ([Python For Beginners](https://www.python.org/about/gettingstarted/))
 
 ### Setup
@@ -32,5 +32,5 @@ from [overlay-any-window.py](overlay-any-window.py) into your own local python f
 
 ## Help
 
-If you need any help feel free to reach out on the [extension discord](../#discord) 
+If you need any help feel free to reach out on the [extension discord](/#discord) 
 or report any issues or enhancement requests on the [issues tab](https://github.com/RG-O/YoutubeOverCommercials/issues)

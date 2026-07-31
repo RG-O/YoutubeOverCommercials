@@ -8,7 +8,7 @@ extension connects to and listens to for triggers when to switch to or from comm
 ### Prerequisites
 
 1. Have Live Commercial Blocker extension installed and enabled on your browser. 
-([installation instructions](../README.md#installation))
+([installation instructions](/#installation))
 1. Have Python 3.13+ installed. ([Python For Beginners](https://www.python.org/about/gettingstarted/))
 
 ### Setup

@@ -33,7 +33,7 @@ from [vlc-over-commercials.py](vlc-over-commercials.py) into your own local pyth
 
 ## Help
 
-If you need any help feel free to reach out on the [extension discord](../#discord) 
+If you need any help feel free to reach out on the [extension discord](/#discord) 
 or report any issues or enhancement requests on the [issues tab](https://github.com/RG-O/YoutubeOverCommercials/issues)
 
 ## Disclaimers and Licensing
