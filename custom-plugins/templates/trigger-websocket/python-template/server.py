@@ -20,8 +20,12 @@ async def handle_client(websocket):
 
     try:
         async for message in websocket:
-            msg = json.loads(message)
-            await handle_message(websocket, msg)
+            if isinstance(message, bytes):
+                await handle_screenshot(websocket, message)
+            
+            else:
+                msg = json.loads(message)
+                await handle_message(websocket, msg)
 
     except websockets.exceptions.ConnectionClosed:
         pass
@@ -50,7 +54,10 @@ async def handle_message(ws, msg):
         # Send initial message
         print("Returning connected status")
         await send_status(ws, PLUGIN_NAME + " connected!", PLUGIN_NAME + " ready")
-
+        
+        #print("Requesting extension starts sending screenshots")
+        #await request_screenshots(ws) # Call if plugin relies on analyzing screenshots of user's browser
+        
         # Start detection loop
         asyncio.create_task(demo_loop(ws))
 
@@ -67,7 +74,10 @@ async def handle_message(ws, msg):
         is_fullscreen = msg["data"]["isFullscreen"]
 
         print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
-
+        
+async def handle_screenshot(ws, screenshot_bytes):
+    print(f"Received screenshot as JPEG: {len(screenshot_bytes)} bytes")
+    
 async def demo_loop(ws):
     is_commercial = False
 
@@ -133,6 +143,31 @@ async def send_status(ws, display, debug):
         }))
     except websockets.exceptions.ConnectionClosed:
         print("send_status send stopped: client disconnected")
+        
+async def request_screenshots(ws):
+    try:
+        await ws.send(json.dumps({
+            "type": "request_screenshots",
+            "timestamp": time.time(),
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
+            "data": {
+                "shouldSendScreenshots": True, # Set to false if need to stop for whatever reason later
+                "frequencyMilliseconds": 1000, # Ask extension to take and send screenshot every X seconds
+                "maxDimensionsPixels": {
+                    "height": 480, 
+                    "width": 854,
+                }, # Will shrink screenshot size while keeping aspect ratio. Do not send to get native size.
+                "trimOptionsPercentages": {
+                    "top": 0, 
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0,
+                }, # Will keep portion of screen out of screenshot. Do not send or leave at zeros to not trim.
+            },
+            "meta": {},
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
     try:
@@ -147,7 +182,7 @@ async def send_manifest(ws):
                 "description": "My trigger plugin description.", # Optional
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional
-                "capabilities": ["trigger"],
+                "capabilities": ["trigger"], # Add "screenshots" for permission to receive screenshots #TODO get this permission security working on extension side
                 "preferences": [
                     {
                         "key": "text-field-example",

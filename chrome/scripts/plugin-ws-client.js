@@ -62,7 +62,11 @@ class WSClient {
     send(payload) {
         if (!this.connected) return;
 
-        this.ws.send(JSON.stringify(payload));
+        if (!(payload instanceof Blob)) {
+            payload = JSON.stringify(payload);
+        }
+
+        this.ws.send(payload);
     }
 
     disconnect() {
@@ -127,7 +131,7 @@ const ws = {
             ws.sendToTrigger(payload);
         }
 
-        if (ws.isPluginOverlayWS && !ws.isDualWS && ws.hasPluginOverlayWSConnected) {
+        if (ws.isPluginOverlayWS && !ws.isDualWS && ws.hasPluginOverlayWSConnected && !(payload instanceof Blob)) {
             ws.sendToOverlay(payload);
         }
 

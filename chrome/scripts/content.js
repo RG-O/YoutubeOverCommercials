@@ -17,6 +17,7 @@ var matchCount = 0;
 var cooldownCountRemaining = 10; //set to 10 for an initial cooldown so video won't display right away
 var utilityCooldownTime = 10;
 var monitorIntervalID;
+var pluginScreenshotIntervalID;
 var originalPixelColor;
 var windowDimensions;
 var logoBoxText;
@@ -43,6 +44,7 @@ var windowWidth;
 var windowHeight;
 var selectedPixelGridLocation;
 var triggerOfLastCommercialStateChange = 'none';
+//Plugin variables
 var pluginCommercialTriggerIndicatorContainer;
 var pluginCommercialTriggerIndicator;
 var pluginCommercialTriggerDebugOverlay;
@@ -50,6 +52,7 @@ var totalFailedCommercialTriggerWSConnectAttempts = 0;
 var totalFailedOverlayWSConnectAttempts = 0;
 var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
 var havePluginsBeenInitiated = false;
+var shouldSendScreenshotsToTriggerPlugin = false;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -574,6 +577,21 @@ function sendMessageToPlugins(type) {
             }
         }
     }
+}
+
+
+function sendScreenshotsToTriggerPluginLoop(payloadData) {
+
+    pluginScreenshotIntervalID = setInterval(() => {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "capture-screenshot-plugin",
+            options: payloadData,
+        });
+
+    }, payloadData.frequencyMilliseconds);
+
 }
 
 
@@ -2703,6 +2721,8 @@ function pauseAutoMode(shouldDisplayMessage) {
     } else {
         pauseListeningToTab();
     }
+
+    //TODO: add something for plugin screenshots
     
     if (shouldDisplayMessage) {
         addMessageAlertToMainVideo("Live Commercial Blocker extension paused. Set video back to fullscreen to resume. This message will disappear shortly.", "info", 9000);
@@ -2723,6 +2743,7 @@ function resumeAutoMode() {
             } else {
                 pixelColorMatchMonitor(originalPixelColor, selectedPixel);
             }
+            //TODO: add new if for plugin screenshots
         }, 1000);
     } else if (commercialDetectionMode === 'auto-audio') {
         startListeningToTab();
@@ -3071,6 +3092,25 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     }
                 } else {
                     console.log("Error: Message type of auto_commercial_blocked_state_change sent without data.isAutoCommercialBlocked");
+                }
+            } else if (message.payload.type === "request_screenshots") {
+                shouldSendScreenshotsToTriggerPlugin = message.payload.data.shouldSendScreenshots ?? false;
+                if (shouldSendScreenshotsToTriggerPlugin) {
+                    if (document.fullscreenElement) {
+                        windowWidth = window.innerWidth;
+                        windowHeight = window.innerHeight;
+                        windowDimensions = { x: windowWidth, y: windowHeight };
+                        startViewingTab(windowDimensions);
+                        //give a sec for tab viewing to start
+                        setTimeout(() => {
+                            sendScreenshotsToTriggerPluginLoop(message.payload.data);
+                        }, 1000);
+                    } else {
+                        addMessageAlertToMainVideo("Plugin requested screenshots but video must be in fullscreen for screenshots to send.");
+                        //TODO: add wait for fullscreen here
+                    }
+                } else {
+                    //TODO: stop sending screenshots
                 }
             }
 

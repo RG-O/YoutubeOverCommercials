@@ -174,6 +174,44 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             sendResponse({ audioLevel: audioLevel });
 
+        } else if (message.action == 'capture-screenshot-plugin') {
+
+            if (viewing) {
+                const MAX_WIDTH = message.options.maxDimensionsPixels.width; //TODO add fallbacks
+                const MAX_HEIGHT = message.options.maxDimensionsPixels.height; //TODO add fallbacks
+
+                const videoWidth = videoElement.videoWidth;
+                const videoHeight = videoElement.videoHeight;
+
+                const scale = Math.min(
+                    MAX_WIDTH / videoWidth,
+                    MAX_HEIGHT / videoHeight,
+                    1 // Prevent upscaling smaller videos
+                );
+
+                const screenshotWidth = Math.round(videoWidth * scale);
+                const screenshotHeight = Math.round(videoHeight * scale);
+
+                if (!canvas) {
+                    //TODO reset canvas if size change?
+                    createCanvas(screenshotWidth, screenshotHeight);
+                }
+
+                ctx.drawImage(videoElement, 0, 0, screenshotWidth, screenshotHeight); //TODO: add trim options
+
+                canvas.toBlob((blob) => {
+                    if (blob && pluginWSScript) {
+                        ws.sendMessageToWSPlugins(blob);
+                    }
+                }, "image/jpeg", 0.8);
+
+            } else {
+
+                //startViewing(constraints);
+                //TODO: something
+
+            }
+
         }
     }
 });
