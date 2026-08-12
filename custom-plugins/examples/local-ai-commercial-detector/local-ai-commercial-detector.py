@@ -1,5 +1,6 @@
 import asyncio
 import json
+import subprocess
 import time
 from collections import deque
 
@@ -10,15 +11,14 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.2.0"
+PLUGIN_VERSION = "1.3.0"
 
 PORT = 64145
 
 # Ollama settings.
 # Install the Python package with: pip install ollama
-# Make sure the Ollama desktop/service is running and this vision model is installed.
-#OLLAMA_MODEL = "gemma3:4b"
-OLLAMA_MODEL = "qwen2.5vl:7b"
+# Make sure the Ollama desktop/service is running.
+DEFAULT_OLLAMA_MODEL = "qwen2.5vl:7b"
 OLLAMA_HOST = "http://127.0.0.1:11434"
 
 # Default plugin preference values.
@@ -29,6 +29,17 @@ DEFAULT_SCREENSHOT_BATCH_SIZE = 3
 DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS = 1500
 DEFAULT_SCREENSHOT_MAX_WIDTH = 500
 DEFAULT_SCREENSHOT_MAX_HEIGHT = 300
+
+DEFAULT_COMMERCIAL_PROMPT = (
+    "You are examining consecutive screenshots from a TV broadcast. "
+    "Determine if all these screenshots are showing advertisements and/or commercials. "
+)
+
+DEFAULT_NON_COMMERCIAL_PROMPT = (
+    "You are examining consecutive screenshots from a TV broadcast. "
+    "Do all of these screenshots appear to NOT be part of a commercial "
+    "and instead seem to be part of regular programming? "
+)
 
 clients = set()
 
@@ -50,6 +61,10 @@ client_last_llm_call_times = {}
 client_analysis_tasks = {}
 client_screenshot_versions = {}
 client_last_analyzed_screenshot_versions = {}
+client_ollama_models = {}
+client_commercial_prompts = {}
+client_non_commercial_prompts = {}
+client_gpu_checked = {}
 
 
 async def handle_client(websocket):
@@ -70,6 +85,10 @@ async def handle_client(websocket):
     client_analysis_tasks[websocket] = None
     client_screenshot_versions[websocket] = 0
     client_last_analyzed_screenshot_versions[websocket] = -1
+    client_ollama_models[websocket] = DEFAULT_OLLAMA_MODEL
+    client_commercial_prompts[websocket] = DEFAULT_COMMERCIAL_PROMPT
+    client_non_commercial_prompts[websocket] = DEFAULT_NON_COMMERCIAL_PROMPT
+    client_gpu_checked[websocket] = False
 
     try:
         async for message in websocket:
@@ -101,6 +120,10 @@ async def handle_client(websocket):
         client_analysis_tasks.pop(websocket, None)
         client_screenshot_versions.pop(websocket, None)
         client_last_analyzed_screenshot_versions.pop(websocket, None)
+        client_ollama_models.pop(websocket, None)
+        client_commercial_prompts.pop(websocket, None)
+        client_non_commercial_prompts.pop(websocket, None)
+        client_gpu_checked.pop(websocket, None)
 
         print("Client disconnected")
 
@@ -141,6 +164,21 @@ async def handle_message(ws, msg):
             "debug-mode",
             DEFAULT_DEBUG_MODE,
         )
+        ollama_model = get_string_preference(
+            custom_trigger_plugin_preferences,
+            "ollama-model",
+            DEFAULT_OLLAMA_MODEL,
+        )
+        commercial_prompt = get_string_preference(
+            custom_trigger_plugin_preferences,
+            "commercial-prompt",
+            DEFAULT_COMMERCIAL_PROMPT,
+        )
+        non_commercial_prompt = get_string_preference(
+            custom_trigger_plugin_preferences,
+            "non-commercial-prompt",
+            DEFAULT_NON_COMMERCIAL_PROMPT,
+        )
         screenshot_batch_size = get_int_preference(
             custom_trigger_plugin_preferences,
             "screenshot-batch-size",
@@ -169,6 +207,10 @@ async def handle_message(ws, msg):
         client_llm_call_frequency_seconds[ws] = llm_frequency
         client_consecutive_yes_required[ws] = consecutive_yes_required
         client_debug_modes[ws] = debug_mode
+        client_ollama_models[ws] = ollama_model
+        client_commercial_prompts[ws] = commercial_prompt
+        client_non_commercial_prompts[ws] = non_commercial_prompt
+        client_gpu_checked[ws] = False
         client_screenshot_batch_sizes[ws] = screenshot_batch_size
         client_screenshot_frequency_milliseconds[ws] = screenshot_frequency_milliseconds
         client_screenshot_max_widths[ws] = screenshot_max_width
@@ -188,6 +230,9 @@ async def handle_message(ws, msg):
         print(f"LLM call frequency: every {llm_frequency:g} second(s) minimum")
         print(f"Consecutive YES responses required: {consecutive_yes_required}")
         print(f"Debug mode: {debug_mode}")
+        print(f"Ollama model: {ollama_model}")
+        print(f"Commercial prompt: {commercial_prompt}")
+        print(f"Non-commercial prompt: {non_commercial_prompt}")
         print(f"Screenshot batch size: {screenshot_batch_size}")
         print(f"Screenshot frequency: {screenshot_frequency_milliseconds} ms")
         print(f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}")
@@ -198,7 +243,8 @@ async def handle_message(ws, msg):
             (
                 f"{PLUGIN_NAME} ready. LLM frequency={llm_frequency:g}s, "
                 f"consecutive YES required={consecutive_yes_required}, "
-                f"debug mode={debug_mode}, batch size={screenshot_batch_size}, "
+                f"debug mode={debug_mode}, model={ollama_model}, "
+                f"batch size={screenshot_batch_size}, "
                 f"screenshot frequency={screenshot_frequency_milliseconds}ms, "
                 f"max dimensions={screenshot_max_width}x{screenshot_max_height}"
             ),
@@ -272,6 +318,17 @@ def get_bool_preference(preferences, key, default):
     return bool(value)
 
 
+def get_string_preference(preferences, key, default):
+    """Read a text preference safely and fall back to its default."""
+    value = preferences.get(key, default)
+
+    if value is None:
+        return default
+
+    value = str(value).strip()
+    return value if value else default
+
+
 async def handle_screenshot(ws, screenshot_bytes):
     print(f"Received screenshot as JPEG: {len(screenshot_bytes)} bytes")
 
@@ -343,11 +400,26 @@ async def analyze_screenshot_batch(ws, screenshots, state_at_start):
         )
 
         debug_mode = client_debug_modes.get(ws, DEFAULT_DEBUG_MODE)
+        selected_model = client_ollama_models.get(ws, DEFAULT_OLLAMA_MODEL)
+        commercial_prompt = client_commercial_prompts.get(ws, DEFAULT_COMMERCIAL_PROMPT)
+        non_commercial_prompt = client_non_commercial_prompts.get(
+            ws,
+            DEFAULT_NON_COMMERCIAL_PROMPT,
+        )
+
         transition_detected, llm_response = await ask_ollama_about_transition(
             screenshots,
             state_at_start,
             debug_mode,
+            selected_model,
+            commercial_prompt,
+            non_commercial_prompt,
         )
+
+        # Check the Ollama CLI once after the model has successfully loaded.
+        # This gives the same CPU/GPU split shown by `ollama ps`.
+        if not client_gpu_checked.get(ws, False):
+            client_gpu_checked[ws] = await warn_if_not_full_gpu(ws, selected_model)
 
         print(f"Ollama response: {llm_response!r}")
 
@@ -449,40 +521,18 @@ async def analyze_screenshot_batch(ws, screenshots, state_at_start):
             await maybe_start_analysis(ws)
 
 
-async def ask_ollama_about_transition(screenshots, currently_commercial, debug_mode):
+async def ask_ollama_about_transition(
+    screenshots,
+    currently_commercial,
+    debug_mode,
+    model,
+    commercial_prompt,
+    non_commercial_prompt,
+):
     if currently_commercial:
-        # question = (
-        #     f"You are examining {len(screenshots)} consecutive screenshots from a TV broadcast. "
-        #     "They are ordered from oldest to newest. The broadcast is currently "
-        #     "considered to be in a commercial break. Determine whether these "
-        #     "screenshots indicate that the commercial break has ended OR is "
-        #     "transitioning back into the normal program. Consider the sequence "
-        #     "across all images, not just one image. Do not say YES merely "
-        #     "because one advertisement changes to another advertisement. "
-        # )
-        question = (
-            f"You are examining {len(screenshots)} consecutive screenshots from a TV broadcast. "
-            "Do all of "
-            "these screenshots appear to NOT be part of a commercial "
-            "and instead seem to be part of regular programming? "
-            #"Small text promotions appearing within seemingly regular programming do not count as a commercial. " #TODO: get rid of this? add this last not after a minute or so of commercial?
-        )
+        question = non_commercial_prompt.rstrip() + " "
     else:
-        # question = (
-        #     f"You are examining {len(screenshots)} consecutive screenshots from a TV broadcast. "
-        #     "They are ordered from oldest to newest. The broadcast is currently "
-        #     "considered to be normal programming. Determine whether these "
-        #     "screenshots indicate that the broadcast is now in a commercial "
-        #     "break OR is transitioning into a commercial break. Consider the "
-        #     "sequence across all images, not just one image. Normal program "
-        #     "scene changes, sports replays, scoreboards, studio segments, and "
-        #     "broadcast graphics should not by themselves be treated as a commercial. "
-        # )
-        question = (
-            f"You are examining {len(screenshots)} consecutive screenshots from a TV broadcast. "
-            "Determine if "
-            "all these screenshots are showing advertisements and/or commercials. "
-        )
+        question = commercial_prompt.rstrip() + " "
 
     if debug_mode:
         question += (
@@ -493,7 +543,7 @@ async def ask_ollama_about_transition(screenshots, currently_commercial, debug_m
         question += "Respond with exactly YES or NO and nothing else."
 
     response = await ollama_client.chat(
-        model=OLLAMA_MODEL,
+        model=model,
         messages=[
             {
                 "role": "user",
@@ -538,6 +588,75 @@ def parse_yes_no_response(response, debug_mode=False):
     raise ValueError(
         f"Expected Ollama to return {expected}, got: {response!r}"
     )
+
+
+def get_ollama_processor_status():
+    """Return the text output from `ollama ps`."""
+    try:
+        startupinfo = None
+        creationflags = 0
+
+        # Avoid flashing a console window on Windows when this script is packaged.
+        if hasattr(subprocess, "STARTUPINFO"):
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+        result = subprocess.run(
+            ["ollama", "ps"],
+            capture_output=True,
+            text=True,
+            check=True,
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+        )
+        return result.stdout.strip()
+
+    except Exception as exc:
+        print(f"Could not run ollama ps: {exc}")
+        return ""
+
+
+def get_ollama_model_processor_line(status, model):
+    """Find the row for a model in `ollama ps` output."""
+    model_lower = model.lower()
+
+    for line in status.splitlines():
+        if model_lower in line.lower():
+            return line.strip()
+
+    return ""
+
+
+async def warn_if_not_full_gpu(ws, model):
+    """Warn the extension if Ollama reports any CPU offload for the model."""
+    status = await asyncio.to_thread(get_ollama_processor_status)
+
+    if not status:
+        print("Could not determine Ollama processor status")
+        return False
+
+    model_line = get_ollama_model_processor_line(status, model)
+
+    if not model_line:
+        print(f"Could not find {model!r} in ollama ps output")
+        print(status)
+        return False
+
+    print(f"Ollama processor status: {model_line}")
+
+    if "100% GPU" not in model_line.upper():
+        await send_status(
+            ws,
+            "Warning: Ollama is not fully using the GPU.",
+            (
+                f"Ollama is using CPU offload for {model}. Performance may be reduced. "
+                f"Restarting Ollama may allow the model to load fully into VRAM.\n"
+                f"{model_line}"
+            ),
+        )
+
+    return True
 
 
 async def send_commercial_state_change(ws, is_commercial, display, debug):
@@ -648,7 +767,45 @@ async def request_screenshots(ws):
         print("request_screenshots stopped: client disconnected")
 
 
+async def get_local_ollama_models():
+    """Return the names of models currently installed in the local Ollama library."""
+    try:
+        response = await ollama_client.list()
+        models = []
+
+        for model in response.models:
+            model_name = getattr(model, "model", None) or getattr(model, "name", None)
+            if model_name:
+                models.append(str(model_name))
+
+        return sorted(set(models), key=str.lower)
+
+    except Exception as exc:
+        print(f"Could not get local Ollama models: {exc}")
+        return []
+
+
 async def send_manifest(ws):
+    local_models = await get_local_ollama_models()
+    model_options = [
+        {"label": model_name, "value": model_name}
+        for model_name in local_models
+    ]
+
+    # The manifest schema expects at least one option. If Ollama is unavailable
+    # or no models are installed, keep the preferred default visible so the
+    # manifest can still render and the user gets a useful model name to install.
+    if not model_options:
+        model_options = [
+            {"label": DEFAULT_OLLAMA_MODEL, "value": DEFAULT_OLLAMA_MODEL}
+        ]
+
+    model_default = (
+        DEFAULT_OLLAMA_MODEL
+        if DEFAULT_OLLAMA_MODEL in local_models
+        else model_options[0]["value"]
+    )
+
     try:
         await ws.send(
             json.dumps(
@@ -671,6 +828,37 @@ async def send_manifest(ws):
                             "screenshots",
                         ],
                         "preferences": [
+                            {
+                                "key": "ollama-model",
+                                "label": "Ollama Model",
+                                "description": (
+                                    "Local Ollama model used for screenshot analysis. "
+                                    "Only models currently installed in Ollama are listed."
+                                ),
+                                "type": "select",
+                                "options": model_options,
+                                "default": model_default,
+                            },
+                            {
+                                "key": "commercial-prompt",
+                                "label": "Commercial Prompt",
+                                "description": (
+                                    "Prompt used while regular programming is active to "
+                                    "decide whether the screenshots indicate a commercial."
+                                ),
+                                "type": "textarea",
+                                "default": DEFAULT_COMMERCIAL_PROMPT,
+                            },
+                            {
+                                "key": "non-commercial-prompt",
+                                "label": "Non-Commercial Prompt",
+                                "description": (
+                                    "Prompt used while a commercial is active to decide "
+                                    "whether regular programming has returned."
+                                ),
+                                "type": "textarea",
+                                "default": DEFAULT_NON_COMMERCIAL_PROMPT,
+                            },
                             {
                                 "key": "llm-call-frequency-seconds",
                                 "label": "LLM Call Frequency (Seconds)",
@@ -753,9 +941,6 @@ async def send_manifest(ws):
                                 "default": DEFAULT_SCREENSHOT_MAX_HEIGHT,
                                 "min": 1,
                             },
-                            #TODO add prompts as preferences
-                            #TODO separate commercial vs non commercial settings
-                            #TODO grab downloaded models from ollama and add them as dropdown, default to qwen2.5vl:7b
                         ],
                     },
                     "meta": {
@@ -773,7 +958,7 @@ async def main():
     async with websockets.serve(handle_client, "localhost", PORT):
         print(f"Server running on ws://localhost:{PORT}")
         print(f"Ollama host: {OLLAMA_HOST}")
-        print(f"Ollama model: {OLLAMA_MODEL}")
+        print(f"Default Ollama model: {DEFAULT_OLLAMA_MODEL}")
         await asyncio.Future()
 
 

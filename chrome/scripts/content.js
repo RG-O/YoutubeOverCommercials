@@ -17,7 +17,6 @@ var matchCount = 0;
 var cooldownCountRemaining = 10; //set to 10 for an initial cooldown so video won't display right away
 var utilityCooldownTime = 10;
 var monitorIntervalID;
-var pluginScreenshotIntervalID;
 var originalPixelColor;
 var windowDimensions;
 var logoBoxText;
@@ -52,7 +51,9 @@ var totalFailedCommercialTriggerWSConnectAttempts = 0;
 var totalFailedOverlayWSConnectAttempts = 0;
 var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
 var havePluginsBeenInitiated = false;
+var pluginScreenshotOptions;
 var shouldSendScreenshotsToTriggerPlugin = false;
+var pluginScreenshotIntervalID;
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -580,17 +581,17 @@ function sendMessageToPlugins(type) {
 }
 
 
-function sendScreenshotsToTriggerPluginLoop(payloadData) {
+function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
 
     pluginScreenshotIntervalID = setInterval(() => {
 
         chrome.runtime.sendMessage({
             target: "offscreen",
             action: "capture-screenshot-plugin",
-            options: payloadData,
+            options: pluginScreenshotOptions,
         });
 
-    }, payloadData.frequencyMilliseconds);
+    }, pluginScreenshotOptions.frequencyMilliseconds);
 
 }
 
@@ -2649,6 +2650,8 @@ function fullscreenChanged() {
         } else if (commercialDetectionMode == 'auto-audio') {
             audioLevelIndicatorContainer.style.display = 'none';
             pauseAutoMode(true);
+        } else if (shouldSendScreenshotsToTriggerPlugin) {
+            pauseAutoMode(true);
         }
 
         if (isCommercialState) {
@@ -2663,7 +2666,6 @@ function fullscreenChanged() {
 
         if (isPiPMode && isLiveOverlayVideo && !isCommercialState) {
             if (overlayVideo) hideOverlayVideo();
-
         }
 
         //TODO: should I be doing it this way?
@@ -2687,6 +2689,8 @@ function fullscreenChanged() {
         } else if (commercialDetectionMode == 'auto-audio') {
             resumeAutoMode();
             if (isDebugMode) { audioLevelIndicatorContainer.style.display = 'flex'; }
+        } else if (shouldSendScreenshotsToTriggerPlugin) {
+            resumeAutoMode();
         } //else do not run resumeAutoMode
 
         if ((overlayVideoType == 'spotify' && !isCommercialState) || overlayVideoType == 'other-tabs') {
@@ -2713,7 +2717,11 @@ function pauseAutoMode(shouldDisplayMessage) {
     if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
         isAdvancedLogoMonitorPaused = true;
     } else {
-        clearInterval(monitorIntervalID);
+        clearInterval(monitorIntervalID); //TODO: is it fine to run this even if not set?
+    }
+
+    if (shouldSendScreenshotsToTriggerPlugin) {
+        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
     }
 
     if (commercialDetectionMode !== 'auto-audio') {
@@ -2721,8 +2729,6 @@ function pauseAutoMode(shouldDisplayMessage) {
     } else {
         pauseListeningToTab();
     }
-
-    //TODO: add something for plugin screenshots
     
     if (shouldDisplayMessage) {
         addMessageAlertToMainVideo("Live Commercial Blocker extension paused. Set video back to fullscreen to resume. This message will disappear shortly.", "info", 9000);
@@ -2732,7 +2738,7 @@ function pauseAutoMode(shouldDisplayMessage) {
 
 function resumeAutoMode() {
 
-    if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
+    if (commercialDetectionMode.indexOf('auto-pixel') >= 0 || shouldSendScreenshotsToTriggerPlugin) {
         startViewingTab(windowDimensions);
         //give a sec for tab viewing to start
         setTimeout(() => {
@@ -2740,10 +2746,13 @@ function resumeAutoMode() {
             if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
                 isAdvancedLogoMonitorPaused = false;
                 advancedLogoMonitor(advancedLogoSelectionTopLeftLocation, advancedLogoSelectionDimensions);
-            } else {
+            } else if (commercialDetectionMode.indexOf('auto-pixel') >= 0) { //any other form of auto-pixel
                 pixelColorMatchMonitor(originalPixelColor, selectedPixel);
             }
-            //TODO: add new if for plugin screenshots
+
+            if (shouldSendScreenshotsToTriggerPlugin) {
+                sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
+            }
         }, 1000);
     } else if (commercialDetectionMode === 'auto-audio') {
         startListeningToTab();
@@ -2832,6 +2841,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         addMessageAlertToMainVideo("Success! You may now resume fullscreen and enjoy :)", "info", 0);
 
         document.addEventListener('fullscreenchange', () => {
+            clearMainVideoMessages();
             pluginInitiation();
         }, { once: true });
 
@@ -3094,7 +3104,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     console.log("Error: Message type of auto_commercial_blocked_state_change sent without data.isAutoCommercialBlocked");
                 }
             } else if (message.payload.type === "request_screenshots") {
-                shouldSendScreenshotsToTriggerPlugin = message.payload.data.shouldSendScreenshots ?? false;
+                pluginScreenshotOptions = message.payload.data ?? {};
+                shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
                 if (shouldSendScreenshotsToTriggerPlugin) {
                     if (document.fullscreenElement) {
                         windowWidth = window.innerWidth;
@@ -3103,14 +3114,18 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         startViewingTab(windowDimensions);
                         //give a sec for tab viewing to start
                         setTimeout(() => {
-                            sendScreenshotsToTriggerPluginLoop(message.payload.data);
+                            sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
                         }, 1000);
                     } else {
                         addMessageAlertToMainVideo("Plugin requested screenshots but video must be in fullscreen for screenshots to send.");
                         //TODO: add wait for fullscreen here
                     }
                 } else {
-                    //TODO: stop sending screenshots
+                    //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
+                    clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                    if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                        pauseViewingTab();
+                    }
                 }
             }
 
