@@ -3,6 +3,9 @@ var constraints;
 var media;
 var videoElement;
 var canvas;
+var pluginCanvas;
+var previousPluginScreenshotMaxWidth = 0;
+var previousPluginScreenshotMaxHeight = 0;
 var ctx;
 var viewing = false;
 var audioContext;
@@ -77,6 +80,14 @@ function createCanvas(width, height) {
     //canvas.width = 30; //debug-high
     //canvas.height = 30; //debug-high
     ctx = canvas.getContext('2d', { willReadFrequently: true });
+}
+
+
+function createPluginCanvas(width, height) {
+    pluginCanvas = document.createElement('canvas');
+    pluginCanvas.width = width;
+    pluginCanvas.height = height;
+    ctx = pluginCanvas.getContext('2d', { willReadFrequently: true });
 }
 
 
@@ -177,8 +188,8 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         } else if (message.action == 'capture-screenshot-plugin') {
 
             if (viewing) {
-                const MAX_WIDTH = message.options.maxDimensionsPixels.width; //TODO add fallbacks
-                const MAX_HEIGHT = message.options.maxDimensionsPixels.height; //TODO add fallbacks
+                const MAX_WIDTH = message.options.maxDimensionsPixels.width ?? 500;
+                const MAX_HEIGHT = message.options.maxDimensionsPixels.height ?? 300;
 
                 const videoWidth = videoElement.videoWidth;
                 const videoHeight = videoElement.videoHeight;
@@ -192,14 +203,16 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 const screenshotWidth = Math.round(videoWidth * scale);
                 const screenshotHeight = Math.round(videoHeight * scale);
 
-                if (!canvas) {
-                    //TODO reset canvas if size change?
-                    createCanvas(screenshotWidth, screenshotHeight);
+                if (!pluginCanvas || previousPluginScreenshotMaxWidth !== MAX_WIDTH || previousPluginScreenshotMaxHeight !== MAX_HEIGHT) {
+                    createPluginCanvas(screenshotWidth, screenshotHeight);
                 }
+
+                previousPluginScreenshotMaxWidth = MAX_WIDTH;
+                previousPluginScreenshotMaxHeight = MAX_HEIGHT;
 
                 ctx.drawImage(videoElement, 0, 0, screenshotWidth, screenshotHeight); //TODO: add trim options
 
-                canvas.toBlob((blob) => {
+                pluginCanvas.toBlob((blob) => {
                     if (blob && pluginWSScript) {
                         ws.sendMessageToWSPlugins(blob);
                     }

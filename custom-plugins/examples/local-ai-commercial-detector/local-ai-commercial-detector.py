@@ -11,7 +11,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.5.0"
+PLUGIN_VERSION = "1.6.0"
 
 PORT = 64145
 
@@ -21,24 +21,44 @@ PORT = 64145
 DEFAULT_OLLAMA_MODEL = "qwen2.5vl:7b"
 OLLAMA_HOST = "http://127.0.0.1:11434"
 
-# Default plugin preference values.
-DEFAULT_LLM_CALL_FREQUENCY_SECONDS = 0
-DEFAULT_CONSECUTIVE_YES_REQUIRED = 1
-DEFAULT_DEBUG_MODE = False
-DEFAULT_SCREENSHOT_BATCH_SIZE = 3
-DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS = 1500
+# Regular-programming and commercial defaults intentionally match. They are
+# separate preferences so users can tune the two states independently.
+DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS = 0
+DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS = 0
+
+DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED = 1
+DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED = 1
+
+DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE = 4
+DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE = 4
+
+DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS = 1000
+DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS = 1000
+
+# Screenshot dimensions and trim settings are shared between regular
+# programming and commercials.
 DEFAULT_SCREENSHOT_MAX_WIDTH = 500
 DEFAULT_SCREENSHOT_MAX_HEIGHT = 300
+DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT = 0
+DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT = 0
+DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT = 0
+DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT = 0
 
+# These prompts are user-editable. The response-format instruction is included
+# directly in each default prompt rather than appended elsewhere in the script.
 DEFAULT_COMMERCIAL_PROMPT = (
     "You are examining consecutive screenshots from a TV broadcast. "
     "Determine if all these screenshots are showing advertisements and/or commercials. "
+    "Respond on one line. Response with YES or NO followed by a dash and then "
+    "one short reason for the decision. Keep the reason concise."
 )
 
 DEFAULT_NON_COMMERCIAL_PROMPT = (
     "You are examining consecutive screenshots from a TV broadcast. "
     "Do all of these screenshots appear to NOT be part of a commercial "
     "and instead seem to be part of regular programming? "
+    "Respond on one line. Response with YES or NO followed by a dash and then "
+    "one short reason for the decision. Keep the reason concise."
 )
 
 # One shared async Ollama client is enough for this plugin.
@@ -50,24 +70,45 @@ ollama_client = ollama.AsyncClient(host=OLLAMA_HOST)
 websocket = None
 
 # Current plugin state.
-screenshot_buffer = deque(maxlen=DEFAULT_SCREENSHOT_BATCH_SIZE)
 commercial_state = False
-llm_call_frequency_seconds = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
-consecutive_yes_required = DEFAULT_CONSECUTIVE_YES_REQUIRED
-debug_mode = DEFAULT_DEBUG_MODE
-screenshot_batch_size = DEFAULT_SCREENSHOT_BATCH_SIZE
-screenshot_frequency_milliseconds = DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
+
+regular_llm_call_frequency_seconds = DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS
+commercial_llm_call_frequency_seconds = DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS
+
+regular_consecutive_yes_required = DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED
+commercial_consecutive_yes_required = DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED
+
+regular_screenshot_batch_size = DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE
+commercial_screenshot_batch_size = DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE
+
+regular_screenshot_frequency_milliseconds = (
+    DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS
+)
+commercial_screenshot_frequency_milliseconds = (
+    DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS
+)
+
 screenshot_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
 screenshot_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+screenshot_trim_top_percent = DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT
+screenshot_trim_right_percent = DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT
+screenshot_trim_bottom_percent = DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT
+screenshot_trim_left_percent = DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT
+
+screenshot_buffer = deque(maxlen=DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE)
 consecutive_yes_count = 0
 last_llm_call_time = 0.0
 analysis_task = None
 screenshot_version = 0
 last_analyzed_screenshot_version = -1
+
 ollama_model = DEFAULT_OLLAMA_MODEL
 commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
 non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
 gpu_checked = False
+
+# Incremented whenever runtime preferences change. An LLM result created with an
+# older preference version is ignored so it cannot affect the new configuration.
 preference_version = 0
 
 
@@ -105,15 +146,22 @@ async def handle_client(connection):
 
 def reset_runtime_state():
     """Reset connection-specific runtime state back to plugin defaults."""
-    global screenshot_buffer
     global commercial_state
-    global llm_call_frequency_seconds
-    global consecutive_yes_required
-    global debug_mode
-    global screenshot_batch_size
-    global screenshot_frequency_milliseconds
+    global regular_llm_call_frequency_seconds
+    global commercial_llm_call_frequency_seconds
+    global regular_consecutive_yes_required
+    global commercial_consecutive_yes_required
+    global regular_screenshot_batch_size
+    global commercial_screenshot_batch_size
+    global regular_screenshot_frequency_milliseconds
+    global commercial_screenshot_frequency_milliseconds
     global screenshot_max_width
     global screenshot_max_height
+    global screenshot_trim_top_percent
+    global screenshot_trim_right_percent
+    global screenshot_trim_bottom_percent
+    global screenshot_trim_left_percent
+    global screenshot_buffer
     global consecutive_yes_count
     global last_llm_call_time
     global analysis_task
@@ -125,20 +173,38 @@ def reset_runtime_state():
     global gpu_checked
     global preference_version
 
-    screenshot_buffer = deque(maxlen=DEFAULT_SCREENSHOT_BATCH_SIZE)
     commercial_state = False
-    llm_call_frequency_seconds = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
-    consecutive_yes_required = DEFAULT_CONSECUTIVE_YES_REQUIRED
-    debug_mode = DEFAULT_DEBUG_MODE
-    screenshot_batch_size = DEFAULT_SCREENSHOT_BATCH_SIZE
-    screenshot_frequency_milliseconds = DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
+
+    regular_llm_call_frequency_seconds = DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS
+    commercial_llm_call_frequency_seconds = DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS
+
+    regular_consecutive_yes_required = DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED
+    commercial_consecutive_yes_required = DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED
+
+    regular_screenshot_batch_size = DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE
+    commercial_screenshot_batch_size = DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE
+
+    regular_screenshot_frequency_milliseconds = (
+        DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS
+    )
+    commercial_screenshot_frequency_milliseconds = (
+        DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS
+    )
+
     screenshot_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
     screenshot_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+    screenshot_trim_top_percent = DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT
+    screenshot_trim_right_percent = DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT
+    screenshot_trim_bottom_percent = DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT
+    screenshot_trim_left_percent = DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT
+
+    screenshot_buffer = deque(maxlen=DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE)
     consecutive_yes_count = 0
     last_llm_call_time = 0.0
     analysis_task = None
     screenshot_version = 0
     last_analyzed_screenshot_version = -1
+
     ollama_model = DEFAULT_OLLAMA_MODEL
     commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
     non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
@@ -191,6 +257,7 @@ async def handle_message(msg):
         if "isCommercialState" in data:
             commercial_state = bool(data["isCommercialState"])
 
+        resize_screenshot_buffer_for_current_state()
         print_current_preferences()
 
         await send_status(
@@ -207,14 +274,14 @@ async def handle_message(msg):
             "triggerOfLastCommercialStateChange"
         ]
 
-        # Always synchronize our state with the extension. This matters when
-        # another trigger changes the commercial state.
         old_state = commercial_state
         commercial_state = is_commercial
 
         # Any confirmed state change starts a fresh YES streak.
         if old_state != is_commercial:
             consecutive_yes_count = 0
+            resize_screenshot_buffer_for_current_state()
+            await request_screenshots()
 
         print(
             "Commercial state confirmed by extension. "
@@ -249,19 +316,19 @@ async def handle_message(msg):
                     ),
                 )
 
-            # Frequency, dimensions, and batch size affect screenshot handling.
-            # Re-send the request whenever any screenshot preference changes so
-            # the browser immediately uses the new capture settings.
+            # Re-send screenshot settings whenever any screenshot-related
+            # preference changes, including an inactive state's settings.
             if screenshot_preferences_changed:
+                resize_screenshot_buffer_for_current_state()
                 print("Screenshot preferences changed. Requesting screenshots again.")
                 await request_screenshots()
 
-            # If reducing the batch size means the existing rolling buffer is now
-            # large enough, allow the next eligible analysis to start.
+            # If a new batch size is smaller, the preserved rolling buffer may
+            # already be large enough for another analysis.
             await maybe_start_analysis()
 
 
-def get_float_preference(preferences, key, default, minimum=None):
+def get_float_preference(preferences, key, default, minimum=None, maximum=None):
     """Read a numeric preference safely and fall back to its default."""
     try:
         value = float(preferences.get(key, default))
@@ -271,10 +338,13 @@ def get_float_preference(preferences, key, default, minimum=None):
     if minimum is not None:
         value = max(minimum, value)
 
+    if maximum is not None:
+        value = min(maximum, value)
+
     return value
 
 
-def get_int_preference(preferences, key, default, minimum=None):
+def get_int_preference(preferences, key, default, minimum=None, maximum=None):
     """Read an integer preference safely and fall back to its default."""
     try:
         value = int(float(preferences.get(key, default)))
@@ -284,20 +354,10 @@ def get_int_preference(preferences, key, default, minimum=None):
     if minimum is not None:
         value = max(minimum, value)
 
+    if maximum is not None:
+        value = min(maximum, value)
+
     return value
-
-
-def get_bool_preference(preferences, key, default):
-    """Read a checkbox/boolean preference safely."""
-    value = preferences.get(key, default)
-
-    if isinstance(value, bool):
-        return value
-
-    if isinstance(value, str):
-        return value.strip().lower() in ("true", "1", "yes", "on")
-
-    return bool(value)
 
 
 def get_string_preference(preferences, key, default):
@@ -313,123 +373,181 @@ def get_string_preference(preferences, key, default):
 
 def apply_plugin_preferences(preferences, initialize=False):
     """Apply initial or updated plugin preferences and report what changed."""
-    global llm_call_frequency_seconds
-    global consecutive_yes_required
-    global debug_mode
-    global ollama_model
-    global commercial_prompt
-    global non_commercial_prompt
-    global screenshot_batch_size
-    global screenshot_frequency_milliseconds
+    global regular_llm_call_frequency_seconds
+    global commercial_llm_call_frequency_seconds
+    global regular_consecutive_yes_required
+    global commercial_consecutive_yes_required
+    global regular_screenshot_batch_size
+    global commercial_screenshot_batch_size
+    global regular_screenshot_frequency_milliseconds
+    global commercial_screenshot_frequency_milliseconds
     global screenshot_max_width
     global screenshot_max_height
-    global screenshot_buffer
+    global screenshot_trim_top_percent
+    global screenshot_trim_right_percent
+    global screenshot_trim_bottom_percent
+    global screenshot_trim_left_percent
     global consecutive_yes_count
     global last_llm_call_time
     global screenshot_version
     global last_analyzed_screenshot_version
+    global ollama_model
+    global commercial_prompt
+    global non_commercial_prompt
     global gpu_checked
     global preference_version
 
     if initialize:
-        current_llm_frequency = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
-        current_yes_required = DEFAULT_CONSECUTIVE_YES_REQUIRED
-        current_debug_mode = DEFAULT_DEBUG_MODE
-        current_model = DEFAULT_OLLAMA_MODEL
-        current_commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
-        current_non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
-        current_batch_size = DEFAULT_SCREENSHOT_BATCH_SIZE
-        current_screenshot_frequency = DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
-        current_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
-        current_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+        current_values = {
+            "regular-llm-call-frequency-seconds": DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS,
+            "commercial-llm-call-frequency-seconds": DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS,
+            "regular-consecutive-yes-required": DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED,
+            "commercial-consecutive-yes-required": DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED,
+            "regular-screenshot-batch-size": DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE,
+            "commercial-screenshot-batch-size": DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE,
+            "regular-screenshot-frequency-milliseconds": DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS,
+            "commercial-screenshot-frequency-milliseconds": DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS,
+            "screenshot-max-width": DEFAULT_SCREENSHOT_MAX_WIDTH,
+            "screenshot-max-height": DEFAULT_SCREENSHOT_MAX_HEIGHT,
+            "screenshot-trim-top-percent": DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT,
+            "screenshot-trim-right-percent": DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT,
+            "screenshot-trim-bottom-percent": DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT,
+            "screenshot-trim-left-percent": DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT,
+            "ollama-model": DEFAULT_OLLAMA_MODEL,
+            "commercial-prompt": DEFAULT_COMMERCIAL_PROMPT,
+            "non-commercial-prompt": DEFAULT_NON_COMMERCIAL_PROMPT,
+        }
     else:
-        current_llm_frequency = llm_call_frequency_seconds
-        current_yes_required = consecutive_yes_required
-        current_debug_mode = debug_mode
-        current_model = ollama_model
-        current_commercial_prompt = commercial_prompt
-        current_non_commercial_prompt = non_commercial_prompt
-        current_batch_size = screenshot_batch_size
-        current_screenshot_frequency = screenshot_frequency_milliseconds
-        current_max_width = screenshot_max_width
-        current_max_height = screenshot_max_height
+        current_values = {
+            "regular-llm-call-frequency-seconds": regular_llm_call_frequency_seconds,
+            "commercial-llm-call-frequency-seconds": commercial_llm_call_frequency_seconds,
+            "regular-consecutive-yes-required": regular_consecutive_yes_required,
+            "commercial-consecutive-yes-required": commercial_consecutive_yes_required,
+            "regular-screenshot-batch-size": regular_screenshot_batch_size,
+            "commercial-screenshot-batch-size": commercial_screenshot_batch_size,
+            "regular-screenshot-frequency-milliseconds": regular_screenshot_frequency_milliseconds,
+            "commercial-screenshot-frequency-milliseconds": commercial_screenshot_frequency_milliseconds,
+            "screenshot-max-width": screenshot_max_width,
+            "screenshot-max-height": screenshot_max_height,
+            "screenshot-trim-top-percent": screenshot_trim_top_percent,
+            "screenshot-trim-right-percent": screenshot_trim_right_percent,
+            "screenshot-trim-bottom-percent": screenshot_trim_bottom_percent,
+            "screenshot-trim-left-percent": screenshot_trim_left_percent,
+            "ollama-model": ollama_model,
+            "commercial-prompt": commercial_prompt,
+            "non-commercial-prompt": non_commercial_prompt,
+        }
 
     new_values = {
-        "llm-call-frequency-seconds": get_float_preference(
+        "regular-llm-call-frequency-seconds": get_float_preference(
             preferences,
-            "llm-call-frequency-seconds",
-            current_llm_frequency,
+            "regular-llm-call-frequency-seconds",
+            current_values["regular-llm-call-frequency-seconds"],
             minimum=0,
         ),
-        "consecutive-yes-required": get_int_preference(
+        "commercial-llm-call-frequency-seconds": get_float_preference(
             preferences,
-            "consecutive-yes-required",
-            current_yes_required,
+            "commercial-llm-call-frequency-seconds",
+            current_values["commercial-llm-call-frequency-seconds"],
+            minimum=0,
+        ),
+        "regular-consecutive-yes-required": get_int_preference(
+            preferences,
+            "regular-consecutive-yes-required",
+            current_values["regular-consecutive-yes-required"],
             minimum=1,
         ),
-        "debug-mode": get_bool_preference(
+        "commercial-consecutive-yes-required": get_int_preference(
             preferences,
-            "debug-mode",
-            current_debug_mode,
-        ),
-        "ollama-model": get_string_preference(
-            preferences,
-            "ollama-model",
-            current_model,
-        ),
-        "commercial-prompt": get_string_preference(
-            preferences,
-            "commercial-prompt",
-            current_commercial_prompt,
-        ),
-        "non-commercial-prompt": get_string_preference(
-            preferences,
-            "non-commercial-prompt",
-            current_non_commercial_prompt,
-        ),
-        "screenshot-batch-size": get_int_preference(
-            preferences,
-            "screenshot-batch-size",
-            current_batch_size,
+            "commercial-consecutive-yes-required",
+            current_values["commercial-consecutive-yes-required"],
             minimum=1,
         ),
-        "screenshot-frequency-milliseconds": get_int_preference(
+        "regular-screenshot-batch-size": get_int_preference(
             preferences,
-            "screenshot-frequency-milliseconds",
-            current_screenshot_frequency,
+            "regular-screenshot-batch-size",
+            current_values["regular-screenshot-batch-size"],
+            minimum=1,
+        ),
+        "commercial-screenshot-batch-size": get_int_preference(
+            preferences,
+            "commercial-screenshot-batch-size",
+            current_values["commercial-screenshot-batch-size"],
+            minimum=1,
+        ),
+        "regular-screenshot-frequency-milliseconds": get_int_preference(
+            preferences,
+            "regular-screenshot-frequency-milliseconds",
+            current_values["regular-screenshot-frequency-milliseconds"],
+            minimum=1,
+        ),
+        "commercial-screenshot-frequency-milliseconds": get_int_preference(
+            preferences,
+            "commercial-screenshot-frequency-milliseconds",
+            current_values["commercial-screenshot-frequency-milliseconds"],
             minimum=1,
         ),
         "screenshot-max-width": get_int_preference(
             preferences,
             "screenshot-max-width",
-            current_max_width,
+            current_values["screenshot-max-width"],
             minimum=1,
         ),
         "screenshot-max-height": get_int_preference(
             preferences,
             "screenshot-max-height",
-            current_max_height,
+            current_values["screenshot-max-height"],
             minimum=1,
         ),
-    }
-
-    old_values = {
-        "llm-call-frequency-seconds": current_llm_frequency,
-        "consecutive-yes-required": current_yes_required,
-        "debug-mode": current_debug_mode,
-        "ollama-model": current_model,
-        "commercial-prompt": current_commercial_prompt,
-        "non-commercial-prompt": current_non_commercial_prompt,
-        "screenshot-batch-size": current_batch_size,
-        "screenshot-frequency-milliseconds": current_screenshot_frequency,
-        "screenshot-max-width": current_max_width,
-        "screenshot-max-height": current_max_height,
+        "screenshot-trim-top-percent": get_float_preference(
+            preferences,
+            "screenshot-trim-top-percent",
+            current_values["screenshot-trim-top-percent"],
+            minimum=0,
+            maximum=100,
+        ),
+        "screenshot-trim-right-percent": get_float_preference(
+            preferences,
+            "screenshot-trim-right-percent",
+            current_values["screenshot-trim-right-percent"],
+            minimum=0,
+            maximum=100,
+        ),
+        "screenshot-trim-bottom-percent": get_float_preference(
+            preferences,
+            "screenshot-trim-bottom-percent",
+            current_values["screenshot-trim-bottom-percent"],
+            minimum=0,
+            maximum=100,
+        ),
+        "screenshot-trim-left-percent": get_float_preference(
+            preferences,
+            "screenshot-trim-left-percent",
+            current_values["screenshot-trim-left-percent"],
+            minimum=0,
+            maximum=100,
+        ),
+        "ollama-model": get_string_preference(
+            preferences,
+            "ollama-model",
+            current_values["ollama-model"],
+        ),
+        "commercial-prompt": get_string_preference(
+            preferences,
+            "commercial-prompt",
+            current_values["commercial-prompt"],
+        ),
+        "non-commercial-prompt": get_string_preference(
+            preferences,
+            "non-commercial-prompt",
+            current_values["non-commercial-prompt"],
+        ),
     }
 
     changed_keys = [
         key
         for key, new_value in new_values.items()
-        if initialize or new_value != old_values[key]
+        if initialize or new_value != current_values[key]
     ]
 
     if initialize:
@@ -437,80 +555,143 @@ def apply_plugin_preferences(preferences, initialize=False):
     elif changed_keys:
         preference_version += 1
 
-    llm_call_frequency_seconds = new_values["llm-call-frequency-seconds"]
-    consecutive_yes_required = new_values["consecutive-yes-required"]
-    debug_mode = new_values["debug-mode"]
-    ollama_model = new_values["ollama-model"]
-    commercial_prompt = new_values["commercial-prompt"]
-    non_commercial_prompt = new_values["non-commercial-prompt"]
-    screenshot_batch_size = new_values["screenshot-batch-size"]
-    screenshot_frequency_milliseconds = new_values[
-        "screenshot-frequency-milliseconds"
+    regular_llm_call_frequency_seconds = new_values[
+        "regular-llm-call-frequency-seconds"
+    ]
+    commercial_llm_call_frequency_seconds = new_values[
+        "commercial-llm-call-frequency-seconds"
+    ]
+    regular_consecutive_yes_required = new_values[
+        "regular-consecutive-yes-required"
+    ]
+    commercial_consecutive_yes_required = new_values[
+        "commercial-consecutive-yes-required"
+    ]
+    regular_screenshot_batch_size = new_values["regular-screenshot-batch-size"]
+    commercial_screenshot_batch_size = new_values["commercial-screenshot-batch-size"]
+    regular_screenshot_frequency_milliseconds = new_values[
+        "regular-screenshot-frequency-milliseconds"
+    ]
+    commercial_screenshot_frequency_milliseconds = new_values[
+        "commercial-screenshot-frequency-milliseconds"
     ]
     screenshot_max_width = new_values["screenshot-max-width"]
     screenshot_max_height = new_values["screenshot-max-height"]
-
-    old_buffer = screenshot_buffer
-    new_batch_size = screenshot_batch_size
+    screenshot_trim_top_percent = new_values["screenshot-trim-top-percent"]
+    screenshot_trim_right_percent = new_values["screenshot-trim-right-percent"]
+    screenshot_trim_bottom_percent = new_values["screenshot-trim-bottom-percent"]
+    screenshot_trim_left_percent = new_values["screenshot-trim-left-percent"]
+    ollama_model = new_values["ollama-model"]
+    commercial_prompt = new_values["commercial-prompt"]
+    non_commercial_prompt = new_values["non-commercial-prompt"]
 
     if initialize:
-        screenshot_buffer = deque(maxlen=new_batch_size)
         consecutive_yes_count = 0
         last_llm_call_time = 0.0
         screenshot_version = 0
         last_analyzed_screenshot_version = -1
         gpu_checked = False
-    elif "screenshot-batch-size" in changed_keys:
-        # Preserve as many of the newest screenshots as possible when resizing
-        # the rolling batch instead of throwing the whole buffer away.
-        screenshot_buffer = deque(
-            list(old_buffer)[-new_batch_size:],
-            maxlen=new_batch_size,
-        )
 
-    decision_preferences = {
+    # Do not carry a YES streak across a model, prompt, confirmation threshold,
+    # or batch-size change because the decisions are no longer directly
+    # comparable.
+    decision_keys = {
         "ollama-model",
         "commercial-prompt",
         "non-commercial-prompt",
-        "consecutive-yes-required",
+        "regular-consecutive-yes-required",
+        "commercial-consecutive-yes-required",
+        "regular-screenshot-batch-size",
+        "commercial-screenshot-batch-size",
     }
-    if not initialize and decision_preferences.intersection(changed_keys):
-        # Do not combine a previous YES streak with decisions made using a new
-        # model, prompt, or confirmation threshold.
+    if not initialize and decision_keys.intersection(changed_keys):
         consecutive_yes_count = 0
 
     if "ollama-model" in changed_keys:
-        # The selected model is supplied on every Ollama chat request, so model
-        # changes can take effect while the plugin is running. Re-check its
-        # CPU/GPU split after the new model has successfully loaded.
+        # The next Ollama request can use the newly selected model immediately.
+        # Re-check the new model's processor split after it loads.
         gpu_checked = False
 
     screenshot_keys = {
-        "screenshot-batch-size",
-        "screenshot-frequency-milliseconds",
+        "regular-screenshot-batch-size",
+        "commercial-screenshot-batch-size",
+        "regular-screenshot-frequency-milliseconds",
+        "commercial-screenshot-frequency-milliseconds",
         "screenshot-max-width",
         "screenshot-max-height",
+        "screenshot-trim-top-percent",
+        "screenshot-trim-right-percent",
+        "screenshot-trim-bottom-percent",
+        "screenshot-trim-left-percent",
     }
-    screenshot_preferences_changed = bool(
-        screenshot_keys.intersection(changed_keys)
-    )
+    screenshot_preferences_changed = bool(screenshot_keys.intersection(changed_keys))
 
     return changed_keys, screenshot_preferences_changed
 
 
+def get_active_llm_call_frequency():
+    if commercial_state:
+        return commercial_llm_call_frequency_seconds
+    return regular_llm_call_frequency_seconds
+
+
+def get_active_consecutive_yes_required():
+    if commercial_state:
+        return commercial_consecutive_yes_required
+    return regular_consecutive_yes_required
+
+
+def get_active_screenshot_batch_size():
+    if commercial_state:
+        return commercial_screenshot_batch_size
+    return regular_screenshot_batch_size
+
+
+def get_active_screenshot_frequency_milliseconds():
+    if commercial_state:
+        return commercial_screenshot_frequency_milliseconds
+    return regular_screenshot_frequency_milliseconds
+
+
+def resize_screenshot_buffer_for_current_state():
+    """Resize the rolling buffer while preserving the newest screenshots."""
+    global screenshot_buffer
+
+    new_batch_size = get_active_screenshot_batch_size()
+
+    if screenshot_buffer.maxlen == new_batch_size:
+        return
+
+    screenshot_buffer = deque(
+        list(screenshot_buffer)[-new_batch_size:],
+        maxlen=new_batch_size,
+    )
+
+
 def print_current_preferences():
     """Print the current plugin settings in a compact form."""
-    print(
-        f"LLM call frequency: every {llm_call_frequency_seconds:g} "
-        "second(s) minimum"
-    )
-    print(f"Consecutive YES responses required: {consecutive_yes_required}")
-    print(f"Debug mode: {debug_mode}")
     print(f"Ollama model: {ollama_model}")
-    print(f"Screenshot batch size: {screenshot_batch_size}")
-    print(f"Screenshot frequency: {screenshot_frequency_milliseconds} ms")
     print(
-        f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}"
+        "Regular programming: "
+        f"LLM frequency={regular_llm_call_frequency_seconds:g}s, "
+        f"YES required={regular_consecutive_yes_required}, "
+        f"batch size={regular_screenshot_batch_size}, "
+        f"screenshot frequency={regular_screenshot_frequency_milliseconds}ms"
+    )
+    print(
+        "Commercial: "
+        f"LLM frequency={commercial_llm_call_frequency_seconds:g}s, "
+        f"YES required={commercial_consecutive_yes_required}, "
+        f"batch size={commercial_screenshot_batch_size}, "
+        f"screenshot frequency={commercial_screenshot_frequency_milliseconds}ms"
+    )
+    print(f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}")
+    print(
+        "Screenshot trim percentages: "
+        f"top={screenshot_trim_top_percent:g}, "
+        f"right={screenshot_trim_right_percent:g}, "
+        f"bottom={screenshot_trim_bottom_percent:g}, "
+        f"left={screenshot_trim_left_percent:g}"
     )
 
 
@@ -518,12 +699,21 @@ def build_current_preferences_debug():
     """Return the current settings as readable debug text."""
     return (
         f"Model: {ollama_model}\n"
-        f"LLM minimum interval: {llm_call_frequency_seconds:g}s\n"
-        f"Consecutive YES required: {consecutive_yes_required}\n"
-        f"Debug mode: {debug_mode}\n"
-        f"Screenshot batch size: {screenshot_batch_size}\n"
-        f"Screenshot frequency: {screenshot_frequency_milliseconds}ms\n"
-        f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}"
+        f"Current state: {'commercial' if commercial_state else 'regular programming'}\n"
+        f"Regular LLM minimum interval: {regular_llm_call_frequency_seconds:g}s\n"
+        f"Commercial LLM minimum interval: {commercial_llm_call_frequency_seconds:g}s\n"
+        f"Regular consecutive YES required: {regular_consecutive_yes_required}\n"
+        f"Commercial consecutive YES required: {commercial_consecutive_yes_required}\n"
+        f"Regular screenshot batch size: {regular_screenshot_batch_size}\n"
+        f"Commercial screenshot batch size: {commercial_screenshot_batch_size}\n"
+        f"Regular screenshot frequency: {regular_screenshot_frequency_milliseconds}ms\n"
+        f"Commercial screenshot frequency: {commercial_screenshot_frequency_milliseconds}ms\n"
+        f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}\n"
+        "Screenshot trim percentages: "
+        f"top={screenshot_trim_top_percent:g}, "
+        f"right={screenshot_trim_right_percent:g}, "
+        f"bottom={screenshot_trim_bottom_percent:g}, "
+        f"left={screenshot_trim_left_percent:g}"
     )
 
 
@@ -535,10 +725,11 @@ async def handle_screenshot(screenshot_bytes):
     screenshot_buffer.append(screenshot_bytes)
     screenshot_version += 1
 
-    print(f"Screenshot buffer: {len(screenshot_buffer)}/{screenshot_batch_size}")
+    batch_size = get_active_screenshot_batch_size()
+    print(f"Screenshot buffer: {len(screenshot_buffer)}/{batch_size}")
 
     # We cannot analyze until the first full rolling batch exists.
-    if len(screenshot_buffer) < screenshot_batch_size:
+    if len(screenshot_buffer) < batch_size:
         return
 
     await maybe_start_analysis()
@@ -549,7 +740,8 @@ async def maybe_start_analysis():
     global last_analyzed_screenshot_version
     global analysis_task
 
-    if len(screenshot_buffer) < screenshot_batch_size:
+    batch_size = get_active_screenshot_batch_size()
+    if len(screenshot_buffer) < batch_size:
         return
 
     # Never allow more than one Ollama request at a time.
@@ -562,9 +754,11 @@ async def maybe_start_analysis():
     if screenshot_version <= last_analyzed_screenshot_version:
         return
 
-    # Respect the user's configured minimum time between the START of calls.
+    # Respect the active state's configured minimum time between call starts.
     now = time.monotonic()
-    if now - last_llm_call_time < llm_call_frequency_seconds:
+    call_frequency = get_active_llm_call_frequency()
+
+    if now - last_llm_call_time < call_frequency:
         return
 
     screenshots = list(screenshot_buffer)
@@ -598,114 +792,124 @@ async def analyze_screenshot_batch(
             f"Current commercial state={state_at_start}"
         )
 
-        # Snapshot these values at the start of the request. If preferences are
-        # changed while Ollama is working, preference_version will change and the
-        # result will be discarded below.
-        selected_debug_mode = debug_mode
+        # Snapshot values used by this request. If preferences change while the
+        # request is running, the result is reported but ignored for state logic.
         selected_model = ollama_model
         selected_commercial_prompt = commercial_prompt
         selected_non_commercial_prompt = non_commercial_prompt
 
-        transition_detected, llm_response, ai_stats = await ask_ollama_about_transition(
+        decision, llm_response, ai_stats = await ask_ollama_about_transition(
             screenshots,
             state_at_start,
-            selected_debug_mode,
             selected_model,
             selected_commercial_prompt,
             selected_non_commercial_prompt,
         )
 
-        # Preferences can change while Ollama is analyzing. Ignore a response
-        # produced with stale model/prompt/settings and let the next analysis use
-        # the newly applied configuration.
-        if preference_version != preference_version_at_start:
-            print(
-                "Ignoring Ollama response because plugin preferences changed "
-                "during analysis"
-            )
-            consecutive_yes_count = 0
-            return
-
-        # Put useful performance information at the top of every debug payload.
         ai_debug_header = build_ai_debug_header(ai_stats)
+        full_debug = ai_debug_header + "\n\nAI response:\n" + llm_response
 
-        # Check the Ollama CLI once after the model has successfully loaded.
-        # This gives the same CPU/GPU split shown by `ollama ps`.
+        # Check the Ollama CLI once after the selected model has successfully
+        # loaded. This gives the same CPU/GPU split shown by `ollama ps`.
         if not gpu_checked:
             gpu_checked = await warn_if_not_full_gpu(selected_model)
 
         print(f"Ollama response: {llm_response!r}")
         print(ai_debug_header)
 
+        # A response generated using old preferences is useful for debugging but
+        # must not affect the current commercial state or YES streak.
+        if preference_version != preference_version_at_start:
+            print(
+                "Ignoring Ollama response because plugin preferences changed "
+                "during analysis"
+            )
+            await send_status(
+                "AI decision ignored because preferences changed",
+                full_debug,
+            )
+            consecutive_yes_count = 0
+            return
+
         # The commercial state may have changed while Ollama was thinking. If
-        # so, this answer was produced for an outdated question and is ignored.
+        # so, this answer was produced for the opposite question and is ignored.
         if commercial_state != state_at_start:
             print(
                 "Ignoring Ollama response because commercial state changed "
                 "during analysis"
             )
+            await send_status(
+                "AI decision ignored because commercial state changed",
+                full_debug,
+            )
             consecutive_yes_count = 0
             return
 
-        if transition_detected:
+        yes_required = get_active_consecutive_yes_required()
+
+        if decision == "YES":
             consecutive_yes_count += 1
-        else:
-            # A NO breaks the streak. The requested confirmations must be
-            # consecutive YES responses.
+        elif decision == "NO":
+            # A NO breaks the streak.
             consecutive_yes_count = 0
+        else:
+            # UNKNOWN neither counts toward nor resets the current YES streak.
+            pass
 
         yes_count = consecutive_yes_count
-        yes_required = consecutive_yes_required
 
-        answer_text = "YES" if transition_detected else "NO"
         print(
-            f"Transition answer={answer_text}; "
+            f"Transition answer={decision}; "
             f"consecutive YES count={yes_count}/{yes_required}"
         )
 
-        # In debug mode, surface every decision that has not yet triggered a
-        # state change. Performance/token information appears first, followed by
-        # the complete YES/NO + reason response from Ollama.
-        if yes_count < yes_required:
-            if selected_debug_mode:
-                await send_status(
-                    f"AI decision: {answer_text} ({yes_count}/{yes_required} YES)",
-                    ai_debug_header + "\n\nAI response:\n" + llm_response,
-                )
+        # Always send the result of every completed analysis. If the answer is
+        # YES, append the entire LLM response to the end of the display.
+        status_display = f"AI decision: {decision} ({yes_count}/{yes_required} YES)"
+        if decision == "YES":
+            status_display += f" - {llm_response}"
+
+        await send_status(
+            status_display,
+            full_debug,
+        )
+
+        if decision != "YES" or yes_count < yes_required:
             return
 
         # Enough consecutive YES responses were received. A YES means the
         # desired transition depends on our current state:
-        #   normal program -> commercial
-        #   commercial     -> normal program
+        #   regular program -> commercial
+        #   commercial      -> regular program
         new_commercial_state = not state_at_start
 
-        # Update immediately so another completed analysis cannot send the same
-        # change again before the extension echoes the confirmed state back.
+        # Update immediately so another analysis cannot send the same change
+        # again before the extension echoes the confirmed state back.
         commercial_state = new_commercial_state
         consecutive_yes_count = 0
+
+        # The active screenshot batch/frequency can change with commercial state.
+        resize_screenshot_buffer_for_current_state()
 
         if new_commercial_state:
             display = "AI detected commercial break"
         else:
             display = "AI detected return to programming"
 
-        if selected_debug_mode:
-            debug = ai_debug_header + "\n\nAI response:\n" + llm_response
-        else:
-            debug = (
-                ai_debug_header
-                + "\n\nDecision:\n"
-                + f"Ollama returned YES {yes_required} time(s) in a row. "
-                + f"New commercial state={new_commercial_state}"
-            )
+        # This state change was caused by a YES, so include the complete response
+        # at the end of the display as well.
+        display += f" - {llm_response}"
 
         print(f"Sending commercial state change: {new_commercial_state}")
         await send_commercial_state_change(
             new_commercial_state,
             display,
-            debug,
+            full_debug,
         )
+
+        # Immediately tell the browser to use the screenshot frequency for the
+        # newly active state. Shared dimensions and trim values are included too.
+        await request_screenshots()
 
     except asyncio.CancelledError:
         raise
@@ -734,23 +938,14 @@ async def analyze_screenshot_batch(
 async def ask_ollama_about_transition(
     screenshots,
     currently_commercial,
-    selected_debug_mode,
     model,
     selected_commercial_prompt,
     selected_non_commercial_prompt,
 ):
     if currently_commercial:
-        question = selected_non_commercial_prompt.rstrip() + " "
+        question = selected_non_commercial_prompt.strip()
     else:
-        question = selected_commercial_prompt.rstrip() + " "
-
-    if selected_debug_mode:
-        question += (
-            "Respond with YES or NO on the first line. On the second line, give "
-            "one short reason for the decision. Keep the reason concise."
-        )
-    else:
-        question += "Respond with exactly YES or NO and nothing else."
+        question = selected_commercial_prompt.strip()
 
     call_started = time.monotonic()
     response = await ollama_client.chat(
@@ -771,10 +966,7 @@ async def ask_ollama_about_transition(
     wall_time_seconds = time.monotonic() - call_started
 
     llm_response = response.message.content.strip()
-    transition_detected = parse_yes_no_response(
-        llm_response,
-        selected_debug_mode,
-    )
+    decision = parse_yes_no_response(llm_response)
 
     prompt_tokens = getattr(response, "prompt_eval_count", None)
     response_tokens = getattr(response, "eval_count", None)
@@ -795,7 +987,31 @@ async def ask_ollama_about_transition(
         "total_tokens": total_tokens,
     }
 
-    return transition_detected, llm_response, ai_stats
+    return decision, llm_response, ai_stats
+
+
+def parse_yes_no_response(response):
+    """Return YES, NO, or UNKNOWN based on the first value in the response."""
+    stripped = response.strip()
+
+    if not stripped:
+        return "UNKNOWN"
+
+    # Reasons are expected on the same line, e.g.:
+    #   YES The screenshots are clearly advertisements.
+    # Only the first word/value controls the decision.
+    first_value = stripped.split(maxsplit=1)[0]
+    cleaned = first_value.upper().strip(" .,!?:;\"'`\n\r\t")
+
+    if cleaned == "YES":
+        return "YES"
+
+    if cleaned == "NO":
+        return "NO"
+
+    # Anything else is deliberately allowed and treated as UNKNOWN. UNKNOWN
+    # neither increments nor resets the consecutive-YES counter.
+    return "UNKNOWN"
 
 
 def format_nanoseconds_as_seconds(value):
@@ -838,36 +1054,6 @@ def build_ai_debug_header(stats):
         f"Prompt tokens: {format_token_count(stats['prompt_tokens'])}\n"
         f"Response tokens: {format_token_count(stats['response_tokens'])}\n"
         f"Total tokens: {format_token_count(stats['total_tokens'])}"
-    )
-
-
-def parse_yes_no_response(response, selected_debug_mode=False):
-    """Convert an Ollama response into a strict True/False decision."""
-    if selected_debug_mode:
-        # Debug responses may contain a reason after the first line, but the
-        # first non-empty line must still be an unambiguous YES or NO.
-        first_line = next(
-            (line.strip() for line in response.splitlines() if line.strip()),
-            "",
-        )
-        cleaned = first_line.upper().strip(" .,!?:;\"'`\n\r\t")
-    else:
-        cleaned = response.strip().upper()
-        cleaned = cleaned.strip(" .,!?:;\"'`\n\r\t")
-
-    if cleaned == "YES":
-        return True
-
-    if cleaned == "NO":
-        return False
-
-    expected = (
-        "YES/NO on the first line"
-        if selected_debug_mode
-        else "only YES or NO"
-    )
-    raise ValueError(
-        f"Expected Ollama to return {expected}, got: {response!r}"
     )
 
 
@@ -1031,16 +1217,18 @@ async def request_screenshots():
                     "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
                     "data": {
                         "shouldSendScreenshots": True,
-                        "frequencyMilliseconds": screenshot_frequency_milliseconds,
+                        "frequencyMilliseconds": (
+                            get_active_screenshot_frequency_milliseconds()
+                        ),
                         "maxDimensionsPixels": {
                             "height": screenshot_max_height,
                             "width": screenshot_max_width,
                         },
                         "trimOptionsPercentages": {
-                            "top": 0,
-                            "right": 0,
-                            "bottom": 0,
-                            "left": 0,
+                            "top": screenshot_trim_top_percent,
+                            "right": screenshot_trim_right_percent,
+                            "bottom": screenshot_trim_bottom_percent,
+                            "left": screenshot_trim_left_percent,
                         },
                     },
                     "meta": {},
@@ -1147,63 +1335,93 @@ async def send_manifest():
                                 "default": DEFAULT_NON_COMMERCIAL_PROMPT,
                             },
                             {
-                                "key": "llm-call-frequency-seconds",
-                                "label": "LLM Call Frequency (Seconds)",
+                                "key": "regular-llm-call-frequency-seconds",
+                                "label": "Regular Programming LLM Call Frequency (Seconds)",
                                 "description": (
-                                    "Minimum number of seconds between the start of "
-                                    "Ollama analysis calls. Set to 0 to analyze again "
-                                    "as soon as the previous call finishes and at least "
-                                    "one new screenshot has arrived."
+                                    "Minimum seconds between Ollama call starts while "
+                                    "regular programming is active. Set to 0 to run again "
+                                    "as soon as the prior call finishes and fresh screenshots exist."
                                 ),
                                 "type": "number",
-                                "default": DEFAULT_LLM_CALL_FREQUENCY_SECONDS,
+                                "default": DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS,
                                 "min": 0,
                             },
                             {
-                                "key": "consecutive-yes-required",
-                                "label": "Consecutive YES Responses Required",
+                                "key": "commercial-llm-call-frequency-seconds",
+                                "label": "Commercial LLM Call Frequency (Seconds)",
                                 "description": (
-                                    "Number of YES answers Ollama must return in a row "
-                                    "before changing the commercial state. Any NO "
-                                    "resets the count to zero."
+                                    "Minimum seconds between Ollama call starts while a "
+                                    "commercial is active. Set to 0 to run again as soon as "
+                                    "the prior call finishes and fresh screenshots exist."
                                 ),
                                 "type": "number",
-                                "default": DEFAULT_CONSECUTIVE_YES_REQUIRED,
+                                "default": DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS,
+                                "min": 0,
+                            },
+                            {
+                                "key": "regular-consecutive-yes-required",
+                                "label": "Regular Programming Consecutive YES Responses Required",
+                                "description": (
+                                    "YES responses required in a row before entering a "
+                                    "commercial. NO resets the count; UNKNOWN leaves it unchanged."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED,
                                 "min": 1,
                             },
                             {
-                                "key": "debug-mode",
-                                "label": "Debug Mode",
+                                "key": "commercial-consecutive-yes-required",
+                                "label": "Commercial Consecutive YES Responses Required",
                                 "description": (
-                                    "Ask Ollama for YES/NO plus a short reason. Before "
-                                    "the required YES streak is reached, the full LLM "
-                                    "response is sent through status debug messages. "
-                                    "When a state changes, the full response is sent "
-                                    "in the commercial state change debug value."
-                                ),
-                                "type": "checkbox",
-                                "default": DEFAULT_DEBUG_MODE,
-                            },
-                            {
-                                "key": "screenshot-batch-size",
-                                "label": "Screenshot Batch Size",
-                                "description": (
-                                    "Number of rolling screenshots sent to Ollama for "
-                                    "each analysis."
+                                    "YES responses required in a row before returning to "
+                                    "regular programming. NO resets the count; UNKNOWN leaves it unchanged."
                                 ),
                                 "type": "number",
-                                "default": DEFAULT_SCREENSHOT_BATCH_SIZE,
+                                "default": DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED,
                                 "min": 1,
                             },
                             {
-                                "key": "screenshot-frequency-milliseconds",
-                                "label": "Screenshot Frequency (Milliseconds)",
+                                "key": "regular-screenshot-batch-size",
+                                "label": "Regular Programming Screenshot Batch Size",
                                 "description": (
-                                    "How frequently the browser extension should capture "
-                                    "and send a screenshot to this plugin."
+                                    "Number of rolling screenshots sent to Ollama while "
+                                    "regular programming is active."
                                 ),
                                 "type": "number",
-                                "default": DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS,
+                                "default": DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE,
+                                "min": 1,
+                            },
+                            {
+                                "key": "commercial-screenshot-batch-size",
+                                "label": "Commercial Screenshot Batch Size",
+                                "description": (
+                                    "Number of rolling screenshots sent to Ollama while a "
+                                    "commercial is active."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE,
+                                "min": 1,
+                            },
+                            {
+                                "key": "regular-screenshot-frequency-milliseconds",
+                                "label": "Regular Programming Screenshot Frequency (Milliseconds)",
+                                "description": (
+                                    "How frequently the browser captures screenshots while "
+                                    "regular programming is active."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS,
+                                "min": 1,
+                            },
+                            {
+                                "key": "commercial-screenshot-frequency-milliseconds",
+                                "label": "Commercial Screenshot Frequency (Milliseconds)",
+                                "description": (
+                                    "How frequently the browser captures screenshots while "
+                                    "a commercial is active."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS,
                                 "min": 1,
                             },
                             {
@@ -1227,6 +1445,42 @@ async def send_manifest():
                                 "type": "number",
                                 "default": DEFAULT_SCREENSHOT_MAX_HEIGHT,
                                 "min": 1,
+                            },
+                            {
+                                "key": "screenshot-trim-top-percent",
+                                "label": "Screenshot Trim Top (%)",
+                                "description": "Percentage to trim from the top of each screenshot.",
+                                "type": "number",
+                                "default": DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT,
+                                "min": 0,
+                                "max": 100,
+                            },
+                            {
+                                "key": "screenshot-trim-right-percent",
+                                "label": "Screenshot Trim Right (%)",
+                                "description": "Percentage to trim from the right of each screenshot.",
+                                "type": "number",
+                                "default": DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT,
+                                "min": 0,
+                                "max": 100,
+                            },
+                            {
+                                "key": "screenshot-trim-bottom-percent",
+                                "label": "Screenshot Trim Bottom (%)",
+                                "description": "Percentage to trim from the bottom of each screenshot.",
+                                "type": "number",
+                                "default": DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT,
+                                "min": 0,
+                                "max": 100,
+                            },
+                            {
+                                "key": "screenshot-trim-left-percent",
+                                "label": "Screenshot Trim Left (%)",
+                                "description": "Percentage to trim from the left of each screenshot.",
+                                "type": "number",
+                                "default": DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT,
+                                "min": 0,
+                                "max": 100,
                             },
                         ],
                     },
