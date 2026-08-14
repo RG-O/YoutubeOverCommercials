@@ -186,7 +186,7 @@
     font-family: "Montserrat", sans-serif !important;
     /*display: flex;*/
     align-items: center !important;
-    white-space: nowrap;
+    white-space: nowrap !important;
 }
 
 .double-clap-debug-overlay {
@@ -202,4 +202,5 @@
     width: 280px !important;
     margin-top: 15px !important;
     margin-bottom: 15px !important;
+    white-space: normal !important;
 }

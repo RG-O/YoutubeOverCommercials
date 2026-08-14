@@ -862,10 +862,12 @@ async def analyze_screenshot_batch(
             f"Transition answer={decision}; "
             f"consecutive YES count={yes_count}/{yes_required}"
         )
+        
+        display_question = "is this not commercial" if commercial_state else "is this a commercial"
 
         # Always send the result of every completed analysis. If the answer is
         # YES, append the entire LLM response to the end of the display.
-        status_display = f"AI decision: {decision} ({yes_count}/{yes_required} YES)"
+        status_display = f"AI, {display_question}? AI: {decision} ({yes_count}/{yes_required} YES)"
         if decision == "YES":
             status_display += f" - {llm_response}"
 
@@ -1319,7 +1321,8 @@ async def send_manifest():
                                 "label": "Commercial Prompt",
                                 "description": (
                                     "Prompt used while regular programming is active to "
-                                    "decide whether the screenshots indicate a commercial."
+                                    "decide whether the screenshots indicate a commercial. "
+                                    "Try to have answer start with YES or NO."
                                 ),
                                 "type": "textarea",
                                 "default": DEFAULT_COMMERCIAL_PROMPT,
@@ -1329,7 +1332,8 @@ async def send_manifest():
                                 "label": "Non-Commercial Prompt",
                                 "description": (
                                     "Prompt used while a commercial is active to decide "
-                                    "whether regular programming has returned."
+                                    "whether regular programming has returned. "
+                                    "Try to have answer start with YES or NO."
                                 ),
                                 "type": "textarea",
                                 "default": DEFAULT_NON_COMMERCIAL_PROMPT,
