@@ -2852,97 +2852,98 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             return;
         }
 
-        if (!isFirstRun) {
+        //grab all user set values
+        //note: this is an async function
+        //TODO: figure out how to update all the preferences that I'm not updating here after extension has already been initiated
+        chrome.storage.sync.get([
+            'overlayVideoType',
+            'ytPlaylistID',
+            'ytVideoID',
+            'ytLiveID',
+            'otherVideoURL',
+            'otherLiveURL',
+            //'isOtherSiteTroubleshootMode',
+            'mainVideoFade',
+            'videoOverlayWidth',
+            'videoOverlayHeight',
+            'overlayVideoLocationHorizontal',
+            'overlayVideoLocationVertical',
+            'mainVideoVolumeDuringCommercials',
+            'mainVideoVolumeDuringNonCommercials',
+            //'commercialDetectionMode',
+            'mismatchCountThreshold',
+            'matchCountThreshold',
+            'colorDifferenceMatchingThreshold',
+            'manualOverrideCooldown',
+            //'isDebugMode',
+            'isPiPMode',
+            'pipLocationHorizontal',
+            'pipLocationVertical',
+            'pipHeight',
+            'pipWidth',
+            'audioLevelThreshold',
+            'shouldOverlayVideoSizeAndLocationAutoSet',
+            //'shouldShuffleYTPlaylist',
+            //'isDoubleClapMode',
+            'clapSensitivity',
+            'isDoubleClapOnlyReturnMode',
+            //'isPluginOverlayMode',
+            //'isPluginCommercialTriggerMode',
+            //'pluginOverlayFramework',
+            //'pluginOverlayAPIURL',
+            //'pluginOverlayWSURL',
+            //'pluginCommercialTriggerWSURL',
+            'pluginTriggerPreferences',
+            'pluginOverlayPreferences',
+            'pluginDualPreferences',
+        ], (result) => {
 
-            //grab all user set values
-            //note: this is an async function
-            //TODO: figure out how to update all the preferences that I'm not updating here after extension has already been initiated
-            chrome.storage.sync.get([
-                'overlayVideoType',
-                'ytPlaylistID',
-                'ytVideoID',
-                'ytLiveID',
-                'otherVideoURL',
-                'otherLiveURL',
-                //'isOtherSiteTroubleshootMode',
-                'mainVideoFade',
-                'videoOverlayWidth',
-                'videoOverlayHeight',
-                'overlayVideoLocationHorizontal',
-                'overlayVideoLocationVertical',
-                'mainVideoVolumeDuringCommercials',
-                'mainVideoVolumeDuringNonCommercials',
-                //'commercialDetectionMode',
-                'mismatchCountThreshold',
-                'matchCountThreshold',
-                'colorDifferenceMatchingThreshold',
-                'manualOverrideCooldown',
-                //'isDebugMode',
-                'isPiPMode',
-                'pipLocationHorizontal',
-                'pipLocationVertical',
-                'pipHeight',
-                'pipWidth',
-                'audioLevelThreshold',
-                'shouldOverlayVideoSizeAndLocationAutoSet',
-                //'shouldShuffleYTPlaylist',
-                //'isDoubleClapMode',
-                'clapSensitivity',
-                'isDoubleClapOnlyReturnMode',
-                //'isPluginOverlayMode',
-                //'isPluginCommercialTriggerMode',
-                //'pluginOverlayFramework',
-                //'pluginOverlayAPIURL',
-                //'pluginOverlayWSURL',
-                //'pluginCommercialTriggerWSURL',
-                'pluginTriggerPreferences',
-                'pluginOverlayPreferences',
-                'pluginDualPreferences',
-            ], (result) => {
+            //set them to default if not set by user yet
+            mainVideoFade = result.mainVideoFade ?? 65;
+            mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
+            mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
+            if (mainVideoVolumeDuringCommercials > 0) {
+                mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
+            }
+            if (mainVideoVolumeDuringNonCommercials > 0) {
+                mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
+            }
+            mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
+            matchCountThreshold = result.matchCountThreshold ?? 2;
+            colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
+            manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
+            isPiPMode = result.isPiPMode ?? true;
+            pipLocationHorizontal = result.pipLocationHorizontal ?? 'left';
+            pipLocationVertical = result.pipLocationVertical ?? 'top';
+            pipHeight = result.pipHeight ?? 20;
+            pipWidth = result.pipWidth ?? 20;
+            audioLevelThreshold = result.audioLevelThreshold ?? 5;
+            isDoubleClapOnlyReturnMode = result.isDoubleClapOnlyReturnMode ?? false;
+            if (commercialDetectionMode === 'manual-clap') {
+                isDoubleClapOnlyReturnMode = false;
+            }
+            clapSensitivity = result.clapSensitivity ?? 40;
+            pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
+            pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
+            pluginDualPreferences = result.pluginDualPreferences ?? {};
 
-                //set them to default if not set by user yet
-                mainVideoFade = result.mainVideoFade ?? 65;
-                mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
-                mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
-                if (mainVideoVolumeDuringCommercials > 0) {
-                    mainVideoVolumeDuringCommercials = mainVideoVolumeDuringCommercials / 100;
-                }
-                if (mainVideoVolumeDuringNonCommercials > 0) {
-                    mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
-                }
-                mismatchCountThreshold = result.mismatchCountThreshold ?? 8;
-                matchCountThreshold = result.matchCountThreshold ?? 2;
-                colorDifferenceMatchingThreshold = result.colorDifferenceMatchingThreshold ?? 12;
-                manualOverrideCooldown = result.manualOverrideCooldown ?? 30;
-                isPiPMode = result.isPiPMode ?? true;
-                pipLocationHorizontal = result.pipLocationHorizontal ?? 'left';
-                pipLocationVertical = result.pipLocationVertical ?? 'top';
-                pipHeight = result.pipHeight ?? 20;
-                pipWidth = result.pipWidth ?? 20;
-                audioLevelThreshold = result.audioLevelThreshold ?? 5;
-                isDoubleClapOnlyReturnMode = result.isDoubleClapOnlyReturnMode ?? false;
-                if (commercialDetectionMode === 'manual-clap') {
-                    isDoubleClapOnlyReturnMode = false;
-                }
-                clapSensitivity = result.clapSensitivity ?? 40;
-                pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
-                pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
-                pluginDualPreferences = result.pluginDualPreferences ?? {};
+            if (audioLevelThresholdLine) {
+                audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
+            }
 
-                if (audioLevelThresholdLine) {
-                    audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
+            //TODO: test running when isFirstRun is false
+            if (isDoubleClapMode) {
+                if (isFirefox) {
+                    //note: this function is actually in double-clap-detector.js
+                    setClapSensitivity(clapSensitivity);
+                } else {
+                    //TODO: add utility for checking if clap port is connected
+                    if (clapPort) clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: clapSensitivity });
                 }
+            }
 
-                //TODO: get this to work even when isFirstRun is false?
-                if (isDoubleClapMode) {
-                    if (isFirefox) {
-                        //note: this function is actually in double-clap-detector.js
-                        setClapSensitivity(clapSensitivity);
-                    } else {
-                        //TODO: add utility for checking if clap port is connected
-                        if (clapPort) clapPort.postMessage({ action: "update-sensitivity", clapSensitivity: clapSensitivity });
-                    }
-                }
+            //TODO: figure this out more
+            if (!isFirstRun) {
 
                 //verify user is not switching from or to audio only overlays //TODO: get that to work
                 if (!isAudioOnlyOverlay && result.overlayVideoType !== 'spotify' && result.overlayVideoType !== 'other-tabs') {
@@ -2981,7 +2982,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                     }
 
-                    
                     if (overlayVideo) {
 
                         if (
@@ -3044,11 +3044,16 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
                 }
 
-                //addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)');
+            }
 
-            });
+            addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)', 'info');
+            //TODO: add as option to addMessageAlertToMainVideo
+            document.addEventListener('fullscreenchange', () => {
+                clearMainVideoMessages();
+            }, { once: true });
 
-        } //else do not update preferences because this gets updated on first run anyway
+        });
+
 
     } else if (message.action == 'message_from_plugin_ws') {
 
@@ -3104,27 +3109,51 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     console.log("Error: Message type of auto_commercial_blocked_state_change sent without data.isAutoCommercialBlocked");
                 }
             } else if (message.payload.type === "request_screenshots") {
-                pluginScreenshotOptions = message.payload.data ?? {};
-                shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
                 if (shouldSendScreenshotsToTriggerPlugin) {
-                    if (document.fullscreenElement) {
-                        windowWidth = window.innerWidth;
-                        windowHeight = window.innerHeight;
-                        windowDimensions = { x: windowWidth, y: windowHeight };
-                        startViewingTab(windowDimensions);
-                        //give a sec for tab viewing to start
-                        setTimeout(() => {
-                            sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
-                        }, 1000);
+                    //plugin set shouldSendScreenshotsToTriggerPlugin to true previously, just updating configs
+                    pluginScreenshotOptions = message.payload.data ?? {};
+                    shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
+                    if (shouldSendScreenshotsToTriggerPlugin) {
+                        if (document.fullscreenElement) {
+                            //give a half sec for tab viewing to start (if triggered due to fullscreen resume)
+                            setTimeout(() => {
+                                clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                                sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
+                            }, 500);
+                        } else {
+                            addMessageAlertToMainVideo("Plugin requested screenshot settings update but video must be in fullscreen for screenshots to send.");
+                            //TODO: add wait for fullscreen here
+                        }
                     } else {
-                        addMessageAlertToMainVideo("Plugin requested screenshots but video must be in fullscreen for screenshots to send.");
-                        //TODO: add wait for fullscreen here
+                        //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
+                        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                            pauseViewingTab();
+                        }
                     }
                 } else {
-                    //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
-                    clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
-                    if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
-                        pauseViewingTab();
+                    pluginScreenshotOptions = message.payload.data ?? {};
+                    shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
+                    if (shouldSendScreenshotsToTriggerPlugin) {
+                        if (document.fullscreenElement) {
+                            windowWidth = window.innerWidth;
+                            windowHeight = window.innerHeight;
+                            windowDimensions = { x: windowWidth, y: windowHeight };
+                            startViewingTab(windowDimensions);
+                            //give a sec for tab viewing to start
+                            setTimeout(() => {
+                                sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
+                            }, 1000);
+                        } else {
+                            addMessageAlertToMainVideo("Plugin requested screenshots but video must be in fullscreen for screenshots to send.");
+                            //TODO: add wait for fullscreen here
+                        }
+                    } else {
+                        //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
+                        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                            pauseViewingTab();
+                        }
                     }
                 }
             }
