@@ -11,7 +11,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.4.0"
+PLUGIN_VERSION = "1.5.0"
 
 PORT = 64145
 
@@ -41,97 +41,129 @@ DEFAULT_NON_COMMERCIAL_PROMPT = (
     "and instead seem to be part of regular programming? "
 )
 
-clients = set()
-
 # One shared async Ollama client is enough for this plugin.
 ollama_client = ollama.AsyncClient(host=OLLAMA_HOST)
 
-# Per-WebSocket client state.
-client_screenshot_buffers = {}
-client_commercial_states = {}
-client_llm_call_frequency_seconds = {}
-client_consecutive_yes_required = {}
-client_debug_modes = {}
-client_screenshot_batch_sizes = {}
-client_screenshot_frequency_milliseconds = {}
-client_screenshot_max_widths = {}
-client_screenshot_max_heights = {}
-client_consecutive_yes_counts = {}
-client_last_llm_call_times = {}
-client_analysis_tasks = {}
-client_screenshot_versions = {}
-client_last_analyzed_screenshot_versions = {}
-client_ollama_models = {}
-client_commercial_prompts = {}
-client_non_commercial_prompts = {}
-client_gpu_checked = {}
-client_preference_versions = {}
+# This plugin is intentionally designed for one WebSocket connection at a time.
+# handle_client() stores the active connection here so it does not need to be
+# passed through every function.
+websocket = None
+
+# Current plugin state.
+screenshot_buffer = deque(maxlen=DEFAULT_SCREENSHOT_BATCH_SIZE)
+commercial_state = False
+llm_call_frequency_seconds = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
+consecutive_yes_required = DEFAULT_CONSECUTIVE_YES_REQUIRED
+debug_mode = DEFAULT_DEBUG_MODE
+screenshot_batch_size = DEFAULT_SCREENSHOT_BATCH_SIZE
+screenshot_frequency_milliseconds = DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
+screenshot_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
+screenshot_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+consecutive_yes_count = 0
+last_llm_call_time = 0.0
+analysis_task = None
+screenshot_version = 0
+last_analyzed_screenshot_version = -1
+ollama_model = DEFAULT_OLLAMA_MODEL
+commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
+non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
+gpu_checked = False
+preference_version = 0
 
 
-async def handle_client(websocket):
+async def handle_client(connection):
+    """Handle the one WebSocket connection used by this plugin."""
+    global websocket
+
+    # The plugin is only intended to have one active extension connection.
+    # Refuse an unexpected second connection rather than replacing the global
+    # websocket underneath the current one.
+    if websocket is not None:
+        print("Second WebSocket connection rejected; plugin already has a client")
+        await connection.close(code=1013, reason="Plugin already has an active client")
+        return
+
+    websocket = connection
+    reset_runtime_state()
     print("Client connected")
-    clients.add(websocket)
-
-    client_screenshot_buffers[websocket] = deque(maxlen=DEFAULT_SCREENSHOT_BATCH_SIZE)
-    client_commercial_states[websocket] = False
-    client_llm_call_frequency_seconds[websocket] = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
-    client_consecutive_yes_required[websocket] = DEFAULT_CONSECUTIVE_YES_REQUIRED
-    client_debug_modes[websocket] = DEFAULT_DEBUG_MODE
-    client_screenshot_batch_sizes[websocket] = DEFAULT_SCREENSHOT_BATCH_SIZE
-    client_screenshot_frequency_milliseconds[websocket] = DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
-    client_screenshot_max_widths[websocket] = DEFAULT_SCREENSHOT_MAX_WIDTH
-    client_screenshot_max_heights[websocket] = DEFAULT_SCREENSHOT_MAX_HEIGHT
-    client_consecutive_yes_counts[websocket] = 0
-    client_last_llm_call_times[websocket] = 0.0
-    client_analysis_tasks[websocket] = None
-    client_screenshot_versions[websocket] = 0
-    client_last_analyzed_screenshot_versions[websocket] = -1
-    client_ollama_models[websocket] = DEFAULT_OLLAMA_MODEL
-    client_commercial_prompts[websocket] = DEFAULT_COMMERCIAL_PROMPT
-    client_non_commercial_prompts[websocket] = DEFAULT_NON_COMMERCIAL_PROMPT
-    client_gpu_checked[websocket] = False
-    client_preference_versions[websocket] = 0
 
     try:
-        async for message in websocket:
+        async for message in connection:
             if isinstance(message, bytes):
-                await handle_screenshot(websocket, message)
+                await handle_screenshot(message)
             else:
                 msg = json.loads(message)
-                await handle_message(websocket, msg)
+                await handle_message(msg)
 
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
-        analysis_task = client_analysis_tasks.get(websocket)
-        if analysis_task and not analysis_task.done():
-            analysis_task.cancel()
-
-        clients.discard(websocket)
-        client_screenshot_buffers.pop(websocket, None)
-        client_commercial_states.pop(websocket, None)
-        client_llm_call_frequency_seconds.pop(websocket, None)
-        client_consecutive_yes_required.pop(websocket, None)
-        client_debug_modes.pop(websocket, None)
-        client_screenshot_batch_sizes.pop(websocket, None)
-        client_screenshot_frequency_milliseconds.pop(websocket, None)
-        client_screenshot_max_widths.pop(websocket, None)
-        client_screenshot_max_heights.pop(websocket, None)
-        client_consecutive_yes_counts.pop(websocket, None)
-        client_last_llm_call_times.pop(websocket, None)
-        client_analysis_tasks.pop(websocket, None)
-        client_screenshot_versions.pop(websocket, None)
-        client_last_analyzed_screenshot_versions.pop(websocket, None)
-        client_ollama_models.pop(websocket, None)
-        client_commercial_prompts.pop(websocket, None)
-        client_non_commercial_prompts.pop(websocket, None)
-        client_gpu_checked.pop(websocket, None)
-        client_preference_versions.pop(websocket, None)
-
+        await cancel_analysis_task()
+        websocket = None
         print("Client disconnected")
 
 
-async def handle_message(ws, msg):
+def reset_runtime_state():
+    """Reset connection-specific runtime state back to plugin defaults."""
+    global screenshot_buffer
+    global commercial_state
+    global llm_call_frequency_seconds
+    global consecutive_yes_required
+    global debug_mode
+    global screenshot_batch_size
+    global screenshot_frequency_milliseconds
+    global screenshot_max_width
+    global screenshot_max_height
+    global consecutive_yes_count
+    global last_llm_call_time
+    global analysis_task
+    global screenshot_version
+    global last_analyzed_screenshot_version
+    global ollama_model
+    global commercial_prompt
+    global non_commercial_prompt
+    global gpu_checked
+    global preference_version
+
+    screenshot_buffer = deque(maxlen=DEFAULT_SCREENSHOT_BATCH_SIZE)
+    commercial_state = False
+    llm_call_frequency_seconds = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
+    consecutive_yes_required = DEFAULT_CONSECUTIVE_YES_REQUIRED
+    debug_mode = DEFAULT_DEBUG_MODE
+    screenshot_batch_size = DEFAULT_SCREENSHOT_BATCH_SIZE
+    screenshot_frequency_milliseconds = DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
+    screenshot_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
+    screenshot_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+    consecutive_yes_count = 0
+    last_llm_call_time = 0.0
+    analysis_task = None
+    screenshot_version = 0
+    last_analyzed_screenshot_version = -1
+    ollama_model = DEFAULT_OLLAMA_MODEL
+    commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
+    non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
+    gpu_checked = False
+    preference_version = 0
+
+
+async def cancel_analysis_task():
+    """Cancel the current Ollama analysis task, if one is running."""
+    global analysis_task
+
+    if analysis_task and not analysis_task.done():
+        analysis_task.cancel()
+        try:
+            await analysis_task
+        except asyncio.CancelledError:
+            pass
+
+    analysis_task = None
+
+
+async def handle_message(msg):
+    global commercial_state
+    global consecutive_yes_count
+
     message_type = msg["type"]
     data = msg.get("data", {})
     preferences = data.get("preferences", {})
@@ -141,7 +173,7 @@ async def handle_message(ws, msg):
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")
-        await send_manifest(ws)
+        await send_manifest()
 
     elif message_type == "init":
         print("Extension initiated")
@@ -150,26 +182,24 @@ async def handle_message(ws, msg):
         print("Your custom requested plugin preferences:")
         print(custom_trigger_plugin_preferences)
 
-        changed_keys, screenshot_preferences_changed = apply_plugin_preferences(
-            ws,
+        apply_plugin_preferences(
             custom_trigger_plugin_preferences,
             initialize=True,
         )
 
         # If the init message provides the current commercial state, use it.
         if "isCommercialState" in data:
-            client_commercial_states[ws] = bool(data["isCommercialState"])
+            commercial_state = bool(data["isCommercialState"])
 
-        print_current_preferences(ws)
+        print_current_preferences()
 
         await send_status(
-            ws,
             "Initializing local AI model...",
-            build_current_preferences_debug(ws),
+            build_current_preferences_debug(),
         )
 
         print("Requesting extension starts sending screenshots")
-        await request_screenshots(ws)
+        await request_screenshots()
 
     elif message_type == "commercial_state_change":
         is_commercial = bool(data["isCommercialState"])
@@ -179,12 +209,12 @@ async def handle_message(ws, msg):
 
         # Always synchronize our state with the extension. This matters when
         # another trigger changes the commercial state.
-        old_state = client_commercial_states.get(ws, False)
-        client_commercial_states[ws] = is_commercial
+        old_state = commercial_state
+        commercial_state = is_commercial
 
         # Any confirmed state change starts a fresh YES streak.
         if old_state != is_commercial:
-            client_consecutive_yes_counts[ws] = 0
+            consecutive_yes_count = 0
 
         print(
             "Commercial state confirmed by extension. "
@@ -200,12 +230,9 @@ async def handle_message(ws, msg):
         # fullscreen. Apply any changes without requiring the plugin to restart.
         if is_fullscreen and custom_trigger_plugin_preferences:
             changed_keys, screenshot_preferences_changed = apply_plugin_preferences(
-                ws,
                 custom_trigger_plugin_preferences,
                 initialize=False,
             )
-            
-            print(custom_trigger_plugin_preferences) #777
 
             if changed_keys:
                 print("Plugin preferences updated while running:")
@@ -213,11 +240,12 @@ async def handle_message(ws, msg):
                     print(f"  - {key}")
 
                 await send_status(
-                    ws,
                     "AI commercial detector preferences updated",
                     (
-                        "Updated preferences: " + ", ".join(changed_keys) + "\n" +
-                        build_current_preferences_debug(ws)
+                        "Updated preferences: "
+                        + ", ".join(changed_keys)
+                        + "\n"
+                        + build_current_preferences_debug()
                     ),
                 )
 
@@ -226,11 +254,12 @@ async def handle_message(ws, msg):
             # the browser immediately uses the new capture settings.
             if screenshot_preferences_changed:
                 print("Screenshot preferences changed. Requesting screenshots again.")
-                await request_screenshots(ws)
+                await request_screenshots()
 
             # If reducing the batch size means the existing rolling buffer is now
             # large enough, allow the next eligible analysis to start.
-            await maybe_start_analysis(ws)
+            await maybe_start_analysis()
+
 
 def get_float_preference(preferences, key, default, minimum=None):
     """Read a numeric preference safely and fall back to its default."""
@@ -282,8 +311,26 @@ def get_string_preference(preferences, key, default):
     return value if value else default
 
 
-def apply_plugin_preferences(ws, preferences, initialize=False):
+def apply_plugin_preferences(preferences, initialize=False):
     """Apply initial or updated plugin preferences and report what changed."""
+    global llm_call_frequency_seconds
+    global consecutive_yes_required
+    global debug_mode
+    global ollama_model
+    global commercial_prompt
+    global non_commercial_prompt
+    global screenshot_batch_size
+    global screenshot_frequency_milliseconds
+    global screenshot_max_width
+    global screenshot_max_height
+    global screenshot_buffer
+    global consecutive_yes_count
+    global last_llm_call_time
+    global screenshot_version
+    global last_analyzed_screenshot_version
+    global gpu_checked
+    global preference_version
+
     if initialize:
         current_llm_frequency = DEFAULT_LLM_CALL_FREQUENCY_SECONDS
         current_yes_required = DEFAULT_CONSECUTIVE_YES_REQUIRED
@@ -296,32 +343,16 @@ def apply_plugin_preferences(ws, preferences, initialize=False):
         current_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
         current_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
     else:
-        current_llm_frequency = client_llm_call_frequency_seconds.get(
-            ws, DEFAULT_LLM_CALL_FREQUENCY_SECONDS
-        )
-        current_yes_required = client_consecutive_yes_required.get(
-            ws, DEFAULT_CONSECUTIVE_YES_REQUIRED
-        )
-        current_debug_mode = client_debug_modes.get(ws, DEFAULT_DEBUG_MODE)
-        current_model = client_ollama_models.get(ws, DEFAULT_OLLAMA_MODEL)
-        current_commercial_prompt = client_commercial_prompts.get(
-            ws, DEFAULT_COMMERCIAL_PROMPT
-        )
-        current_non_commercial_prompt = client_non_commercial_prompts.get(
-            ws, DEFAULT_NON_COMMERCIAL_PROMPT
-        )
-        current_batch_size = client_screenshot_batch_sizes.get(
-            ws, DEFAULT_SCREENSHOT_BATCH_SIZE
-        )
-        current_screenshot_frequency = client_screenshot_frequency_milliseconds.get(
-            ws, DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS
-        )
-        current_max_width = client_screenshot_max_widths.get(
-            ws, DEFAULT_SCREENSHOT_MAX_WIDTH
-        )
-        current_max_height = client_screenshot_max_heights.get(
-            ws, DEFAULT_SCREENSHOT_MAX_HEIGHT
-        )
+        current_llm_frequency = llm_call_frequency_seconds
+        current_yes_required = consecutive_yes_required
+        current_debug_mode = debug_mode
+        current_model = ollama_model
+        current_commercial_prompt = commercial_prompt
+        current_non_commercial_prompt = non_commercial_prompt
+        current_batch_size = screenshot_batch_size
+        current_screenshot_frequency = screenshot_frequency_milliseconds
+        current_max_width = screenshot_max_width
+        current_max_height = screenshot_max_height
 
     new_values = {
         "llm-call-frequency-seconds": get_float_preference(
@@ -396,42 +427,43 @@ def apply_plugin_preferences(ws, preferences, initialize=False):
     }
 
     changed_keys = [
-        key for key, new_value in new_values.items()
+        key
+        for key, new_value in new_values.items()
         if initialize or new_value != old_values[key]
     ]
 
     if initialize:
-        client_preference_versions[ws] = 0
+        preference_version = 0
     elif changed_keys:
-        client_preference_versions[ws] = client_preference_versions.get(ws, 0) + 1
+        preference_version += 1
 
-    client_llm_call_frequency_seconds[ws] = new_values["llm-call-frequency-seconds"]
-    client_consecutive_yes_required[ws] = new_values["consecutive-yes-required"]
-    client_debug_modes[ws] = new_values["debug-mode"]
-    client_ollama_models[ws] = new_values["ollama-model"]
-    client_commercial_prompts[ws] = new_values["commercial-prompt"]
-    client_non_commercial_prompts[ws] = new_values["non-commercial-prompt"]
-    client_screenshot_batch_sizes[ws] = new_values["screenshot-batch-size"]
-    client_screenshot_frequency_milliseconds[ws] = new_values[
+    llm_call_frequency_seconds = new_values["llm-call-frequency-seconds"]
+    consecutive_yes_required = new_values["consecutive-yes-required"]
+    debug_mode = new_values["debug-mode"]
+    ollama_model = new_values["ollama-model"]
+    commercial_prompt = new_values["commercial-prompt"]
+    non_commercial_prompt = new_values["non-commercial-prompt"]
+    screenshot_batch_size = new_values["screenshot-batch-size"]
+    screenshot_frequency_milliseconds = new_values[
         "screenshot-frequency-milliseconds"
     ]
-    client_screenshot_max_widths[ws] = new_values["screenshot-max-width"]
-    client_screenshot_max_heights[ws] = new_values["screenshot-max-height"]
+    screenshot_max_width = new_values["screenshot-max-width"]
+    screenshot_max_height = new_values["screenshot-max-height"]
 
-    old_buffer = client_screenshot_buffers.get(ws, deque())
-    new_batch_size = new_values["screenshot-batch-size"]
+    old_buffer = screenshot_buffer
+    new_batch_size = screenshot_batch_size
 
     if initialize:
-        client_screenshot_buffers[ws] = deque(maxlen=new_batch_size)
-        client_consecutive_yes_counts[ws] = 0
-        client_last_llm_call_times[ws] = 0.0
-        client_screenshot_versions[ws] = 0
-        client_last_analyzed_screenshot_versions[ws] = -1
-        client_gpu_checked[ws] = False
+        screenshot_buffer = deque(maxlen=new_batch_size)
+        consecutive_yes_count = 0
+        last_llm_call_time = 0.0
+        screenshot_version = 0
+        last_analyzed_screenshot_version = -1
+        gpu_checked = False
     elif "screenshot-batch-size" in changed_keys:
         # Preserve as many of the newest screenshots as possible when resizing
         # the rolling batch instead of throwing the whole buffer away.
-        client_screenshot_buffers[ws] = deque(
+        screenshot_buffer = deque(
             list(old_buffer)[-new_batch_size:],
             maxlen=new_batch_size,
         )
@@ -445,12 +477,13 @@ def apply_plugin_preferences(ws, preferences, initialize=False):
     if not initialize and decision_preferences.intersection(changed_keys):
         # Do not combine a previous YES streak with decisions made using a new
         # model, prompt, or confirmation threshold.
-        client_consecutive_yes_counts[ws] = 0
+        consecutive_yes_count = 0
 
     if "ollama-model" in changed_keys:
-        # The model can be switched at runtime. The next LLM call uses the new
-        # model name. Re-check its CPU/GPU split once it has loaded.
-        client_gpu_checked[ws] = False
+        # The selected model is supplied on every Ollama chat request, so model
+        # changes can take effect while the plugin is running. Re-check its
+        # CPU/GPU split after the new model has successfully loaded.
+        gpu_checked = False
 
     screenshot_keys = {
         "screenshot-batch-size",
@@ -458,120 +491,90 @@ def apply_plugin_preferences(ws, preferences, initialize=False):
         "screenshot-max-width",
         "screenshot-max-height",
     }
-    screenshot_preferences_changed = bool(screenshot_keys.intersection(changed_keys))
+    screenshot_preferences_changed = bool(
+        screenshot_keys.intersection(changed_keys)
+    )
 
     return changed_keys, screenshot_preferences_changed
 
 
-def print_current_preferences(ws):
-    """Print the current per-client settings in a compact form."""
+def print_current_preferences():
+    """Print the current plugin settings in a compact form."""
     print(
-        f"LLM call frequency: every "
-        f"{client_llm_call_frequency_seconds.get(ws, DEFAULT_LLM_CALL_FREQUENCY_SECONDS):g} "
+        f"LLM call frequency: every {llm_call_frequency_seconds:g} "
         "second(s) minimum"
     )
+    print(f"Consecutive YES responses required: {consecutive_yes_required}")
+    print(f"Debug mode: {debug_mode}")
+    print(f"Ollama model: {ollama_model}")
+    print(f"Screenshot batch size: {screenshot_batch_size}")
+    print(f"Screenshot frequency: {screenshot_frequency_milliseconds} ms")
     print(
-        "Consecutive YES responses required: "
-        f"{client_consecutive_yes_required.get(ws, DEFAULT_CONSECUTIVE_YES_REQUIRED)}"
-    )
-    print(f"Debug mode: {client_debug_modes.get(ws, DEFAULT_DEBUG_MODE)}")
-    print(f"Ollama model: {client_ollama_models.get(ws, DEFAULT_OLLAMA_MODEL)}")
-    print(
-        "Screenshot batch size: "
-        f"{client_screenshot_batch_sizes.get(ws, DEFAULT_SCREENSHOT_BATCH_SIZE)}"
-    )
-    print(
-        "Screenshot frequency: "
-        f"{client_screenshot_frequency_milliseconds.get(ws, DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS)} ms"
-    )
-    print(
-        "Screenshot max dimensions: "
-        f"{client_screenshot_max_widths.get(ws, DEFAULT_SCREENSHOT_MAX_WIDTH)}x"
-        f"{client_screenshot_max_heights.get(ws, DEFAULT_SCREENSHOT_MAX_HEIGHT)}"
+        f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}"
     )
 
 
-def build_current_preferences_debug(ws):
+def build_current_preferences_debug():
     """Return the current settings as readable debug text."""
     return (
-        f"Model: {client_ollama_models.get(ws, DEFAULT_OLLAMA_MODEL)}\n"
-        f"LLM minimum interval: "
-        f"{client_llm_call_frequency_seconds.get(ws, DEFAULT_LLM_CALL_FREQUENCY_SECONDS):g}s\n"
-        f"Consecutive YES required: "
-        f"{client_consecutive_yes_required.get(ws, DEFAULT_CONSECUTIVE_YES_REQUIRED)}\n"
-        f"Debug mode: {client_debug_modes.get(ws, DEFAULT_DEBUG_MODE)}\n"
-        f"Screenshot batch size: "
-        f"{client_screenshot_batch_sizes.get(ws, DEFAULT_SCREENSHOT_BATCH_SIZE)}\n"
-        f"Screenshot frequency: "
-        f"{client_screenshot_frequency_milliseconds.get(ws, DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS)}ms\n"
-        f"Screenshot max dimensions: "
-        f"{client_screenshot_max_widths.get(ws, DEFAULT_SCREENSHOT_MAX_WIDTH)}x"
-        f"{client_screenshot_max_heights.get(ws, DEFAULT_SCREENSHOT_MAX_HEIGHT)}"
+        f"Model: {ollama_model}\n"
+        f"LLM minimum interval: {llm_call_frequency_seconds:g}s\n"
+        f"Consecutive YES required: {consecutive_yes_required}\n"
+        f"Debug mode: {debug_mode}\n"
+        f"Screenshot batch size: {screenshot_batch_size}\n"
+        f"Screenshot frequency: {screenshot_frequency_milliseconds}ms\n"
+        f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}"
     )
 
 
-async def handle_screenshot(ws, screenshot_bytes):
+async def handle_screenshot(screenshot_bytes):
+    global screenshot_version
+
     print(f"Received screenshot as JPEG: {len(screenshot_bytes)} bytes")
 
-    screenshot_buffer = client_screenshot_buffers.get(ws)
-    if screenshot_buffer is None:
-        return
-
     screenshot_buffer.append(screenshot_bytes)
-    client_screenshot_versions[ws] = client_screenshot_versions.get(ws, 0) + 1
+    screenshot_version += 1
 
-    batch_size = client_screenshot_batch_sizes.get(ws, DEFAULT_SCREENSHOT_BATCH_SIZE)
-    print(f"Screenshot buffer: {len(screenshot_buffer)}/{batch_size}")
+    print(f"Screenshot buffer: {len(screenshot_buffer)}/{screenshot_batch_size}")
 
     # We cannot analyze until the first full rolling batch exists.
-    if len(screenshot_buffer) < batch_size:
+    if len(screenshot_buffer) < screenshot_batch_size:
         return
 
-    await maybe_start_analysis(ws)
+    await maybe_start_analysis()
 
 
-async def maybe_start_analysis(ws):
-    screenshot_buffer = client_screenshot_buffers.get(ws)
-    if screenshot_buffer is None:
+async def maybe_start_analysis():
+    global last_llm_call_time
+    global last_analyzed_screenshot_version
+    global analysis_task
+
+    if len(screenshot_buffer) < screenshot_batch_size:
         return
 
-    batch_size = client_screenshot_batch_sizes.get(ws, DEFAULT_SCREENSHOT_BATCH_SIZE)
-    if len(screenshot_buffer) < batch_size:
-        return
-
-    # Never allow more than one Ollama request at a time for this client.
-    existing_task = client_analysis_tasks.get(ws)
-    if existing_task and not existing_task.done():
+    # Never allow more than one Ollama request at a time.
+    if analysis_task and not analysis_task.done():
         return
 
     # Require at least one newly received screenshot since the previous LLM
     # analysis started. This prevents frequency=0 from re-analyzing the exact
     # same batch repeatedly.
-    screenshot_version = client_screenshot_versions.get(ws, 0)
-    last_analyzed_version = client_last_analyzed_screenshot_versions.get(ws, -1)
-    if screenshot_version <= last_analyzed_version:
+    if screenshot_version <= last_analyzed_screenshot_version:
         return
 
     # Respect the user's configured minimum time between the START of calls.
     now = time.monotonic()
-    last_call_time = client_last_llm_call_times.get(ws, 0.0)
-    call_frequency = client_llm_call_frequency_seconds.get(
-        ws,
-        DEFAULT_LLM_CALL_FREQUENCY_SECONDS,
-    )
-
-    if now - last_call_time < call_frequency:
+    if now - last_llm_call_time < llm_call_frequency_seconds:
         return
 
     screenshots = list(screenshot_buffer)
-    state_at_start = client_commercial_states.get(ws, False)
-    preference_version_at_start = client_preference_versions.get(ws, 0)
+    state_at_start = commercial_state
+    preference_version_at_start = preference_version
 
-    client_last_llm_call_times[ws] = now
-    client_last_analyzed_screenshot_versions[ws] = screenshot_version
-    client_analysis_tasks[ws] = asyncio.create_task(
+    last_llm_call_time = now
+    last_analyzed_screenshot_version = screenshot_version
+    analysis_task = asyncio.create_task(
         analyze_screenshot_batch(
-            ws,
             screenshots,
             state_at_start,
             preference_version_at_start,
@@ -580,75 +583,79 @@ async def maybe_start_analysis(ws):
 
 
 async def analyze_screenshot_batch(
-    ws, screenshots, state_at_start, preference_version_at_start
+    screenshots,
+    state_at_start,
+    preference_version_at_start,
 ):
+    global analysis_task
+    global consecutive_yes_count
+    global commercial_state
+    global gpu_checked
+
     try:
         print(
             f"Sending {len(screenshots)} screenshots to Ollama. "
             f"Current commercial state={state_at_start}"
         )
 
-        debug_mode = client_debug_modes.get(ws, DEFAULT_DEBUG_MODE)
-        selected_model = client_ollama_models.get(ws, DEFAULT_OLLAMA_MODEL)
-        commercial_prompt = client_commercial_prompts.get(ws, DEFAULT_COMMERCIAL_PROMPT)
-        non_commercial_prompt = client_non_commercial_prompts.get(
-            ws,
-            DEFAULT_NON_COMMERCIAL_PROMPT,
-        )
+        # Snapshot these values at the start of the request. If preferences are
+        # changed while Ollama is working, preference_version will change and the
+        # result will be discarded below.
+        selected_debug_mode = debug_mode
+        selected_model = ollama_model
+        selected_commercial_prompt = commercial_prompt
+        selected_non_commercial_prompt = non_commercial_prompt
 
         transition_detected, llm_response, ai_stats = await ask_ollama_about_transition(
             screenshots,
             state_at_start,
-            debug_mode,
+            selected_debug_mode,
             selected_model,
-            commercial_prompt,
-            non_commercial_prompt,
+            selected_commercial_prompt,
+            selected_non_commercial_prompt,
         )
 
         # Preferences can change while Ollama is analyzing. Ignore a response
         # produced with stale model/prompt/settings and let the next analysis use
         # the newly applied configuration.
-        current_preference_version = client_preference_versions.get(ws, 0)
-        if current_preference_version != preference_version_at_start:
-            print("Ignoring Ollama response because plugin preferences changed during analysis")
-            client_consecutive_yes_counts[ws] = 0
+        if preference_version != preference_version_at_start:
+            print(
+                "Ignoring Ollama response because plugin preferences changed "
+                "during analysis"
+            )
+            consecutive_yes_count = 0
             return
 
         # Put useful performance information at the top of every debug payload.
-        # In debug mode the model's short reason follows it; otherwise a concise
-        # decision description follows it.
         ai_debug_header = build_ai_debug_header(ai_stats)
 
         # Check the Ollama CLI once after the model has successfully loaded.
         # This gives the same CPU/GPU split shown by `ollama ps`.
-        if not client_gpu_checked.get(ws, False):
-            client_gpu_checked[ws] = await warn_if_not_full_gpu(ws, selected_model)
+        if not gpu_checked:
+            gpu_checked = await warn_if_not_full_gpu(selected_model)
 
         print(f"Ollama response: {llm_response!r}")
         print(ai_debug_header)
 
         # The commercial state may have changed while Ollama was thinking. If
         # so, this answer was produced for an outdated question and is ignored.
-        current_state = client_commercial_states.get(ws, False)
-        if current_state != state_at_start:
-            print("Ignoring Ollama response because commercial state changed during analysis")
-            client_consecutive_yes_counts[ws] = 0
+        if commercial_state != state_at_start:
+            print(
+                "Ignoring Ollama response because commercial state changed "
+                "during analysis"
+            )
+            consecutive_yes_count = 0
             return
 
         if transition_detected:
-            client_consecutive_yes_counts[ws] = (
-                client_consecutive_yes_counts.get(ws, 0) + 1
-            )
+            consecutive_yes_count += 1
         else:
             # A NO breaks the streak. The requested confirmations must be
             # consecutive YES responses.
-            client_consecutive_yes_counts[ws] = 0
+            consecutive_yes_count = 0
 
-        yes_count = client_consecutive_yes_counts[ws]
-        yes_required = client_consecutive_yes_required.get(
-            ws,
-            DEFAULT_CONSECUTIVE_YES_REQUIRED,
-        )
+        yes_count = consecutive_yes_count
+        yes_required = consecutive_yes_required
 
         answer_text = "YES" if transition_detected else "NO"
         print(
@@ -660,9 +667,8 @@ async def analyze_screenshot_batch(
         # state change. Performance/token information appears first, followed by
         # the complete YES/NO + reason response from Ollama.
         if yes_count < yes_required:
-            if debug_mode:
+            if selected_debug_mode:
                 await send_status(
-                    ws,
                     f"AI decision: {answer_text} ({yes_count}/{yes_required} YES)",
                     ai_debug_header + "\n\nAI response:\n" + llm_response,
                 )
@@ -676,27 +682,26 @@ async def analyze_screenshot_batch(
 
         # Update immediately so another completed analysis cannot send the same
         # change again before the extension echoes the confirmed state back.
-        client_commercial_states[ws] = new_commercial_state
-        client_consecutive_yes_counts[ws] = 0
+        commercial_state = new_commercial_state
+        consecutive_yes_count = 0
 
         if new_commercial_state:
             display = "AI detected commercial break"
         else:
             display = "AI detected return to programming"
 
-        if debug_mode:
+        if selected_debug_mode:
             debug = ai_debug_header + "\n\nAI response:\n" + llm_response
         else:
             debug = (
-                ai_debug_header +
-                "\n\nDecision:\n" +
-                f"Ollama returned YES {yes_required} time(s) in a row. "
-                f"New commercial state={new_commercial_state}"
+                ai_debug_header
+                + "\n\nDecision:\n"
+                + f"Ollama returned YES {yes_required} time(s) in a row. "
+                + f"New commercial state={new_commercial_state}"
             )
 
         print(f"Sending commercial state change: {new_commercial_state}")
         await send_commercial_state_change(
-            ws,
             new_commercial_state,
             display,
             debug,
@@ -707,38 +712,39 @@ async def analyze_screenshot_batch(
     except Exception as exc:
         print(f"Ollama analysis failed: {exc}")
 
-        if ws in clients:
+        if websocket is not None:
             await send_status(
-                ws,
                 "AI commercial detection error",
                 f"Ollama analysis failed: {exc}",
             )
     finally:
-        # Only clear the slot if this is still the registered analysis task.
+        # Only clear the task slot if this coroutine is still the registered
+        # analysis task.
         current_task = asyncio.current_task()
-        if client_analysis_tasks.get(ws) is current_task:
-            client_analysis_tasks[ws] = None
+        if analysis_task is current_task:
+            analysis_task = None
 
         # Important for frequency=0: if at least one screenshot arrived while
         # Ollama was working, immediately check whether another analysis can be
         # started using the newest rolling batch.
-        if ws in clients:
-            await maybe_start_analysis(ws)
+        if websocket is not None:
+            await maybe_start_analysis()
+
 
 async def ask_ollama_about_transition(
     screenshots,
     currently_commercial,
-    debug_mode,
+    selected_debug_mode,
     model,
-    commercial_prompt,
-    non_commercial_prompt,
+    selected_commercial_prompt,
+    selected_non_commercial_prompt,
 ):
     if currently_commercial:
-        question = non_commercial_prompt.rstrip() + " "
+        question = selected_non_commercial_prompt.rstrip() + " "
     else:
-        question = commercial_prompt.rstrip() + " "
+        question = selected_commercial_prompt.rstrip() + " "
 
-    if debug_mode:
+    if selected_debug_mode:
         question += (
             "Respond with YES or NO on the first line. On the second line, give "
             "one short reason for the decision. Keep the reason concise."
@@ -765,7 +771,10 @@ async def ask_ollama_about_transition(
     wall_time_seconds = time.monotonic() - call_started
 
     llm_response = response.message.content.strip()
-    transition_detected = parse_yes_no_response(llm_response, debug_mode)
+    transition_detected = parse_yes_no_response(
+        llm_response,
+        selected_debug_mode,
+    )
 
     prompt_tokens = getattr(response, "prompt_eval_count", None)
     response_tokens = getattr(response, "eval_count", None)
@@ -818,18 +827,23 @@ def build_ai_debug_header(stats):
         f"Model: {stats['model']}\n"
         f"Screenshots: {stats['screenshots']}\n"
         f"Wall-clock time: {stats['wall_time_seconds']:.3f}s\n"
-        f"Ollama total duration: {format_nanoseconds_as_seconds(stats['total_duration_ns'])}\n"
-        f"Model load duration: {format_nanoseconds_as_seconds(stats['load_duration_ns'])}\n"
-        f"Prompt/image evaluation: {format_nanoseconds_as_seconds(stats['prompt_eval_duration_ns'])}\n"
-        f"Response generation: {format_nanoseconds_as_seconds(stats['eval_duration_ns'])}\n"
+        f"Ollama total duration: "
+        f"{format_nanoseconds_as_seconds(stats['total_duration_ns'])}\n"
+        f"Model load duration: "
+        f"{format_nanoseconds_as_seconds(stats['load_duration_ns'])}\n"
+        f"Prompt/image evaluation: "
+        f"{format_nanoseconds_as_seconds(stats['prompt_eval_duration_ns'])}\n"
+        f"Response generation: "
+        f"{format_nanoseconds_as_seconds(stats['eval_duration_ns'])}\n"
         f"Prompt tokens: {format_token_count(stats['prompt_tokens'])}\n"
         f"Response tokens: {format_token_count(stats['response_tokens'])}\n"
         f"Total tokens: {format_token_count(stats['total_tokens'])}"
     )
 
-def parse_yes_no_response(response, debug_mode=False):
+
+def parse_yes_no_response(response, selected_debug_mode=False):
     """Convert an Ollama response into a strict True/False decision."""
-    if debug_mode:
+    if selected_debug_mode:
         # Debug responses may contain a reason after the first line, but the
         # first non-empty line must still be an unambiguous YES or NO.
         first_line = next(
@@ -847,7 +861,11 @@ def parse_yes_no_response(response, debug_mode=False):
     if cleaned == "NO":
         return False
 
-    expected = "YES/NO on the first line" if debug_mode else "only YES or NO"
+    expected = (
+        "YES/NO on the first line"
+        if selected_debug_mode
+        else "only YES or NO"
+    )
     raise ValueError(
         f"Expected Ollama to return {expected}, got: {response!r}"
     )
@@ -891,7 +909,7 @@ def get_ollama_model_processor_line(status, model):
     return ""
 
 
-async def warn_if_not_full_gpu(ws, model):
+async def warn_if_not_full_gpu(model):
     """Warn the extension if Ollama reports any CPU offload for the model."""
     status = await asyncio.to_thread(get_ollama_processor_status)
 
@@ -910,7 +928,6 @@ async def warn_if_not_full_gpu(ws, model):
 
     if "100% GPU" not in model_line.upper():
         await send_status(
-            ws,
             "Warning: Ollama is not fully using the GPU.",
             (
                 f"Ollama is using CPU offload for {model}. Performance may be reduced. "
@@ -922,9 +939,12 @@ async def warn_if_not_full_gpu(ws, model):
     return True
 
 
-async def send_commercial_state_change(ws, is_commercial, display, debug):
+async def send_commercial_state_change(is_commercial, display, debug):
+    if websocket is None:
+        return
+
     try:
-        await ws.send(
+        await websocket.send(
             json.dumps(
                 {
                     "type": "commercial_state_change",
@@ -947,13 +967,15 @@ async def send_commercial_state_change(ws, is_commercial, display, debug):
 # This can be used to disable or enable any auto commercial detection that the
 # browser extension is doing.
 async def send_auto_commercial_blocked_state_change(
-    ws,
     is_auto_commercial_blocked,
     display,
     debug,
 ):
+    if websocket is None:
+        return
+
     try:
-        await ws.send(
+        await websocket.send(
             json.dumps(
                 {
                     "type": "auto_commercial_blocked_state_change",
@@ -973,9 +995,12 @@ async def send_auto_commercial_blocked_state_change(
         print("send_auto_commercial_blocked_state_change stopped: client disconnected")
 
 
-async def send_status(ws, display, debug):
+async def send_status(display, debug):
+    if websocket is None:
+        return
+
     try:
-        await ws.send(
+        await websocket.send(
             json.dumps(
                 {
                     "type": "status",
@@ -993,16 +1018,12 @@ async def send_status(ws, display, debug):
         print("send_status stopped: client disconnected")
 
 
-async def request_screenshots(ws):
-    frequency_milliseconds = client_screenshot_frequency_milliseconds.get(
-        ws,
-        DEFAULT_SCREENSHOT_FREQUENCY_MILLISECONDS,
-    )
-    max_width = client_screenshot_max_widths.get(ws, DEFAULT_SCREENSHOT_MAX_WIDTH)
-    max_height = client_screenshot_max_heights.get(ws, DEFAULT_SCREENSHOT_MAX_HEIGHT)
+async def request_screenshots():
+    if websocket is None:
+        return
 
     try:
-        await ws.send(
+        await websocket.send(
             json.dumps(
                 {
                     "type": "request_screenshots",
@@ -1010,10 +1031,10 @@ async def request_screenshots(ws):
                     "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
                     "data": {
                         "shouldSendScreenshots": True,
-                        "frequencyMilliseconds": frequency_milliseconds,
+                        "frequencyMilliseconds": screenshot_frequency_milliseconds,
                         "maxDimensionsPixels": {
-                            "height": max_height,
-                            "width": max_width,
+                            "height": screenshot_max_height,
+                            "width": screenshot_max_width,
                         },
                         "trimOptionsPercentages": {
                             "top": 0,
@@ -1048,7 +1069,10 @@ async def get_local_ollama_models():
         return []
 
 
-async def send_manifest(ws):
+async def send_manifest():
+    if websocket is None:
+        return
+
     local_models = await get_local_ollama_models()
     model_options = [
         {"label": model_name, "value": model_name}
@@ -1070,7 +1094,7 @@ async def send_manifest(ws):
     )
 
     try:
-        await ws.send(
+        await websocket.send(
             json.dumps(
                 {
                     "type": "plugin_manifest",
