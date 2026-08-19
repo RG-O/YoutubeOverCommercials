@@ -6,13 +6,13 @@
 
 body {
     background-color: rgb(240, 238, 236);
-    width: 400px;
     overflow-x: hidden;
     margin-top: 0;
     margin: 0;
 }
 
 form, .plugins-section {
+    width: 400px;
     color: black;
     font-size: 16px;
     margin: 8px;
