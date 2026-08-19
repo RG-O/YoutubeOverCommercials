@@ -26,8 +26,8 @@ OLLAMA_HOST = "http://127.0.0.1:11434"
 DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS = 0
 DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS = 0
 
-DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED = 1
-DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED = 1
+DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED = 2
+DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED = 2
 
 DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE = 4
 DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE = 4
@@ -53,6 +53,7 @@ DEFAULT_COMMERCIAL_PROMPT = (
     "one short reason for the decision. Keep the reason concise."
 )
 
+#TODO: Add option to grab a few screenshots at the beging and have it summarize what the user is watching so it can check specifically for that
 DEFAULT_NON_COMMERCIAL_PROMPT = (
     "You are examining consecutive screenshots from a TV broadcast. "
     "Do all of these screenshots appear to NOT be part of a commercial "

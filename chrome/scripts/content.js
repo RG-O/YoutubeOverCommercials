@@ -94,7 +94,7 @@ var clapIndicatorResetTimer = null;
 var doubleClapDetectorIFrameContainer;
 var clapPort;
 
-//TODO: put all in here
+//TODO: put all in here?
 const preferences = {
 
 }
@@ -3109,6 +3109,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     console.log("Error: Message type of auto_commercial_blocked_state_change sent without data.isAutoCommercialBlocked");
                 }
             } else if (message.payload.type === "request_screenshots") {
+                //check previous settings from current session
                 if (shouldSendScreenshotsToTriggerPlugin) {
                     //plugin set shouldSendScreenshotsToTriggerPlugin to true previously, just updating configs
                     pluginScreenshotOptions = message.payload.data ?? {};
@@ -3132,28 +3133,35 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         }
                     }
                 } else {
-                    pluginScreenshotOptions = message.payload.data ?? {};
-                    shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
-                    if (shouldSendScreenshotsToTriggerPlugin) {
-                        if (document.fullscreenElement) {
-                            windowWidth = window.innerWidth;
-                            windowHeight = window.innerHeight;
-                            windowDimensions = { x: windowWidth, y: windowHeight };
-                            startViewingTab(windowDimensions);
-                            //give a sec for tab viewing to start
-                            setTimeout(() => {
-                                sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
-                            }, 1000);
+                    if (
+                        (message.sender === "trigger-plugin" && pluginTriggerPreferences?.capabilities?.includes("screenshots")) ||
+                        (message.sender === "dual-plugin" && pluginDualPreferences?.capabilities?.includes("screenshots"))
+                    ) {
+                        pluginScreenshotOptions = message.payload.data ?? {};
+                        shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
+                        if (shouldSendScreenshotsToTriggerPlugin) {
+                            if (document.fullscreenElement) {
+                                windowWidth = window.innerWidth;
+                                windowHeight = window.innerHeight;
+                                windowDimensions = { x: windowWidth, y: windowHeight };
+                                startViewingTab(windowDimensions);
+                                //give a sec for tab viewing to start
+                                setTimeout(() => {
+                                    sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
+                                }, 1000);
+                            } else {
+                                addMessageAlertToMainVideo("Plugin requested screenshots but video must be in fullscreen for screenshots to send.");
+                                //TODO: add wait for fullscreen here
+                            }
                         } else {
-                            addMessageAlertToMainVideo("Plugin requested screenshots but video must be in fullscreen for screenshots to send.");
-                            //TODO: add wait for fullscreen here
+                            //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
+                            clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                            if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
+                                pauseViewingTab();
+                            }
                         }
                     } else {
-                        //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
-                        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
-                        if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
-                            pauseViewingTab();
-                        }
+                        addMessageAlertToMainVideo("Plugin requesting screenshots but 'screenshots' not listed in capabilities of plugin manifest.");
                     }
                 }
             }

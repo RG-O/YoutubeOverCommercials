@@ -1768,6 +1768,10 @@ function displayPluginManifest(container, manifest, preferences = {}) {
     } else {
         settings.remove();
     }
+
+    if (manifest?.capabilities?.includes("screenshots")) {
+        container.querySelector("#plugin-screenshot-disclaimer").style.display = 'block';
+    }
 }
 
 
@@ -1790,6 +1794,7 @@ function capturePluginPreferences(pluginManifest, pluginManifestContainerElmID) 
     return {
         id: pluginManifest.id,
         version: pluginManifest.version,
+        capabilities: pluginManifest.capabilities,
         lastSavedTimestamp: Date.now(),
         preferences: preferences,
     }
