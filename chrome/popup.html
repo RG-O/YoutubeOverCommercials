@@ -20,7 +20,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-normal" name="commercialDetectionMode" value="auto-pixel-normal">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-default">Default</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-normal">Pixel Color Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Detects when commercials occur by checking for a selected screen graphic, that only shows when the game/program is on, disapearing and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-default">Default</span>
         </div>
         <div id="auto-pixel-normal" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
@@ -31,7 +31,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-opposite" name="commercialDetectionMode" value="auto-pixel-opposite">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-opposite">Pixel Color Match</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercials occur by checking for the presence of a selected screen graphic that only shows during commercial breaks on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-opposite">Pixel Color Match</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Detects when commercials occur by checking for the presence of a selected screen graphic that only shows during commercial breaks on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span>
         </div>
         <div id="auto-pixel-opposite" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
@@ -42,7 +42,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-pixel-advanced-logo" name="commercialDetectionMode" value="auto-pixel-advanced-logo">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Logo Edge Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">This mode works by the user (you) selecting the full channel logo on the on the broadcast. It then sends images of this logo to the Advanced Logo Analyzer app on your desktop which uses computer vision to detect the edges of the logo. It first builds a mask of this logo's edges and then compares future images of this area to see if the edges match up to the original mask. If the edges don't match up, that means the logo went away, so it is most likely a commercial.</span></span><span class="badge badge-advanced">Enhanced</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-pixel-advanced-logo">Logo Edge Mismatch</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">This mode works by the user (you) selecting the full channel logo on the on the broadcast. It then sends images of this logo to the Advanced Logo Analyzer app on your desktop which uses computer vision to detect the edges of the logo. It first builds a mask of this logo's edges and then compares future images of this area to see if the edges match up to the original mask. If the edges don't match up, that means the logo went away, so it is most likely a commercial.</span></span><span class="badge badge-advanced">Enhanced</span>
         </div>
         <div id="auto-pixel-advanced-logo" class="commercial-detection-mode-instructions-wrapper">
             <div id="companion-app-loading" class="loading-spinner"></div>
@@ -72,7 +72,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-auto-audio" name="commercialDetectionMode" value="auto-audio">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-audio">Audio Level Low</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Detects when commercial breaks occur by detecting a set duration of volume lower than a set threshold on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-experimental firefox-experimental">Experimental</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-audio">Audio Level Low</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Detects when commercial breaks occur by detecting a set duration of volume lower than a set threshold on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-experimental firefox-experimental">Experimental</span>
         </div>
         <div id="auto-audio" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
@@ -83,7 +83,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-manual" name="commercialDetectionMode" value="manual">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual - Keyboard &#9000;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual">Manual - Keyboard &#9000;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Manually trigger YouTube or your media of choice to play over top of commercials. If computer playing through TV, I highly recommend downloading Touch Portal or Deckboard from the app store on your phone and setting up the extension shortcut through one of them so you can control this extension on your computer from your phone.</span></span>
         </div>
         <div id="manual" class="commercial-detection-mode-instructions-wrapper">
             <div class="mode-how-to settings-box">
@@ -94,7 +94,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-manual-clap" name="commercialDetectionMode" value="manual-clap">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual-clap">Manual - Double Clap &#128079;&#128079;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Manually trigger YouTube or your media of choice to play over top of commercials by double clapping (like the old Clap-On Clap-Off commercials).</span></span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-manual-clap">Manual - Double Clap &#128079;&#128079;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Manually trigger YouTube or your media of choice to play over top of commercials by double clapping (like the old Clap-On Clap-Off commercials).</span></span>
         </div>
         <div id="manual-clap" class="commercial-detection-mode-instructions-wrapper">
             <div id="double-clap-mode-starter-instructions" class="mode-how-to settings-box">
@@ -109,7 +109,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-custom-plugin-trigger" name="commercialDetectionMode" value="custom-plugin-trigger">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -60px; width: 210px;">Trigger the extension any way you can dream of with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trigger the extension any way you can dream of with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
             <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
@@ -152,7 +152,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
-            <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
+            <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
         </div>
         <div id="yt-playlist" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
@@ -169,7 +169,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
-            <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
+            <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
         </div>
         <div id="yt-video" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
@@ -186,7 +186,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
-            <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -10px;">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
+            <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
         </div>
         <div id="yt-live" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
@@ -203,7 +203,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-spotify" name="overlayVideoType" value="spotify">
-            <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
+            <label class="video-type-label" for="overlayVideoType-spotify">Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays a spotify playlist of your choice during commercials. Tip: you can change the song/playlist from your phone if you also have the app there.</span></span>
         </div>
         <div id="spotify" class="id-field-wrapper blue-settings-box settings-box">
             Will prompt you to select playlist from Spotify.<br />
@@ -212,7 +212,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-other-tabs" name="overlayVideoType" value="other-tabs">
-            <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 250px; top: -205px; left: -120px;">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
+            <label class="video-type-label" for="overlayVideoType-other-tabs">Other Tab Audio</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">You can play any audio from a different tab in your browser and then this extension will unmute that audio during commercials. Great if you want to play music from a different site besides spotify or maybe the radio broadcast of the event you are watching. Fun use case: If your computer is plugged into two different TVs or monitors and you are playing your main game on one and a secondary game on the other. You can set this up to play audio from your secondary game while your main one goes to commercial.</span></span>
         </div>
         <div id="other-tabs" class="id-field-wrapper blue-settings-box settings-box">
             Will mute/unmute audio playing from other tabs.
@@ -220,7 +220,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
-            <label class="video-type-label" for="overlayVideoType-other-video">Any Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 240px; top: -160px; left: -110px;">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
+            <label class="video-type-label" for="overlayVideoType-other-video">Any Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
         <div id="other-video" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
@@ -237,7 +237,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
-            <label class="video-type-label" for="overlayVideoType-other-live">Any Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 280px; top: -270px; left: -160px;">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below! Doesn't work from all websites. Troubleshooting Tips: Overlay stream doesn't mute/unmute? - Try checking "Non-YT Video Troubleshoot" toggle in advanced settings, refreshing, and trying again. Overlay stream is zoomed out or not centered within its window? -  Try checking "Non-YT Video Zoom" toggle in advanced settings, refreshing, and trying again. Overlay stream doesn't load at all? - Try finding and installing an ignore x-frame options/header browser extension (at your own risk), refreshing, and trying again.</span></span><span class="badge badge-experimental">Experimental</span>
+            <label class="video-type-label" for="overlayVideoType-other-live">Any Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below! Doesn't work from all websites. Troubleshooting Tips: Overlay stream doesn't mute/unmute? - Try checking "Non-YT Video Troubleshoot" toggle in advanced settings, refreshing, and trying again. Overlay stream is zoomed out or not centered within its window? -  Try checking "Non-YT Video Zoom" toggle in advanced settings, refreshing, and trying again. Overlay stream doesn't load at all? - Try finding and installing an ignore x-frame options/header browser extension (at your own risk), refreshing, and trying again.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
         <div id="other-live" class="id-field-wrapper blue-settings-box settings-box">
             <div class="id-field-label">
@@ -254,7 +254,7 @@
 
         <div>
             <input type="radio" id="overlayVideoType-custom-plugin-overlay" name="overlayVideoType" value="custom-plugin-overlay">
-            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: -10px;">Have anything you can dream of happen automatically during commercials with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="video-type-label" for="overlayVideoType-custom-plugin-overlay">Overlay Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Have anything you can dream of happen automatically during commercials with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-overlay" class="id-field-wrapper">
             <div class="plugin-url-wrapper blue-settings-box settings-box">
@@ -316,17 +316,17 @@
             <div class="dimensions-fields-wrapper settings-box">
 
                 <div class="general-field">
-                    Overlay Video Width (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Percentatage of the width of the screen the overlay video takes up.</span></span>
+                    Overlay Video Width (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Percentatage of the width of the screen the overlay video takes up.</span></span>
                     <input type="number" name="videoOverlayWidth" id="videoOverlayWidth" min="1" max="100">
                 </div>
 
                 <div class="general-field">
-                    Overlay Video Height (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Percentatage of the height of the screen the overlay video takes up.</span></span>
+                    Overlay Video Height (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Percentatage of the height of the screen the overlay video takes up.</span></span>
                     <input type="number" name="videoOverlayHeight" id="videoOverlayHeight" min="1" max="100">
                 </div>
 
                 <div class="general-field">
-                    Overlay Video Display Position:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Location the overlay video displays on the screen. Can be helpful for when certain sports do a side by side during commercials to set overlay video to the side.</span></span>
+                    Overlay Video Display Position:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Location the overlay video displays on the screen. Can be helpful for when certain sports do a side by side during commercials to set overlay video to the side.</span></span>
                     <div class="display-grid">
                         <div class="grid-cell" data-x="left" data-y="top"></div>
                         <div class="grid-cell" data-x="middle" data-y="top"></div>
@@ -360,7 +360,7 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="shouldClickNextOnPlaySpotify">Auto Next Song for Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">For Spotify mode only. Automatically plays the next song when a commercial is detected. Uncheck this if you would like it to resume where a song left off when the last commercial ended.</span></span>
+                <label class="checkbox-label" for="shouldClickNextOnPlaySpotify">Auto Next Song for Spotify</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">For Spotify mode only. Automatically plays the next song when a commercial is detected. Uncheck this if you would like it to resume where a song left off when the last commercial ended.</span></span>
                 <input type="checkbox" name="shouldClickNextOnPlaySpotify" id="shouldClickNextOnPlaySpotify">
             </div>
 
@@ -370,7 +370,7 @@
             </div>
 
             <div class="general-field">
-                <label class="checkbox-label" for="isOverlayVideoZoomMode">Non-YT Video Zoom</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Trying to play a non YouTube video over commercials and the overlay shows other info on the site besides just the video or some of the video is cut off? Try enabling this setting to fix it!</span></span>
+                <label class="checkbox-label" for="isOverlayVideoZoomMode">Non-YT Video Zoom</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trying to play a non YouTube video over commercials and the overlay shows other info on the site besides just the video or some of the video is cut off? Try enabling this setting to fix it!</span></span>
                 <input type="checkbox" name="isOverlayVideoZoomMode" id="isOverlayVideoZoomMode">
             </div>
 
@@ -387,17 +387,17 @@
             <div class="pip-fields-wrapper settings-box">
 
                 <div class="general-field">
-                    PiP Width (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the width of the screen the overlay video takes up while in PiP mode.</span></span>
+                    PiP Width (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the width of the screen the overlay video takes up while in PiP mode.</span></span>
                     <input type="number" name="pipWidth" id="pipWidth" min="1" max="50">
                 </div>
 
                 <div class="general-field">
-                    PiP Height (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the height of the screen the overlay video takes up while in PiP mode.</span></span>
+                    PiP Height (%):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Percentatage of the height of the screen the overlay video takes up while in PiP mode.</span></span>
                     <input type="number" name="pipHeight" id="pipHeight" min="1" max="50">
                 </div>
 
                 <div class="general-field">
-                    PiP Display Position:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="left: 0px;">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Which corner the overlay video displays while in PiP mode.</span></span>
+                    PiP Display Position:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Setting for YT Live and Non-YT Live Stream modes with PiP enabled only. Which corner the overlay video displays while in PiP mode.</span></span>
                     <div class="pip-grid">
                         <div class="pip-grid-cell" data-pip-x="left" data-pip-y="top"></div>
                         <div class="pip-grid-cell" data-pip-x="right" data-pip-y="top"></div>
@@ -493,7 +493,7 @@
             </div>
 
             <div class="general-field">
-                Color Difference Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">How different from the original pixel color does the current pixel color need to be before deciding it isn't a matching color. This isn't really a percentage, but more so a made up measurement where around 8-12 is usually the sweet spot. Set higher if you absolutely have to pick a pixel inside a semi-transparent logo/graphic.</span></span>
+                Color Difference Threshold:<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">How different from the original pixel color does the current pixel color need to be before deciding it isn't a matching color. This isn't really a percentage, but more so a made up measurement where around 8-12 is usually the sweet spot. Set higher if you absolutely have to pick a pixel inside a semi-transparent logo/graphic.</span></span>
                 <input type="number" name="colorDifferenceMatchingThreshold" id="colorDifferenceMatchingThreshold" min="3" max="88">
             </div>
 
@@ -507,7 +507,7 @@
             </table>-->
 
             <div class="general-field">
-                Override Cooldown Time (sec):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext" style="width: 210px; left: -160px;">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
+                Override Cooldown Time (sec):<span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Number of seconds after you manually switch in or out of commercial mode before the auto-detection kicks back in again.</span></span>
                 <input type="number" name="manualOverrideCooldown" id="manualOverrideCooldown" min="1">
             </div>
 
@@ -691,6 +691,16 @@
             </div>
         </div>
 
+    </div>
+
+    <div id="tooltips-modal" class="tooltips-modal" aria-hidden="true">
+        <div class="tooltips-modal-content" role="dialog" aria-modal="true" aria-labelledby="tooltips-modal-title">
+            <div class="tooltips-modal-header">
+                <h2 id="tooltips-modal-title">HELP & TOOLTIPS</h2>
+                <button id="tooltips-modal-close" class="tooltips-modal-close" type="button" aria-label="Close">&times;</button>
+            </div>
+            <div id="tooltips-modal-body" class="tooltips-modal-body"></div>
+        </div>
     </div>
 
     <div class="sticky-buttons">

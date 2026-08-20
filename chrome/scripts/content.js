@@ -235,8 +235,8 @@ function hideOverlayVideo() {
 
 
 function removeOverlayVideo() {
-    overlayVideo.remove();
-    overlayScreen.remove();
+    if (overlayVideo) overlayVideo.remove();
+    if (overlayScreen) overlayScreen.remove();
 }
 
 
@@ -2706,8 +2706,6 @@ function fullscreenChanged() {
         setTimeout(() => {
             sendPluginsFullscreenState();
         }, sendDelay);
-    } else {
-        console.log(isAnyPluginMode);
     }
 
 }

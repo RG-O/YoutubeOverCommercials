@@ -373,6 +373,8 @@ chrome.storage.sync.get([
     //clear cache on buy me a coffee image to show updated supporter count
     document.getElementById('buy-me-coffee').src = `https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=${today}&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff`;
 
+    buildFancyTooltipModal();
+
     //check if user granted extension mic access for later double clap mode checks
     navigator.permissions.query({ name: "microphone" }).then((result) => {
         if (result.state === "granted") {
@@ -1644,20 +1646,20 @@ function updatePluginOverlayFramework() {
 
 
 function displayPluginManifest(container, manifest, preferences = {}) {
-    //TODO: rename various variables
     const savedValues = preferences.preferences ?? {};
+    const primaryColor = manifest.primaryColor ?? "#000"; //black
+    const secondaryColor = manifest.secondaryColor ?? "#dadcdc"; //greyblue
 
-    if (manifest.secondaryColor) {
-        const { r, g, b } = hexToRgb(manifest.secondaryColor);
-        if (!isLightColor(r, g, b)) {
-            container.style.color = '#fff' //white
-        }
+    const { r, g, b } = hexToRgb(secondaryColor);
+    if (!isLightColor(r, g, b)) {
+        container.style.color = '#fff' //white
     }
-    container.style.backgroundColor = manifest.secondaryColor ?? "#dadcdc"; //greyblue
+
+    container.style.backgroundColor = secondaryColor; //greyblue
 
     const title = container.querySelector("#plugin-title");
     title.textContent = manifest.name;
-    title.style.color = manifest.primaryColor ?? "#000"; //black
+    title.style.color = primaryColor; //black
 
     const version = container.querySelector("#plugin-version");
     version.textContent = manifest.version;
@@ -1726,6 +1728,10 @@ function displayPluginManifest(container, manifest, preferences = {}) {
                         radioLabel.textContent = opt.label;
                         radioWrapper.appendChild(radio);
                         radioWrapper.appendChild(radioLabel);
+                        if (opt?.tooltip) {
+                            const tooltip = buildTooltip(field?.tooltip, primaryColor);
+                            radioWrapper.appendChild(tooltip);
+                        }
                         input.appendChild(radioWrapper);
                     });
                     break;
@@ -1754,7 +1760,11 @@ function displayPluginManifest(container, manifest, preferences = {}) {
             }
 
             wrapper.appendChild(label);
-            if (field.description) {
+            if (field?.tooltip) {
+                const tooltip = buildTooltip(field?.tooltip, primaryColor);
+                wrapper.appendChild(tooltip);
+            }
+            if (field?.description) {
                 const description = document.createElement("div");
                 description.className = "note";
                 description.textContent = field.description;
@@ -1772,6 +1782,8 @@ function displayPluginManifest(container, manifest, preferences = {}) {
     if (manifest?.capabilities?.includes("screenshots")) {
         container.querySelector("#plugin-screenshot-disclaimer").style.display = 'block';
     }
+
+    buildFancyTooltipModal();
 }
 
 
@@ -1958,4 +1970,157 @@ function handlePluginWSMessage(message) {
             }
         } //else ignore all other connectionStates
     }
+}
+
+
+function buildTooltip(text, color) {
+    const tooltip = document.createElement("span");
+    tooltip.className = "tooltip";
+    tooltip.style.color = color;
+
+    const icon = document.createElement("sup");
+    icon.innerHTML = "&#x1F6C8;";
+    tooltip.appendChild(icon);
+
+    const tooltipText = document.createElement("span");
+    tooltipText.className = "tooltiptext";
+    tooltipText.textContent = text;
+
+    tooltip.appendChild(tooltipText);
+
+    return tooltip;
+}
+
+
+//TODO: update this in the html instead of using this much js
+function buildFancyTooltipModal() {
+    const tooltips = Array.from(document.querySelectorAll(".tooltip"));
+
+    if (tooltips.length === 0) {
+        return;
+    }
+
+    const modal = document.querySelector(".tooltips-modal");
+    const modalBody = modal.querySelector(".tooltips-modal-body");
+    const closeButton = modal.querySelector(".tooltips-modal-close");
+
+    // Clear tooltips from modal if already populated
+    modalBody.innerHTML = "";
+
+    // Add every tooltip on the page to the modal.
+    tooltips.forEach((tooltip, index) => {
+        const tooltipText = tooltip.querySelector(".tooltiptext");
+
+        if (!tooltipText) {
+            return;
+        }
+
+        // Try to get the label/text immediately before the tooltip.
+        let label = "";
+
+        const previousElement = tooltip.previousElementSibling;
+
+        if (previousElement) {
+            label = previousElement.textContent.trim();
+        }
+
+        // Some tooltips follow plain text instead of an actual element.
+        // If no useful label was found, look at the text directly before
+        // the tooltip inside its parent.
+        if (!label) {
+            const parent = tooltip.parentElement;
+            const childNodes = Array.from(parent.childNodes);
+            const tooltipIndex = childNodes.indexOf(tooltip);
+
+            for (let i = tooltipIndex - 1; i >= 0; i--) {
+                const node = childNodes[i];
+
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent.trim();
+
+                    if (text) {
+                        label = text;
+                        break;
+                    }
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const text = node.textContent.trim();
+
+                    if (text) {
+                        label = text;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!label) {
+            label = `Tooltip ${index + 1}`;
+        }
+
+        const tooltipItem = document.createElement("div");
+        tooltipItem.className = "tooltips-modal-item";
+        tooltipItem.id = `tooltip-modal-item-${index}`;
+
+        const tooltipLabel = document.createElement("div");
+        tooltipLabel.className = "tooltips-modal-label";
+        tooltipLabel.textContent = label;
+
+        const tooltipDescription = document.createElement("div");
+        tooltipDescription.className = "tooltips-modal-description";
+        tooltipDescription.textContent = tooltipText.textContent.trim();
+
+        tooltipItem.appendChild(tooltipLabel);
+        tooltipItem.appendChild(tooltipDescription);
+        modalBody.appendChild(tooltipItem);
+
+        // Make the existing tooltip icon clickable.
+        tooltip.setAttribute("role", "button");
+        tooltip.setAttribute("tabindex", "0");
+        tooltip.setAttribute("aria-label", `Help: ${label}`);
+
+        const openTooltipModal = () => {
+            modal.classList.add("open");
+
+            // Wait until the modal is displayed before scrolling.
+            requestAnimationFrame(() => {
+                tooltipItem.scrollIntoView({
+                    behavior: "instant",
+                    block: "start"
+                });
+
+                // Briefly highlight the tooltip that was clicked.
+                tooltipItem.classList.add("selected-tooltip");
+
+                setTimeout(() => {
+                    tooltipItem.classList.remove("selected-tooltip");
+                }, 500);
+            });
+        };
+
+        tooltip.addEventListener("click", (event) => {
+            event.preventDefault();
+            //event.stopPropagation(); //TODO: is this really needed?
+            openTooltipModal();
+        });
+
+        tooltip.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openTooltipModal();
+            }
+        });
+    });
+
+    function closeTooltipModal() {
+        modal.classList.remove("open");
+    }
+
+    closeButton.addEventListener("click", closeTooltipModal);
+
+    // Close when clicking the background outside the modal.
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+            closeTooltipModal();
+        }
+    });
 }

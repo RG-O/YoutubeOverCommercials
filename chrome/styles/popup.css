@@ -15,7 +15,7 @@ form, .plugins-section {
     width: 400px;
     color: black;
     font-size: 16px;
-    margin: 8px;
+    padding: 8px;
 }
 
 kbd {
@@ -32,24 +32,24 @@ input {
     accent-color: #12384d;
 }
 
-input[type=radio] {
-    margin-top: 5px;
-    margin-bottom: 5px;
-    top: 3px;
-    width: 18px;
-    height: 18px;
-}
+    input[type=radio] {
+        margin-top: 5px;
+        margin-bottom: 5px;
+        top: 3px;
+        width: 18px;
+        height: 18px;
+    }
 
-input[type=number] {
-    width: 40px;
-    float: right;
-}
+    input[type=number] {
+        width: 40px;
+        float: right;
+    }
 
-input[type=checkbox] {
-    width: 18px;
-    height: 18px;
-    float: right;
-}
+    input[type=checkbox] {
+        width: 18px;
+        height: 18px;
+        float: right;
+    }
 
 .general-field {
     margin-bottom: 7px;
@@ -109,22 +109,22 @@ button {
     display: inline-block;
 }
 
-.pull-id-button .pull-id-tooltip {
-    visibility: hidden;
-    width: max-content;
-    background-color: white;
-    color: black;
-    text-align: center;
-    padding: 5px;
-    border-style: solid !important;
-    border: 1px;
-    border-color: #ccc;
-    border-radius: 3px;
-    position: absolute;
-    right: -2px;
-    bottom: 23px;
-    z-index: 999;
-}
+    .pull-id-button .pull-id-tooltip {
+        visibility: hidden;
+        width: max-content;
+        background-color: white;
+        color: black;
+        text-align: center;
+        padding: 5px;
+        border-style: solid !important;
+        border: 1px;
+        border-color: #ccc;
+        border-radius: 3px;
+        position: absolute;
+        right: -2px;
+        bottom: 23px;
+        z-index: 999;
+    }
 
     .pull-id-button:hover:not([disabled]) .pull-id-tooltip {
         visibility: visible;
@@ -157,29 +157,84 @@ button {
     position: relative;
     display: inline-block;
     color: #12384d;
-    cursor: default;
+    cursor: pointer;
 }
 
     .tooltip .tooltiptext {
-        visibility: hidden;
-        width: 180px;
-        background-color: white;
-        color: black;
-        /*text-align: center;*/
-        padding: 5px;
-        border-style: solid !important;
-        border: 1px;
-        border-color: #ccc;
-        border-radius: 3px;
-        position: absolute;
-        left: -130px;
-        top: 22px;
-        z-index: 1;
+        display: none;
     }
 
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
+#tooltips-modal {
+    display: none;
+    position: fixed;
+    z-index: 99999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+    #tooltips-modal.open {
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
+
+.tooltips-modal-content {
+    background-color: white;
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.tooltips-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 15px;
+    border-bottom: 1px solid #ccc;
+}
+
+    .tooltips-modal-header h2 {
+        margin: 0;
+    }
+
+.tooltips-modal-close {
+    border: none;
+    background: none;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.tooltips-modal-body {
+    overflow-y: auto;
+    padding: 5px 0;
+}
+
+.tooltips-modal-item {
+    padding: 5px 15px;
+}
+
+.tooltips-modal-label {
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.tooltips-modal-description {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.tooltips-modal-item.selected-tooltip {
+    background-color: rgba(18, 56, 77, 0.1);
+}
 
 .keyboard-shortcut {
     text-wrap: nowrap;
