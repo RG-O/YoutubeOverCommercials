@@ -90,6 +90,7 @@ chrome.storage.sync.get([
     'pluginTriggerPreferences',
     'pluginOverlayPreferences',
     'pluginDualPreferences',
+    'shouldDisplaySpotifyLyrics',
 ], (result) => {
 
     //set them to default if not set by user yet
@@ -164,6 +165,7 @@ chrome.storage.sync.get([
         pluginTriggerPreferences,
         pluginDualPreferences
     ];
+    optionsForm.shouldDisplaySpotifyLyrics.checked = result.shouldDisplaySpotifyLyrics ?? true;
 
     //setting duplicated fields
     optionsForm.pluginOverlayFrameworkDuplicate.value = optionsForm.pluginOverlayFramework.value;
@@ -521,6 +523,7 @@ document.getElementById("save-button").onclick = function () {
             pluginTriggerPreferences: pluginTriggerPreferences,
             pluginOverlayPreferences: pluginOverlayPreferences,
             pluginDualPreferences: pluginDualPreferences,
+            shouldDisplaySpotifyLyrics: optionsForm.shouldDisplaySpotifyLyrics.checked,
         }, function () {
 
             let shouldDirectToMicConfig = false;
@@ -951,6 +954,7 @@ function saveProfile(shouldSaveWithID) {
             isDoubleClapOnlyReturnMode: optionsForm.isDoubleClapOnlyReturnMode.checked,
             isPluginOverlayMode: optionsForm.isPluginOverlayMode.checked,
             isPluginCommercialTriggerMode: optionsForm.isPluginCommercialTriggerMode.checked,
+            shouldDisplaySpotifyLyrics: optionsForm.shouldDisplaySpotifyLyrics.checked,
         };
 
         chrome.storage.sync.set({ profiles }, () => {
@@ -1014,6 +1018,7 @@ function applyProfile() {
             if (typeof profiles[selectedProfile].isDoubleClapOnlyReturnMode !== 'undefined') { optionsForm.isDoubleClapOnlyReturnMode.checked = profiles[selectedProfile].isDoubleClapOnlyReturnMode; }
             if (typeof profiles[selectedProfile].isPluginOverlayMode !== 'undefined') { optionsForm.isPluginOverlayMode.checked = profiles[selectedProfile].isPluginOverlayMode; }
             if (typeof profiles[selectedProfile].isPluginCommercialTriggerMode !== 'undefined') { optionsForm.isPluginCommercialTriggerMode.checked = profiles[selectedProfile].isPluginCommercialTriggerMode; }
+            if (typeof profiles[selectedProfile].shouldDisplaySpotifyLyrics !== 'undefined') { optionsForm.shouldDisplaySpotifyLyrics.checked = profiles[selectedProfile].shouldDisplaySpotifyLyrics; }
 
             showProfileUpdateSettings(selectedProfile);
             runAllToggles();

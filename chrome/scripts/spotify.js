@@ -2,8 +2,12 @@
 var playButton;
 var nextButton;
 var nowPlayingWidget;
+var lyricsBox;
 var hasFirstSongPlayed = false;
 var isInitialSetupComplete = false;
+var extensionInitConfig = window.__extensionConfig ?? {};
+var shouldDisplayLyrics = extensionInitConfig.shouldDisplaySpotifyLyrics ?? false;
+var currentLyric;
 
 
 //run initialSetup() as soon as DOM is loaded
@@ -27,7 +31,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             play();
             hasFirstSongPlayed = true;
         }
-        
     }
 });
 
@@ -57,7 +60,8 @@ function play() {
 
         }
 
-        shipNowPlaying();
+        let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+        shipTextToContent(text);
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
 
@@ -71,7 +75,7 @@ function next() {
         //note: only need to hit next button because as of 10/29/24 spotify automatically starts playing after next button is clicked
         nextButton.click();
 
-        //note: don't need to run shipNowPlaying() because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
+        //note: don't need to run shipTextToContent(text) because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
 
     } else if (playButton != null) {
 
@@ -82,7 +86,8 @@ function next() {
 
         }
 
-        shipNowPlaying();
+        let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+        shipTextToContent(text);
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
 
@@ -122,7 +127,8 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
     const observer = new MutationObserver((mutationsList) => {
         for (let mutation of mutationsList) {
             if (mutation.type === 'attributes' && mutation.attributeName === 'aria-label') {
-                shipNowPlaying();
+                let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+                shipTextToContent(text);
             }
         }
     });
@@ -134,9 +140,66 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
 }
 
 
-function shipNowPlaying() {
+const processedLyricElements = new WeakSet();
 
-    let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+function matchesComputedStyle(element) {
+    return getComputedStyle(element).viewTimeline === '--scroll-to-viewport-button-anim';
+}
+
+function checkElement(element) {
+    if (!(element instanceof Element)) return;
+
+    // Check this element plus all descendants.
+    const elements = [element, ...element.querySelectorAll('*')];
+
+    for (const el of elements) {
+        if (!matchesComputedStyle(el)) continue;
+        if (processedLyricElements.has(el)) continue;
+
+        processedLyricElements.add(el);
+
+        console.log('Matched element:', el);
+
+        const lyric = el.innerText?.trim();
+
+        if (lyric && lyric !== currentLyric) {
+            currentLyric = lyric;
+            console.log('Current lyric:', lyric);
+            shipTextToContent(lyric);
+        }
+    }
+}
+
+function lyricsObserver(mainViewContainer) {
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            if (mutation.type === 'attributes') {
+                checkElement(mutation.target);
+            }
+
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node instanceof Element) {
+                        checkElement(node);
+                    }
+                });
+            }
+        }
+    });
+
+    observer.observe(mainViewContainer, {
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+        childList: true,
+        subtree: true,
+    });
+
+    // Check anything that already exists before the observer started.
+    checkElement(mainViewContainer);
+}
+
+
+function shipTextToContent(text) {
 
     chrome.runtime.sendMessage({
         action: "background_update_logo_text",
@@ -194,6 +257,26 @@ function initialSetup() {
 
                             nowPlayingWidget = document.querySelector('[data-testid="now-playing-widget"]');
                             nowPlayingWidgetObserver(nowPlayingWidget);
+
+                        }
+
+                        if (shouldDisplayLyrics) {
+
+                            const lyricsButton = document.querySelector('[data-testid="lyrics-button"]');
+                            if (lyricsButton) {
+
+                                lyricsButton.click();
+
+                                const mainViewContainer = document.getElementsByClassName('main-view-container')[0];
+                                if (mainViewContainer) {
+                                    lyricsObserver(mainViewContainer);
+                                } else {
+                                    shipTextToContent('Error getting lyrics from spotify');
+                                }
+
+                            } else {
+                                shipTextToContent('Error getting lyrics from spotify');
+                            }
 
                         }
 

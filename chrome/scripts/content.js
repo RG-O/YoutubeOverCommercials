@@ -2334,6 +2334,10 @@ function audioThresholdMonitor() {
                                 logoBox.textContent = logoBoxText;
                             } else {
                                 audioLevelIndicatorContainer.style.display = 'none';
+                                if (overlayVideoType == 'spotify') {
+                                    logoBoxText = 'Playing Spotify'; //not actually playing, this is just getting ready for the next commercial break
+                                    logoBox.textContent = logoBoxText;
+                                }
                             }
                         }
 
@@ -2452,12 +2456,9 @@ function spotifyLogoBoxUpdate(text) {
 
     logoBoxText = text;
 
-    //strangley, an unnecessary delay feels smoother here
-    setTimeout(() => {
-        if (!countdownOngoing) {
-            logoBox.textContent = logoBoxText;
-        }
-    }, 2000);
+    if (!countdownOngoing) {
+        logoBox.textContent = logoBoxText;
+    }
 
     if (isCommercialState) {
 
