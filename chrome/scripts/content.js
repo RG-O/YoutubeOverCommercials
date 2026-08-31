@@ -243,7 +243,7 @@ function removeOverlayVideo() {
 //adding an overlay to darken the main/background video during commercials if user has chosen to do so
 function addOverlayFade() {
 
-    if (mainVideoFade > 0) {
+    if (mainVideoFade > 0 && !shouldSendScreenshotsToTriggerPlugin) {
 
         //TODO: add check to make sure user is still in full screen and if not to break and resut isFirstRun
         let insertLocation = document.fullscreenElement;
@@ -301,7 +301,7 @@ function addOverlayFade() {
 
 function showOverlayFade() {
 
-    if (mainVideoFade > 0) {
+    if (mainVideoFade > 0 && overlayScreen) {
         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
             //dim slow like a movie theater
             overlayScreen.style.setProperty("transition", "background-color 5s ease");
@@ -317,7 +317,7 @@ function showOverlayFade() {
 
 function hideOverlayFade() {
 
-    if (mainVideoFade > 0) {
+    if (mainVideoFade > 0 && overlayScreen) {
         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
             //remove fade fast to get back to the action
             overlayScreen.style.setProperty("transition", "background-color 0.2s ease");
@@ -3077,7 +3077,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 totalFailedCommercialTriggerWSConnectAttempts = 0;
             }
 
-            if (message.payload?.meta?.display) {
+            if (message.payload?.meta?.display && message.payload.type !== "plugin_manifest") {
                 if (pluginCommercialTriggerIndicator) {
                     pluginCommercialTriggerIndicator.textContent = message.payload.meta.display;
                 }

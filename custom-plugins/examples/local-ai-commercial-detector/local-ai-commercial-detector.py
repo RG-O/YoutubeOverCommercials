@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import subprocess
 import time
 from collections import deque
@@ -11,7 +12,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.6.0"
+PLUGIN_VERSION = "1.7.0"
 
 PORT = 64145
 
@@ -19,6 +20,7 @@ PORT = 64145
 # Install the Python package with: pip install ollama
 # Make sure the Ollama desktop/service is running.
 DEFAULT_OLLAMA_MODEL = "qwen2.5vl:7b"
+DEFAULT_OLLAMA_CONTEXT_SIZE = None  # None = let the Ollama runtime decide
 OLLAMA_HOST = "http://127.0.0.1:11434"
 
 # Regular-programming and commercial defaults intentionally match. They are
@@ -26,14 +28,14 @@ OLLAMA_HOST = "http://127.0.0.1:11434"
 DEFAULT_REGULAR_LLM_CALL_FREQUENCY_SECONDS = 0
 DEFAULT_COMMERCIAL_LLM_CALL_FREQUENCY_SECONDS = 0
 
-DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED = 2
-DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED = 2
+DEFAULT_REGULAR_CONSECUTIVE_YES_REQUIRED = 1
+DEFAULT_COMMERCIAL_CONSECUTIVE_YES_REQUIRED = 1
 
-DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE = 4
-DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE = 4
+DEFAULT_REGULAR_SCREENSHOT_BATCH_SIZE = 3
+DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE = 3
 
-DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS = 1000
-DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS = 1000
+DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS = 1500
+DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS = 1500
 
 # Screenshot dimensions and trim settings are shared between regular
 # programming and commercials.
@@ -104,6 +106,7 @@ screenshot_version = 0
 last_analyzed_screenshot_version = -1
 
 ollama_model = DEFAULT_OLLAMA_MODEL
+ollama_context_size = DEFAULT_OLLAMA_CONTEXT_SIZE
 commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
 non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
 gpu_checked = False
@@ -169,6 +172,7 @@ def reset_runtime_state():
     global screenshot_version
     global last_analyzed_screenshot_version
     global ollama_model
+    global ollama_context_size
     global commercial_prompt
     global non_commercial_prompt
     global gpu_checked
@@ -207,6 +211,7 @@ def reset_runtime_state():
     last_analyzed_screenshot_version = -1
 
     ollama_model = DEFAULT_OLLAMA_MODEL
+    ollama_context_size = DEFAULT_OLLAMA_CONTEXT_SIZE
     commercial_prompt = DEFAULT_COMMERCIAL_PROMPT
     non_commercial_prompt = DEFAULT_NON_COMMERCIAL_PROMPT
     gpu_checked = False
@@ -372,6 +377,30 @@ def get_string_preference(preferences, key, default):
     return value if value else default
 
 
+def get_context_size_preference(preferences, key, default):
+    """Read the optional Ollama context size preference. None means runtime default."""
+    value = preferences.get(key, default)
+
+    if value is None:
+        return None
+
+    value = str(value).strip().lower()
+    if value in ("", "runtime-default", "default", "none"):
+        return None
+
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def format_context_size(value):
+    """Return a readable context-size label for status/debug output."""
+    if value is None:
+        return "Runtime Default"
+    return f"{value:,} tokens"
+
+
 def apply_plugin_preferences(preferences, initialize=False):
     """Apply initial or updated plugin preferences and report what changed."""
     global regular_llm_call_frequency_seconds
@@ -393,6 +422,7 @@ def apply_plugin_preferences(preferences, initialize=False):
     global screenshot_version
     global last_analyzed_screenshot_version
     global ollama_model
+    global ollama_context_size
     global commercial_prompt
     global non_commercial_prompt
     global gpu_checked
@@ -415,6 +445,7 @@ def apply_plugin_preferences(preferences, initialize=False):
             "screenshot-trim-bottom-percent": DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT,
             "screenshot-trim-left-percent": DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT,
             "ollama-model": DEFAULT_OLLAMA_MODEL,
+            "ollama-context-size": DEFAULT_OLLAMA_CONTEXT_SIZE,
             "commercial-prompt": DEFAULT_COMMERCIAL_PROMPT,
             "non-commercial-prompt": DEFAULT_NON_COMMERCIAL_PROMPT,
         }
@@ -435,6 +466,7 @@ def apply_plugin_preferences(preferences, initialize=False):
             "screenshot-trim-bottom-percent": screenshot_trim_bottom_percent,
             "screenshot-trim-left-percent": screenshot_trim_left_percent,
             "ollama-model": ollama_model,
+            "ollama-context-size": ollama_context_size,
             "commercial-prompt": commercial_prompt,
             "non-commercial-prompt": non_commercial_prompt,
         }
@@ -533,6 +565,11 @@ def apply_plugin_preferences(preferences, initialize=False):
             "ollama-model",
             current_values["ollama-model"],
         ),
+        "ollama-context-size": get_context_size_preference(
+            preferences,
+            "ollama-context-size",
+            current_values["ollama-context-size"],
+        ),
         "commercial-prompt": get_string_preference(
             preferences,
             "commercial-prompt",
@@ -583,6 +620,7 @@ def apply_plugin_preferences(preferences, initialize=False):
     screenshot_trim_bottom_percent = new_values["screenshot-trim-bottom-percent"]
     screenshot_trim_left_percent = new_values["screenshot-trim-left-percent"]
     ollama_model = new_values["ollama-model"]
+    ollama_context_size = new_values["ollama-context-size"]
     commercial_prompt = new_values["commercial-prompt"]
     non_commercial_prompt = new_values["non-commercial-prompt"]
 
@@ -598,6 +636,7 @@ def apply_plugin_preferences(preferences, initialize=False):
     # comparable.
     decision_keys = {
         "ollama-model",
+        "ollama-context-size",
         "commercial-prompt",
         "non-commercial-prompt",
         "regular-consecutive-yes-required",
@@ -672,6 +711,7 @@ def resize_screenshot_buffer_for_current_state():
 def print_current_preferences():
     """Print the current plugin settings in a compact form."""
     print(f"Ollama model: {ollama_model}")
+    print(f"Ollama context size: {format_context_size(ollama_context_size)}")
     print(
         "Regular programming: "
         f"LLM frequency={regular_llm_call_frequency_seconds:g}s, "
@@ -700,6 +740,7 @@ def build_current_preferences_debug():
     """Return the current settings as readable debug text."""
     return (
         f"Model: {ollama_model}\n"
+        f"Ollama context size: {format_context_size(ollama_context_size)}\n"
         f"Current state: {'commercial' if commercial_state else 'regular programming'}\n"
         f"Regular LLM minimum interval: {regular_llm_call_frequency_seconds:g}s\n"
         f"Commercial LLM minimum interval: {commercial_llm_call_frequency_seconds:g}s\n"
@@ -796,6 +837,7 @@ async def analyze_screenshot_batch(
         # Snapshot values used by this request. If preferences change while the
         # request is running, the result is reported but ignored for state logic.
         selected_model = ollama_model
+        selected_context_size = ollama_context_size
         selected_commercial_prompt = commercial_prompt
         selected_non_commercial_prompt = non_commercial_prompt
 
@@ -803,6 +845,7 @@ async def analyze_screenshot_batch(
             screenshots,
             state_at_start,
             selected_model,
+            selected_context_size,
             selected_commercial_prompt,
             selected_non_commercial_prompt,
         )
@@ -920,10 +963,39 @@ async def analyze_screenshot_batch(
         print(f"Ollama analysis failed: {exc}")
 
         if websocket is not None:
-            await send_status(
-                "AI commercial detection error",
-                f"Ollama analysis failed: {exc}",
-            )
+            context_error = get_context_size_error_details(exc)
+
+            if context_error is not None:
+                required_tokens, available_tokens = context_error
+                required_text = (
+                    f"{required_tokens:,}" if required_tokens is not None else "unknown"
+                )
+                available_text = (
+                    f"{available_tokens:,}" if available_tokens is not None else "unknown"
+                )
+
+                await send_status(
+                    (
+                        "AI request is too large for Ollama's context window. "
+                        "Increase the Ollama Context Size preference or reduce the "
+                        "screenshot batch size/resolution."
+                    ),
+                    (
+                        "Ollama context-size error\n"
+                        f"Request tokens: {required_text}\n"
+                        f"Available context: {available_text}\n"
+                        f"Configured preference: {format_context_size(ollama_context_size)}\n\n"
+                        "If Ollama Context Size is set to Runtime Default, try 8,192 "
+                        "or a larger value supported by your model/hardware. You can "
+                        "also reduce Screenshot Batch Size or screenshot dimensions.\n\n"
+                        f"Original Ollama error: {exc}"
+                    ),
+                )
+            else:
+                await send_status(
+                    "AI commercial detection error",
+                    f"Ollama analysis failed: {exc}",
+                )
     finally:
         # Only clear the task slot if this coroutine is still the registered
         # analysis task.
@@ -942,6 +1014,7 @@ async def ask_ollama_about_transition(
     screenshots,
     currently_commercial,
     model,
+    context_size,
     selected_commercial_prompt,
     selected_non_commercial_prompt,
 ):
@@ -949,6 +1022,15 @@ async def ask_ollama_about_transition(
         question = selected_non_commercial_prompt.strip()
     else:
         question = selected_commercial_prompt.strip()
+
+    options = {
+        "temperature": 0,
+    }
+
+    # When Runtime Default is selected, do not send num_ctx at all and let
+    # Ollama choose its normal runtime context.
+    if context_size is not None:
+        options["num_ctx"] = context_size
 
     call_started = time.monotonic()
     response = await ollama_client.chat(
@@ -962,9 +1044,7 @@ async def ask_ollama_about_transition(
                 "images": screenshots,
             }
         ],
-        options={
-            "temperature": 0,
-        },
+        options=options,
     )
     wall_time_seconds = time.monotonic() - call_started
 
@@ -979,6 +1059,7 @@ async def ask_ollama_about_transition(
 
     ai_stats = {
         "model": model,
+        "context_size": context_size,
         "screenshots": len(screenshots),
         "wall_time_seconds": wall_time_seconds,
         "total_duration_ns": getattr(response, "total_duration", None),
@@ -1044,6 +1125,7 @@ def build_ai_debug_header(stats):
     return (
         "AI call details:\n"
         f"Model: {stats['model']}\n"
+        f"Requested context: {format_context_size(stats['context_size'])}\n"
         f"Screenshots: {stats['screenshots']}\n"
         f"Wall-clock time: {stats['wall_time_seconds']:.3f}s\n"
         f"Ollama total duration: "
@@ -1058,6 +1140,37 @@ def build_ai_debug_header(stats):
         f"Response tokens: {format_token_count(stats['response_tokens'])}\n"
         f"Total tokens: {format_token_count(stats['total_tokens'])}"
     )
+
+
+def get_context_size_error_details(exc):
+    """Return (required_tokens, available_tokens) for Ollama context overflow errors."""
+    error_text = str(exc)
+    error_text_lower = error_text.lower()
+
+    if (
+        "exceed_context_size_error" not in error_text_lower
+        and "exceeds the available context size" not in error_text_lower
+    ):
+        return None
+
+    required_match = re.search(r'"n_prompt_tokens"\s*:\s*(\d+)', error_text)
+    context_match = re.search(r'"n_ctx"\s*:\s*(\d+)', error_text)
+
+    # Fall back to the human-readable message if the JSON fields are unavailable.
+    if required_match is None:
+        required_match = re.search(r"request \((\d+) tokens\)", error_text, re.IGNORECASE)
+
+    if context_match is None:
+        context_match = re.search(
+            r"available context size \((\d+) tokens\)",
+            error_text,
+            re.IGNORECASE,
+        )
+
+    required_tokens = int(required_match.group(1)) if required_match else None
+    available_tokens = int(context_match.group(1)) if context_match else None
+
+    return required_tokens, available_tokens
 
 
 def get_ollama_processor_status():
@@ -1299,8 +1412,8 @@ async def send_manifest():
                             "Uses Ollama and a rolling screenshot window to detect "
                             "TV commercial transitions."
                         ),
-                        "primaryColor": "#12384d",
-                        "secondaryColor": "#dadcdc",
+                        "primaryColor": "#000000",
+                        "secondaryColor": "#FFFFFF",
                         "capabilities": [
                             "trigger",
                             "screenshots",
@@ -1316,6 +1429,29 @@ async def send_manifest():
                                 "type": "select",
                                 "options": model_options,
                                 "default": model_default,
+                            },
+                            {
+                                "key": "ollama-context-size",
+                                "label": "Ollama Context Size",
+                                "description": (
+                                    "Maximum context window requested from Ollama. Runtime "
+                                    "Default does not send num_ctx and lets Ollama decide. "
+                                    "Larger values can use more memory."
+                                ),
+                                "type": "select",
+                                "options": [
+                                    {"label": "Runtime Default", "value": "runtime-default"},
+                                    {"label": "4,096 tokens", "value": "4096"},
+                                    {"label": "5K tokens", "value": "5000"},
+                                    {"label": "6K tokens", "value": "6000"},
+                                    {"label": "7K tokens", "value": "7000"},
+                                    {"label": "8,192 tokens", "value": "8192"},
+                                    {"label": "12K tokens", "value": "12000"},
+                                    {"label": "16,384 tokens", "value": "16384"},
+                                    {"label": "32,768 tokens", "value": "32768"},
+                                    {"label": "65,536 tokens", "value": "65536"},
+                                ],
+                                "default": "runtime-default",
                             },
                             {
                                 "key": "commercial-prompt",
@@ -1505,6 +1641,7 @@ async def main():
         print(f"Server running on ws://localhost:{PORT}")
         print(f"Ollama host: {OLLAMA_HOST}")
         print(f"Default Ollama model: {DEFAULT_OLLAMA_MODEL}")
+        print("Default Ollama context size: Runtime Default")
         await asyncio.Future()
 
 

@@ -208,6 +208,11 @@ const ws = {
             return;
         }
 
+        if (payload instanceof Blob && triggerWS.bufferedAmount > 0) {
+            console.log("Screenshot queue backlogged. Dropping screenshot.");
+            return;
+        }
+
         triggerWS.send(payload);
     },
     initOverlay(payload) {
