@@ -2,3 +2,4 @@ mediapipe
 websockets
 aiohttp
 opencv-python
+pygrabber

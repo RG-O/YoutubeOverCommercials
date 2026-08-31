@@ -9,6 +9,7 @@ import base64
 import platform
 import aiohttp
 
+from pygrabber.dshow_graph import FilterGraph
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import mediapipe as mp
@@ -71,7 +72,7 @@ THRESHOLDS = [
 
 CAMERA_RESOLUTION = "native"
 
-VISIBILITY_THRESHOLD = 0.50
+VISIBILITY_THRESHOLD = 0.40
 COOLDOWN = 1.0
 
 SNAPSHOT_MAX_WIDTH = 400
@@ -192,24 +193,57 @@ def get_video_capture_backend():
 
 
 def get_available_cameras(max_index=10):
-    """Return camera options OpenCV can successfully open."""
+    """
+    Return available cameras for the manifest.
+
+    On Windows, pygrabber is used to get each camera's DirectShow-friendly
+    device name. The stored value remains the numeric camera index expected
+    by OpenCV.
+    """
     cameras = []
+
+    if platform.system() == "Windows":
+        try:
+            graph = FilterGraph()
+            camera_names = graph.get_input_devices()
+
+            for index, name in enumerate(camera_names):
+                cameras.append({
+                    "label": f"{name} (Camera {index})",
+                    "value": str(index),
+                })
+
+            if cameras:
+                return cameras
+
+        except Exception as error:
+            print(f"Could not get camera names with pygrabber: {error}")
+
+    # Fallback for non-Windows systems or if pygrabber enumeration fails.
     backend = get_video_capture_backend()
 
     for index in range(max_index):
         cap = cv2.VideoCapture(index, backend)
-        if cap.isOpened():
-            success, _ = cap.read()
-            if success:
-                cameras.append({
-                    "label": f"Camera {index}",
-                    "value": str(index),
-                })
-        cap.release()
+
+        try:
+            if cap.isOpened():
+                success, _ = cap.read()
+
+                if success:
+                    cameras.append({
+                        "label": f"Camera {index}",
+                        "value": str(index),
+                    })
+
+        finally:
+            cap.release()
 
     # Always provide a usable option even if probing is blocked by another app.
     if not cameras:
-        cameras.append({"label": "Camera 0", "value": "0"})
+        cameras.append({
+            "label": "Camera 0",
+            "value": "0",
+        })
 
     return cameras
 
