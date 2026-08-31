@@ -12,7 +12,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.7.0"
+PLUGIN_VERSION = "1.8.0"
 
 PORT = 64145
 
@@ -37,10 +37,17 @@ DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE = 3
 DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS = 1500
 DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS = 1500
 
-# Screenshot dimensions and trim settings are shared between regular
-# programming and commercials.
-DEFAULT_SCREENSHOT_MAX_WIDTH = 500
-DEFAULT_SCREENSHOT_MAX_HEIGHT = 300
+# Screenshot dimensions are state-specific, while trim settings are shared.
+DEFAULT_REGULAR_SCREENSHOT_MAX_WIDTH = 500
+DEFAULT_COMMERCIAL_SCREENSHOT_MAX_WIDTH = 500
+DEFAULT_REGULAR_SCREENSHOT_MAX_HEIGHT = 300
+DEFAULT_COMMERCIAL_SCREENSHOT_MAX_HEIGHT = 300
+
+# Cooldowns begin after a confirmed state change. Ollama still runs during the
+# cooldown, but its decisions are ignored for state-change logic.
+DEFAULT_INTO_COMMERCIAL_COOLDOWN_SECONDS = 6
+DEFAULT_OUT_OF_COMMERCIAL_COOLDOWN_SECONDS = 6
+
 DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT = 0
 DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT = 0
 DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT = 0
@@ -91,8 +98,15 @@ commercial_screenshot_frequency_milliseconds = (
     DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS
 )
 
-screenshot_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
-screenshot_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+regular_screenshot_max_width = DEFAULT_REGULAR_SCREENSHOT_MAX_WIDTH
+commercial_screenshot_max_width = DEFAULT_COMMERCIAL_SCREENSHOT_MAX_WIDTH
+regular_screenshot_max_height = DEFAULT_REGULAR_SCREENSHOT_MAX_HEIGHT
+commercial_screenshot_max_height = DEFAULT_COMMERCIAL_SCREENSHOT_MAX_HEIGHT
+
+into_commercial_cooldown_seconds = DEFAULT_INTO_COMMERCIAL_COOLDOWN_SECONDS
+out_of_commercial_cooldown_seconds = DEFAULT_OUT_OF_COMMERCIAL_COOLDOWN_SECONDS
+cooldown_until = 0.0
+
 screenshot_trim_top_percent = DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT
 screenshot_trim_right_percent = DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT
 screenshot_trim_bottom_percent = DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT
@@ -159,8 +173,13 @@ def reset_runtime_state():
     global commercial_screenshot_batch_size
     global regular_screenshot_frequency_milliseconds
     global commercial_screenshot_frequency_milliseconds
-    global screenshot_max_width
-    global screenshot_max_height
+    global regular_screenshot_max_width
+    global commercial_screenshot_max_width
+    global regular_screenshot_max_height
+    global commercial_screenshot_max_height
+    global into_commercial_cooldown_seconds
+    global out_of_commercial_cooldown_seconds
+    global cooldown_until
     global screenshot_trim_top_percent
     global screenshot_trim_right_percent
     global screenshot_trim_bottom_percent
@@ -196,8 +215,15 @@ def reset_runtime_state():
         DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS
     )
 
-    screenshot_max_width = DEFAULT_SCREENSHOT_MAX_WIDTH
-    screenshot_max_height = DEFAULT_SCREENSHOT_MAX_HEIGHT
+    regular_screenshot_max_width = DEFAULT_REGULAR_SCREENSHOT_MAX_WIDTH
+    commercial_screenshot_max_width = DEFAULT_COMMERCIAL_SCREENSHOT_MAX_WIDTH
+    regular_screenshot_max_height = DEFAULT_REGULAR_SCREENSHOT_MAX_HEIGHT
+    commercial_screenshot_max_height = DEFAULT_COMMERCIAL_SCREENSHOT_MAX_HEIGHT
+
+    into_commercial_cooldown_seconds = DEFAULT_INTO_COMMERCIAL_COOLDOWN_SECONDS
+    out_of_commercial_cooldown_seconds = DEFAULT_OUT_OF_COMMERCIAL_COOLDOWN_SECONDS
+    cooldown_until = 0.0
+
     screenshot_trim_top_percent = DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT
     screenshot_trim_right_percent = DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT
     screenshot_trim_bottom_percent = DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT
@@ -283,9 +309,12 @@ async def handle_message(msg):
         old_state = commercial_state
         commercial_state = is_commercial
 
-        # Any confirmed state change starts a fresh YES streak.
+        # Any confirmed state change starts a fresh YES streak and the cooldown
+        # associated with the direction of that state change. This also covers
+        # state changes initiated by triggers outside this plugin.
         if old_state != is_commercial:
             consecutive_yes_count = 0
+            start_state_change_cooldown(is_commercial)
             resize_screenshot_buffer_for_current_state()
             await request_screenshots()
 
@@ -411,8 +440,13 @@ def apply_plugin_preferences(preferences, initialize=False):
     global commercial_screenshot_batch_size
     global regular_screenshot_frequency_milliseconds
     global commercial_screenshot_frequency_milliseconds
-    global screenshot_max_width
-    global screenshot_max_height
+    global regular_screenshot_max_width
+    global commercial_screenshot_max_width
+    global regular_screenshot_max_height
+    global commercial_screenshot_max_height
+    global into_commercial_cooldown_seconds
+    global out_of_commercial_cooldown_seconds
+    global cooldown_until
     global screenshot_trim_top_percent
     global screenshot_trim_right_percent
     global screenshot_trim_bottom_percent
@@ -438,8 +472,12 @@ def apply_plugin_preferences(preferences, initialize=False):
             "commercial-screenshot-batch-size": DEFAULT_COMMERCIAL_SCREENSHOT_BATCH_SIZE,
             "regular-screenshot-frequency-milliseconds": DEFAULT_REGULAR_SCREENSHOT_FREQUENCY_MILLISECONDS,
             "commercial-screenshot-frequency-milliseconds": DEFAULT_COMMERCIAL_SCREENSHOT_FREQUENCY_MILLISECONDS,
-            "screenshot-max-width": DEFAULT_SCREENSHOT_MAX_WIDTH,
-            "screenshot-max-height": DEFAULT_SCREENSHOT_MAX_HEIGHT,
+            "regular-screenshot-max-width": DEFAULT_REGULAR_SCREENSHOT_MAX_WIDTH,
+            "commercial-screenshot-max-width": DEFAULT_COMMERCIAL_SCREENSHOT_MAX_WIDTH,
+            "regular-screenshot-max-height": DEFAULT_REGULAR_SCREENSHOT_MAX_HEIGHT,
+            "commercial-screenshot-max-height": DEFAULT_COMMERCIAL_SCREENSHOT_MAX_HEIGHT,
+            "into-commercial-cooldown-seconds": DEFAULT_INTO_COMMERCIAL_COOLDOWN_SECONDS,
+            "out-of-commercial-cooldown-seconds": DEFAULT_OUT_OF_COMMERCIAL_COOLDOWN_SECONDS,
             "screenshot-trim-top-percent": DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT,
             "screenshot-trim-right-percent": DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT,
             "screenshot-trim-bottom-percent": DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT,
@@ -459,8 +497,12 @@ def apply_plugin_preferences(preferences, initialize=False):
             "commercial-screenshot-batch-size": commercial_screenshot_batch_size,
             "regular-screenshot-frequency-milliseconds": regular_screenshot_frequency_milliseconds,
             "commercial-screenshot-frequency-milliseconds": commercial_screenshot_frequency_milliseconds,
-            "screenshot-max-width": screenshot_max_width,
-            "screenshot-max-height": screenshot_max_height,
+            "regular-screenshot-max-width": regular_screenshot_max_width,
+            "commercial-screenshot-max-width": commercial_screenshot_max_width,
+            "regular-screenshot-max-height": regular_screenshot_max_height,
+            "commercial-screenshot-max-height": commercial_screenshot_max_height,
+            "into-commercial-cooldown-seconds": into_commercial_cooldown_seconds,
+            "out-of-commercial-cooldown-seconds": out_of_commercial_cooldown_seconds,
             "screenshot-trim-top-percent": screenshot_trim_top_percent,
             "screenshot-trim-right-percent": screenshot_trim_right_percent,
             "screenshot-trim-bottom-percent": screenshot_trim_bottom_percent,
@@ -520,17 +562,41 @@ def apply_plugin_preferences(preferences, initialize=False):
             current_values["commercial-screenshot-frequency-milliseconds"],
             minimum=1,
         ),
-        "screenshot-max-width": get_int_preference(
+        "regular-screenshot-max-width": get_int_preference(
             preferences,
-            "screenshot-max-width",
-            current_values["screenshot-max-width"],
+            "regular-screenshot-max-width",
+            current_values["regular-screenshot-max-width"],
             minimum=1,
         ),
-        "screenshot-max-height": get_int_preference(
+        "commercial-screenshot-max-width": get_int_preference(
             preferences,
-            "screenshot-max-height",
-            current_values["screenshot-max-height"],
+            "commercial-screenshot-max-width",
+            current_values["commercial-screenshot-max-width"],
             minimum=1,
+        ),
+        "regular-screenshot-max-height": get_int_preference(
+            preferences,
+            "regular-screenshot-max-height",
+            current_values["regular-screenshot-max-height"],
+            minimum=1,
+        ),
+        "commercial-screenshot-max-height": get_int_preference(
+            preferences,
+            "commercial-screenshot-max-height",
+            current_values["commercial-screenshot-max-height"],
+            minimum=1,
+        ),
+        "into-commercial-cooldown-seconds": get_float_preference(
+            preferences,
+            "into-commercial-cooldown-seconds",
+            current_values["into-commercial-cooldown-seconds"],
+            minimum=0,
+        ),
+        "out-of-commercial-cooldown-seconds": get_float_preference(
+            preferences,
+            "out-of-commercial-cooldown-seconds",
+            current_values["out-of-commercial-cooldown-seconds"],
+            minimum=0,
         ),
         "screenshot-trim-top-percent": get_float_preference(
             preferences,
@@ -613,8 +679,12 @@ def apply_plugin_preferences(preferences, initialize=False):
     commercial_screenshot_frequency_milliseconds = new_values[
         "commercial-screenshot-frequency-milliseconds"
     ]
-    screenshot_max_width = new_values["screenshot-max-width"]
-    screenshot_max_height = new_values["screenshot-max-height"]
+    regular_screenshot_max_width = new_values["regular-screenshot-max-width"]
+    commercial_screenshot_max_width = new_values["commercial-screenshot-max-width"]
+    regular_screenshot_max_height = new_values["regular-screenshot-max-height"]
+    commercial_screenshot_max_height = new_values["commercial-screenshot-max-height"]
+    into_commercial_cooldown_seconds = new_values["into-commercial-cooldown-seconds"]
+    out_of_commercial_cooldown_seconds = new_values["out-of-commercial-cooldown-seconds"]
     screenshot_trim_top_percent = new_values["screenshot-trim-top-percent"]
     screenshot_trim_right_percent = new_values["screenshot-trim-right-percent"]
     screenshot_trim_bottom_percent = new_values["screenshot-trim-bottom-percent"]
@@ -657,8 +727,10 @@ def apply_plugin_preferences(preferences, initialize=False):
         "commercial-screenshot-batch-size",
         "regular-screenshot-frequency-milliseconds",
         "commercial-screenshot-frequency-milliseconds",
-        "screenshot-max-width",
-        "screenshot-max-height",
+        "regular-screenshot-max-width",
+        "commercial-screenshot-max-width",
+        "regular-screenshot-max-height",
+        "commercial-screenshot-max-height",
         "screenshot-trim-top-percent",
         "screenshot-trim-right-percent",
         "screenshot-trim-bottom-percent",
@@ -693,6 +765,38 @@ def get_active_screenshot_frequency_milliseconds():
     return regular_screenshot_frequency_milliseconds
 
 
+def get_active_screenshot_max_width():
+    if commercial_state:
+        return commercial_screenshot_max_width
+    return regular_screenshot_max_width
+
+
+def get_active_screenshot_max_height():
+    if commercial_state:
+        return commercial_screenshot_max_height
+    return regular_screenshot_max_height
+
+
+def start_state_change_cooldown(new_commercial_state):
+    """Start the cooldown for the direction of a confirmed state change."""
+    global cooldown_until
+
+    if new_commercial_state:
+        cooldown_seconds = into_commercial_cooldown_seconds
+        direction = "into commercial"
+    else:
+        cooldown_seconds = out_of_commercial_cooldown_seconds
+        direction = "out of commercial"
+
+    cooldown_until = time.monotonic() + cooldown_seconds
+    print(f"Starting {direction} cooldown for {cooldown_seconds:g} second(s)")
+
+
+def get_cooldown_remaining_seconds():
+    """Return the remaining state-change cooldown, or zero when it has expired."""
+    return max(0.0, cooldown_until - time.monotonic())
+
+
 def resize_screenshot_buffer_for_current_state():
     """Resize the rolling buffer while preserving the newest screenshots."""
     global screenshot_buffer
@@ -717,16 +821,21 @@ def print_current_preferences():
         f"LLM frequency={regular_llm_call_frequency_seconds:g}s, "
         f"YES required={regular_consecutive_yes_required}, "
         f"batch size={regular_screenshot_batch_size}, "
-        f"screenshot frequency={regular_screenshot_frequency_milliseconds}ms"
+        f"screenshot frequency={regular_screenshot_frequency_milliseconds}ms, "
+        f"max dimensions={regular_screenshot_max_width}x{regular_screenshot_max_height}"
     )
     print(
         "Commercial: "
         f"LLM frequency={commercial_llm_call_frequency_seconds:g}s, "
         f"YES required={commercial_consecutive_yes_required}, "
         f"batch size={commercial_screenshot_batch_size}, "
-        f"screenshot frequency={commercial_screenshot_frequency_milliseconds}ms"
+        f"screenshot frequency={commercial_screenshot_frequency_milliseconds}ms, "
+        f"max dimensions={commercial_screenshot_max_width}x{commercial_screenshot_max_height}"
     )
-    print(f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}")
+    print(
+        f"Cooldowns: into commercial={into_commercial_cooldown_seconds:g}s, "
+        f"out of commercial={out_of_commercial_cooldown_seconds:g}s"
+    )
     print(
         "Screenshot trim percentages: "
         f"top={screenshot_trim_top_percent:g}, "
@@ -750,7 +859,10 @@ def build_current_preferences_debug():
         f"Commercial screenshot batch size: {commercial_screenshot_batch_size}\n"
         f"Regular screenshot frequency: {regular_screenshot_frequency_milliseconds}ms\n"
         f"Commercial screenshot frequency: {commercial_screenshot_frequency_milliseconds}ms\n"
-        f"Screenshot max dimensions: {screenshot_max_width}x{screenshot_max_height}\n"
+        f"Regular screenshot max dimensions: {regular_screenshot_max_width}x{regular_screenshot_max_height}\n"
+        f"Commercial screenshot max dimensions: {commercial_screenshot_max_width}x{commercial_screenshot_max_height}\n"
+        f"Going into commercial cooldown: {into_commercial_cooldown_seconds:g}s\n"
+        f"Going out of commercial cooldown: {out_of_commercial_cooldown_seconds:g}s\n"
         "Screenshot trim percentages: "
         f"top={screenshot_trim_top_percent:g}, "
         f"right={screenshot_trim_right_percent:g}, "
@@ -889,6 +1001,28 @@ async def analyze_screenshot_batch(
             consecutive_yes_count = 0
             return
 
+        # Ollama continues running during cooldowns, but every decision is
+        # deliberately ignored so it cannot increment/reset the YES streak or
+        # trigger another state change too soon.
+        cooldown_remaining = get_cooldown_remaining_seconds()
+        if cooldown_remaining > 0:
+            print(
+                f"Ignoring AI decision during state-change cooldown "
+                f"({cooldown_remaining:.2f}s remaining)"
+            )
+            cooldown_display = (
+                f"AI decision ignored during cooldown ({cooldown_remaining:.1f}s remaining): "
+                f"{decision}"
+            )
+            if decision == "YES":
+                cooldown_display += f" - {llm_response}"
+
+            await send_status(
+                cooldown_display,
+                full_debug,
+            )
+            return
+
         yes_required = get_active_consecutive_yes_required()
 
         if decision == "YES":
@@ -933,8 +1067,9 @@ async def analyze_screenshot_batch(
         # again before the extension echoes the confirmed state back.
         commercial_state = new_commercial_state
         consecutive_yes_count = 0
+        start_state_change_cooldown(new_commercial_state)
 
-        # The active screenshot batch/frequency can change with commercial state.
+        # The active screenshot batch/frequency/dimensions can change with commercial state.
         resize_screenshot_buffer_for_current_state()
 
         if new_commercial_state:
@@ -953,8 +1088,8 @@ async def analyze_screenshot_batch(
             full_debug,
         )
 
-        # Immediately tell the browser to use the screenshot frequency for the
-        # newly active state. Shared dimensions and trim values are included too.
+        # Immediately tell the browser to use the screenshot frequency and
+        # dimensions for the newly active state. Shared trim values are included too.
         await request_screenshots()
 
     except asyncio.CancelledError:
@@ -1337,8 +1472,8 @@ async def request_screenshots():
                             get_active_screenshot_frequency_milliseconds()
                         ),
                         "maxDimensionsPixels": {
-                            "height": screenshot_max_height,
-                            "width": screenshot_max_width,
+                            "height": get_active_screenshot_max_height(),
+                            "width": get_active_screenshot_max_width(),
                         },
                         "trimOptionsPercentages": {
                             "top": screenshot_trim_top_percent,
@@ -1566,26 +1701,70 @@ async def send_manifest():
                                 "min": 1,
                             },
                             {
-                                "key": "screenshot-max-width",
-                                "label": "Screenshot Max Width (Pixels)",
+                                "key": "regular-screenshot-max-width",
+                                "label": "Regular Programming Screenshot Max Width (Pixels)",
                                 "description": (
-                                    "Maximum screenshot width sent by the browser. The "
-                                    "extension should preserve the screenshot aspect ratio."
+                                    "Maximum screenshot width while regular programming is active. "
+                                    "The extension should preserve the screenshot aspect ratio."
                                 ),
                                 "type": "number",
-                                "default": DEFAULT_SCREENSHOT_MAX_WIDTH,
+                                "default": DEFAULT_REGULAR_SCREENSHOT_MAX_WIDTH,
                                 "min": 1,
                             },
                             {
-                                "key": "screenshot-max-height",
-                                "label": "Screenshot Max Height (Pixels)",
+                                "key": "regular-screenshot-max-height",
+                                "label": "Regular Programming Screenshot Max Height (Pixels)",
                                 "description": (
-                                    "Maximum screenshot height sent by the browser. The "
+                                    "Maximum screenshot height while regular programming is active. "
+                                    "The extension should preserve the screenshot aspect ratio."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_REGULAR_SCREENSHOT_MAX_HEIGHT,
+                                "min": 1,
+                            },
+                            {
+                                "key": "commercial-screenshot-max-width",
+                                "label": "Commercial Screenshot Max Width (Pixels)",
+                                "description": (
+                                    "Maximum screenshot width while a commercial is active. The "
                                     "extension should preserve the screenshot aspect ratio."
                                 ),
                                 "type": "number",
-                                "default": DEFAULT_SCREENSHOT_MAX_HEIGHT,
+                                "default": DEFAULT_COMMERCIAL_SCREENSHOT_MAX_WIDTH,
                                 "min": 1,
+                            },
+                            {
+                                "key": "commercial-screenshot-max-height",
+                                "label": "Commercial Screenshot Max Height (Pixels)",
+                                "description": (
+                                    "Maximum screenshot height while a commercial is active. The "
+                                    "extension should preserve the screenshot aspect ratio."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_COMMERCIAL_SCREENSHOT_MAX_HEIGHT,
+                                "min": 1,
+                            },
+                            {
+                                "key": "into-commercial-cooldown-seconds",
+                                "label": "Going Into Commercial Cooldown (Seconds)",
+                                "description": (
+                                    "After entering a commercial, AI analysis continues but its "
+                                    "decisions are ignored for this many seconds."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_INTO_COMMERCIAL_COOLDOWN_SECONDS,
+                                "min": 0,
+                            },
+                            {
+                                "key": "out-of-commercial-cooldown-seconds",
+                                "label": "Going Out of Commercial Cooldown (Seconds)",
+                                "description": (
+                                    "After returning to regular programming, AI analysis continues "
+                                    "but its decisions are ignored for this many seconds."
+                                ),
+                                "type": "number",
+                                "default": DEFAULT_OUT_OF_COMMERCIAL_COOLDOWN_SECONDS,
+                                "min": 0,
                             },
                             {
                                 "key": "screenshot-trim-top-percent",
