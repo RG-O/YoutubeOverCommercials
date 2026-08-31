@@ -2641,6 +2641,8 @@ function fullscreenChanged() {
 
     if (!document.fullscreenElement) {
 
+        //User exited fullscreen
+
         if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
             if (commercialDetectionMode !== 'auto-pixel-advanced-logo') {
                 logoBox.style.display = 'none';
@@ -2676,6 +2678,8 @@ function fullscreenChanged() {
 
     } else if (document.fullscreenElement) {
 
+        //User entered fullscreen
+
         clearMainVideoMessages();
 
         if (commercialDetectionMode.indexOf('auto-pixel') >= 0) {
@@ -2696,6 +2700,14 @@ function fullscreenChanged() {
 
         if ((overlayVideoType == 'spotify' && !isCommercialState) || overlayVideoType == 'other-tabs') {
             chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+        }
+
+        //bring back showing pip video in the corner when applicable
+        if (isLiveOverlayVideo && isPiPMode) {
+            if (overlayVideo) {
+                enterPiPMode();
+                showOverlayVideo();
+            }
         }
 
     }
