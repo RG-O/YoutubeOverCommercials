@@ -37,7 +37,9 @@ DEFAULT_MEDIA_URL = "file:///C:/Users/user/Downloads/video.mp4"
 DEFAULT_VOLUME = 256
 FALLBACK_VOLUME = 205
 FREEZE_TIMEOUT_SECONDS = 20
-FREEZE_CHECK_INTERVAL_SECONDS = 1
+AUDIO_TIMEOUT_SECONDS = 20
+HEALTH_CHECK_INTERVAL_SECONDS = 1
+WINDOW_SIZE_TOLERANCE_PIXELS = 2
 
 
 # -----------------------------------------------------------------------------
@@ -58,10 +60,17 @@ is_original_foreground_window_topmost = False
 is_setup_complete = False
 saved_volume = DEFAULT_VOLUME
 current_media_url = None
+current_media_has_audio = False
+is_commercial_state = False
+expected_commercial_window_rect = None
 
-freeze_monitor_thread = None
-freeze_monitor_stop_event = threading.Event()
+health_monitor_thread = None
+health_monitor_stop_event = threading.Event()
 vlc_command_lock = threading.Lock()
+# Prevent media URL changes and health-triggered reloads from overlapping.
+# RLock lets reset_unhealthy_media() safely call switch_vlc_media(), which also
+# uses this same lock.
+media_reload_lock = threading.RLock()
 
 
 # -----------------------------------------------------------------------------
@@ -209,6 +218,53 @@ def status_has_video(status):
     return False
 
 
+def status_has_audio(status):
+    """Return True when VLC reports at least one audio stream."""
+    categories = status.get("information", {}).get("category", {})
+
+    for stream_info in categories.values():
+        if not isinstance(stream_info, dict):
+            continue
+
+        if str(stream_info.get("Type", "")).lower() == "audio":
+            return True
+
+    return False
+
+
+def update_current_media_audio_status(timeout=5):
+    """Check whether the newly loaded media actually contains an audio stream."""
+    global current_media_has_audio
+
+    start_time = time.time()
+    latest_status = {}
+
+    while time.time() - start_time < timeout:
+        try:
+            latest_status = get_vlc_status()
+        except requests.RequestException:
+            time.sleep(0.25)
+            continue
+
+        if status_has_audio(latest_status):
+            current_media_has_audio = True
+            print("Current media contains an audio stream.")
+            return True
+
+        # Once VLC is playing video, give its stream metadata a little time to
+        # populate before deciding that this source is intentionally video-only.
+        time.sleep(0.25)
+
+    current_media_has_audio = status_has_audio(latest_status)
+
+    if current_media_has_audio:
+        print("Current media contains an audio stream.")
+    else:
+        print("Current media does not report an audio stream. Audio monitoring disabled.")
+
+    return current_media_has_audio
+
+
 def switch_vlc_media(media_url, preserve_state=True):
     """Replace VLC's current media without opening another VLC process."""
     global current_media_url
@@ -218,33 +274,37 @@ def switch_vlc_media(media_url, preserve_state=True):
     if not media_url:
         return False
 
-    old_status = {}
-    if preserve_state:
-        try:
-            old_status = get_vlc_status()
-        except requests.RequestException:
-            pass
+    # Keep the entire stop/load/wait sequence together so another request or
+    # health check cannot start a second reload before this one finishes.
+    with media_reload_lock:
+        old_status = {}
+        if preserve_state:
+            try:
+                old_status = get_vlc_status()
+            except requests.RequestException:
+                pass
 
-    old_state = old_status.get("state")
-    old_volume = old_status.get("volume")
+        old_state = old_status.get("state")
+        old_volume = old_status.get("volume")
 
-    print(f"Switching VLC media to: {media_url}")
-    send_vlc_command("pl_stop")
-    send_vlc_command("in_play", {"input": media_url})
+        print(f"Switching VLC media to: {media_url}")
+        send_vlc_command("pl_stop")
+        send_vlc_command("in_play", {"input": media_url})
 
-    current_media_url = media_url
-    previous_overlay_width_percentage = 0
-    previous_overlay_height_percentage = 0
+        current_media_url = media_url
+        previous_overlay_width_percentage = 0
+        previous_overlay_height_percentage = 0
 
-    wait_for_vlc_playing(timeout=30)
+        wait_for_vlc_playing(timeout=30)
+        update_current_media_audio_status()
 
-    if old_volume is not None:
-        set_vlc_volume(int(old_volume))
+        if old_volume is not None:
+            set_vlc_volume(int(old_volume))
 
-    if preserve_state and old_state == "paused":
-        send_vlc_command("pl_forcepause")
+        if preserve_state and old_state == "paused":
+            send_vlc_command("pl_forcepause")
 
-    return True
+        return True
 
 
 def update_media_url_if_changed(preferences):
@@ -263,36 +323,71 @@ def update_media_url_if_changed(preferences):
     return switch_vlc_media(media_url, preserve_state=True)
 
 
-def reset_frozen_media():
-    """Restart the current media after VLC stops displaying new frames."""
-    if not current_media_url:
+def reset_unhealthy_media(reason):
+    """Restart the current media after a video or audio playback failure."""
+    # Hold the reload lock for the whole health recovery. This prevents a URL
+    # change or another recovery from being started at the same time.
+    with media_reload_lock:
+        if not current_media_url:
+            return
+
+        try:
+            status = get_vlc_status()
+            volume = int(status.get("volume", saved_volume))
+            media_url = current_media_url
+
+            print(f"{reason} Restarting the media.")
+            switch_vlc_media(media_url, preserve_state=False)
+            set_vlc_volume(volume)
+        except requests.RequestException as error:
+            print(f"Could not reset VLC media: {error}")
+
+
+def window_rect_changed(current_rect, expected_rect):
+    """Return True when a window moved or resized beyond the small tolerance."""
+    if not current_rect or not expected_rect:
+        return False
+
+    return any(
+        abs(current - expected) > WINDOW_SIZE_TOLERANCE_PIXELS
+        for current, expected in zip(current_rect, expected_rect)
+    )
+
+
+def restore_expected_commercial_window(hwnd):
+    """Put VLC back at the commercial overlay position and size."""
+    if not hwnd or not expected_commercial_window_rect:
         return
 
-    try:
-        status = get_vlc_status()
-        volume = int(status.get("volume", saved_volume))
+    left, top, right, bottom = expected_commercial_window_rect
+    width = right - left
+    height = bottom - top
 
-        print(
-            f"No new VLC frames for {FREEZE_TIMEOUT_SECONDS} seconds. "
-            "Restarting the media."
-        )
-        switch_vlc_media(current_media_url, preserve_state=False)
-        set_vlc_volume(volume)
-    except requests.RequestException as error:
-        print(f"Could not reset frozen VLC media: {error}")
+    win32gui.SetWindowPos(
+        hwnd,
+        win32con.HWND_TOPMOST,
+        left,
+        top,
+        width,
+        height,
+        win32con.SWP_NOACTIVATE,
+    )
 
 
-def monitor_vlc_for_freezes():
-    """Restart playing media when no new frame appears for too long."""
+def monitor_vlc_health():
+    """Monitor VLC for frozen video, dropped audio, and window size changes."""
     last_displayed_count = None
     last_frame_time = time.monotonic()
 
-    while not freeze_monitor_stop_event.wait(
-        FREEZE_CHECK_INTERVAL_SECONDS
-    ):
+    last_audio_count = None
+    last_audio_time = time.monotonic()
+
+    while not health_monitor_stop_event.wait(HEALTH_CHECK_INTERVAL_SECONDS):
         if not is_setup_complete or not current_media_url:
             last_displayed_count = None
+            last_audio_count = None
             last_frame_time = time.monotonic()
+            last_audio_time = time.monotonic()
             continue
 
         try:
@@ -300,46 +395,98 @@ def monitor_vlc_for_freezes():
         except requests.RequestException:
             continue
 
-        if status.get("state") != "playing" or not status_has_video(status):
+        if status.get("state") != "playing":
             last_displayed_count = None
+            last_audio_count = None
             last_frame_time = time.monotonic()
+            last_audio_time = time.monotonic()
             continue
 
-        displayed_count = int(
-            status.get("stats", {}).get("displayedpictures", 0) or 0
-        )
+        # VLC can sometimes resize its own window after a stream reload. While
+        # commercials are playing, keep it at the exact overlay rectangle that
+        # the plugin most recently requested.
+        if is_commercial_state and expected_commercial_window_rect:
+            hwnd = get_vlc_window()
 
-        if last_displayed_count is None or displayed_count > last_displayed_count:
-            last_displayed_count = displayed_count
-            last_frame_time = time.monotonic()
-            continue
+            if hwnd:
+                try:
+                    current_rect = win32gui.GetWindowRect(hwnd)
+                    if window_rect_changed(
+                        current_rect,
+                        expected_commercial_window_rect,
+                    ):
+                        print("VLC window changed size or position. Restoring overlay.")
+                        restore_expected_commercial_window(hwnd)
+                except win32gui.error:
+                    pass
 
-        if time.monotonic() - last_frame_time >= FREEZE_TIMEOUT_SECONDS:
-            reset_frozen_media()
+        stats = status.get("stats", {})
+
+        # Video freeze detection
+        if status_has_video(status):
+            displayed_count = int(stats.get("displayedpictures", 0) or 0)
+
+            if (
+                last_displayed_count is None
+                or displayed_count > last_displayed_count
+            ):
+                last_displayed_count = displayed_count
+                last_frame_time = time.monotonic()
+            elif time.monotonic() - last_frame_time >= FREEZE_TIMEOUT_SECONDS:
+                reset_unhealthy_media(
+                    f"No new VLC video frames for {FREEZE_TIMEOUT_SECONDS} seconds."
+                )
+                last_displayed_count = None
+                last_audio_count = None
+                last_frame_time = time.monotonic()
+                last_audio_time = time.monotonic()
+                continue
+        else:
             last_displayed_count = None
             last_frame_time = time.monotonic()
 
+        # Audio failure detection. Only monitor audio when this media source was
+        # confirmed to contain an audio stream when it began playing.
+        if current_media_has_audio:
+            played_audio_buffers = int(stats.get("playedabuffers", 0) or 0)
+            decoded_audio = int(stats.get("decodedaudio", 0) or 0)
+            audio_count = max(played_audio_buffers, decoded_audio)
 
-def start_freeze_monitor():
-    """Start the freeze-monitor thread once."""
-    global freeze_monitor_thread
+            if last_audio_count is None or audio_count > last_audio_count:
+                last_audio_count = audio_count
+                last_audio_time = time.monotonic()
+            elif time.monotonic() - last_audio_time >= AUDIO_TIMEOUT_SECONDS:
+                reset_unhealthy_media(
+                    f"No new VLC audio data for {AUDIO_TIMEOUT_SECONDS} seconds."
+                )
+                last_displayed_count = None
+                last_audio_count = None
+                last_frame_time = time.monotonic()
+                last_audio_time = time.monotonic()
+        else:
+            last_audio_count = None
+            last_audio_time = time.monotonic()
 
-    if freeze_monitor_thread and freeze_monitor_thread.is_alive():
+
+def start_health_monitor():
+    """Start the VLC health-monitor thread once."""
+    global health_monitor_thread
+
+    if health_monitor_thread and health_monitor_thread.is_alive():
         return
 
-    freeze_monitor_stop_event.clear()
-    freeze_monitor_thread = threading.Thread(
-        target=monitor_vlc_for_freezes,
-        name="vlc-freeze-monitor",
+    health_monitor_stop_event.clear()
+    health_monitor_thread = threading.Thread(
+        target=monitor_vlc_health,
+        name="vlc-health-monitor",
         daemon=True,
     )
-    freeze_monitor_thread.start()
+    health_monitor_thread.start()
 
 
-def stop_freeze_monitor():
-    """Tell the freeze-monitor thread to stop."""
-    freeze_monitor_stop_event.set()
-
+def stop_health_monitor():
+    """Tell the VLC health-monitor thread to stop."""
+    health_monitor_stop_event.set()
 
 def open_vlc_with_media(media_url):
     """Start VLC and remember the main window owned by that process."""
@@ -733,6 +880,7 @@ def show_commercial_overlay(hwnd, preferences):
     global optimized_height_percentage
     global previous_overlay_width_percentage
     global previous_overlay_height_percentage
+    global expected_commercial_window_rect
 
     dimensions_changed = (
         preferences["overlay_width"] != previous_overlay_width_percentage
@@ -758,6 +906,9 @@ def show_commercial_overlay(hwnd, preferences):
         vertical=preferences["overlay_vertical"],
         horizontal=preferences["overlay_horizontal"],
     )
+
+    if hwnd and win32gui.IsWindow(hwnd):
+        expected_commercial_window_rect = win32gui.GetWindowRect(hwnd)
 
     time.sleep(0.1)
     send_vlc_command("pl_forceresume")
@@ -845,6 +996,7 @@ def initialize_plugin(preferences):
     if not wait_for_vlc_playing():
         raise RuntimeError("VLC did not begin displaying video before timeout.")
 
+    update_current_media_audio_status()
     time.sleep(0.5)
 
     hwnd = get_vlc_window()
@@ -888,7 +1040,7 @@ def initialize_plugin(preferences):
             hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
 
     is_setup_complete = True
-    start_freeze_monitor()
+    start_health_monitor()
 
 
 def end_plugin():
@@ -896,8 +1048,11 @@ def end_plugin():
     global vlc_window_handle
     global is_setup_complete
     global current_media_url
+    global current_media_has_audio
+    global is_commercial_state
+    global expected_commercial_window_rect
 
-    stop_freeze_monitor()
+    stop_health_monitor()
 
     if is_original_foreground_window_topmost:
         set_original_window_topmost(False)
@@ -928,6 +1083,9 @@ def end_plugin():
     vlc_process = None
     vlc_window_handle = None
     current_media_url = None
+    current_media_has_audio = False
+    is_commercial_state = False
+    expected_commercial_window_rect = None
     is_setup_complete = False
     print("Extension stopped.")
 
@@ -941,6 +1099,8 @@ app = Flask(__name__)
 
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
+    global is_commercial_state
+
     try:
         data = request.get_json(silent=True) or {}
         request_type = data.get("type")
@@ -966,6 +1126,8 @@ def custom_plugin_overlay():
             is_commercial = bool(
                 data.get("data", {}).get("isCommercialState", False)
             )
+
+            is_commercial_state = is_commercial
 
             if is_commercial:
                 print("Starting overlay.")
