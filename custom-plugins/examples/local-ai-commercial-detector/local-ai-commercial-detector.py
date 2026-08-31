@@ -12,7 +12,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.8.0"
+PLUGIN_VERSION = "1.8.1"
 
 PORT = 64145
 
@@ -1557,7 +1557,7 @@ async def send_manifest():
                             {
                                 "key": "ollama-model",
                                 "label": "Ollama Model",
-                                "description": (
+                                "tooltip": (
                                     "Local Ollama model used for screenshot analysis. "
                                     "Only models currently installed in Ollama are listed."
                                 ),
@@ -1591,7 +1591,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-prompt",
                                 "label": "Commercial Prompt",
-                                "description": (
+                                "tooltip": (
                                     "Prompt used while regular programming is active to "
                                     "decide whether the screenshots indicate a commercial. "
                                     "Try to have answer start with YES or NO."
@@ -1602,7 +1602,7 @@ async def send_manifest():
                             {
                                 "key": "non-commercial-prompt",
                                 "label": "Non-Commercial Prompt",
-                                "description": (
+                                "tooltip": (
                                     "Prompt used while a commercial is active to decide "
                                     "whether regular programming has returned. "
                                     "Try to have answer start with YES or NO."
@@ -1613,7 +1613,7 @@ async def send_manifest():
                             {
                                 "key": "regular-llm-call-frequency-seconds",
                                 "label": "Regular Programming LLM Call Frequency (Seconds)",
-                                "description": (
+                                "tooltip": (
                                     "Minimum seconds between Ollama call starts while "
                                     "regular programming is active. Set to 0 to run again "
                                     "as soon as the prior call finishes and fresh screenshots exist."
@@ -1625,7 +1625,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-llm-call-frequency-seconds",
                                 "label": "Commercial LLM Call Frequency (Seconds)",
-                                "description": (
+                                "tooltip": (
                                     "Minimum seconds between Ollama call starts while a "
                                     "commercial is active. Set to 0 to run again as soon as "
                                     "the prior call finishes and fresh screenshots exist."
@@ -1637,7 +1637,7 @@ async def send_manifest():
                             {
                                 "key": "regular-consecutive-yes-required",
                                 "label": "Regular Programming Consecutive YES Responses Required",
-                                "description": (
+                                "tooltip": (
                                     "YES responses required in a row before entering a "
                                     "commercial. NO resets the count; UNKNOWN leaves it unchanged."
                                 ),
@@ -1648,7 +1648,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-consecutive-yes-required",
                                 "label": "Commercial Consecutive YES Responses Required",
-                                "description": (
+                                "tooltip": (
                                     "YES responses required in a row before returning to "
                                     "regular programming. NO resets the count; UNKNOWN leaves it unchanged."
                                 ),
@@ -1659,7 +1659,7 @@ async def send_manifest():
                             {
                                 "key": "regular-screenshot-batch-size",
                                 "label": "Regular Programming Screenshot Batch Size",
-                                "description": (
+                                "tooltip": (
                                     "Number of rolling screenshots sent to Ollama while "
                                     "regular programming is active."
                                 ),
@@ -1670,7 +1670,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-screenshot-batch-size",
                                 "label": "Commercial Screenshot Batch Size",
-                                "description": (
+                                "tooltip": (
                                     "Number of rolling screenshots sent to Ollama while a "
                                     "commercial is active."
                                 ),
@@ -1681,7 +1681,7 @@ async def send_manifest():
                             {
                                 "key": "regular-screenshot-frequency-milliseconds",
                                 "label": "Regular Programming Screenshot Frequency (Milliseconds)",
-                                "description": (
+                                "tooltip": (
                                     "How frequently the browser captures screenshots while "
                                     "regular programming is active."
                                 ),
@@ -1692,7 +1692,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-screenshot-frequency-milliseconds",
                                 "label": "Commercial Screenshot Frequency (Milliseconds)",
-                                "description": (
+                                "tooltip": (
                                     "How frequently the browser captures screenshots while "
                                     "a commercial is active."
                                 ),
@@ -1703,7 +1703,7 @@ async def send_manifest():
                             {
                                 "key": "regular-screenshot-max-width",
                                 "label": "Regular Programming Screenshot Max Width (Pixels)",
-                                "description": (
+                                "tooltip": (
                                     "Maximum screenshot width while regular programming is active. "
                                     "The extension should preserve the screenshot aspect ratio."
                                 ),
@@ -1714,7 +1714,7 @@ async def send_manifest():
                             {
                                 "key": "regular-screenshot-max-height",
                                 "label": "Regular Programming Screenshot Max Height (Pixels)",
-                                "description": (
+                                "tooltip": (
                                     "Maximum screenshot height while regular programming is active. "
                                     "The extension should preserve the screenshot aspect ratio."
                                 ),
@@ -1725,7 +1725,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-screenshot-max-width",
                                 "label": "Commercial Screenshot Max Width (Pixels)",
-                                "description": (
+                                "tooltip": (
                                     "Maximum screenshot width while a commercial is active. The "
                                     "extension should preserve the screenshot aspect ratio."
                                 ),
@@ -1736,7 +1736,7 @@ async def send_manifest():
                             {
                                 "key": "commercial-screenshot-max-height",
                                 "label": "Commercial Screenshot Max Height (Pixels)",
-                                "description": (
+                                "tooltip": (
                                     "Maximum screenshot height while a commercial is active. The "
                                     "extension should preserve the screenshot aspect ratio."
                                 ),
@@ -1747,7 +1747,7 @@ async def send_manifest():
                             {
                                 "key": "into-commercial-cooldown-seconds",
                                 "label": "Going Into Commercial Cooldown (Seconds)",
-                                "description": (
+                                "tooltip": (
                                     "After entering a commercial, AI analysis continues but its "
                                     "decisions are ignored for this many seconds."
                                 ),
@@ -1758,7 +1758,7 @@ async def send_manifest():
                             {
                                 "key": "out-of-commercial-cooldown-seconds",
                                 "label": "Going Out of Commercial Cooldown (Seconds)",
-                                "description": (
+                                "tooltip": (
                                     "After returning to regular programming, AI analysis continues "
                                     "but its decisions are ignored for this many seconds."
                                 ),
@@ -1769,7 +1769,7 @@ async def send_manifest():
                             {
                                 "key": "screenshot-trim-top-percent",
                                 "label": "Screenshot Trim Top (%)",
-                                "description": "Percentage to trim from the top of each screenshot.",
+                                "tooltip": "Percentage to trim from the top of each screenshot.",
                                 "type": "number",
                                 "default": DEFAULT_SCREENSHOT_TRIM_TOP_PERCENT,
                                 "min": 0,
@@ -1778,7 +1778,7 @@ async def send_manifest():
                             {
                                 "key": "screenshot-trim-right-percent",
                                 "label": "Screenshot Trim Right (%)",
-                                "description": "Percentage to trim from the right of each screenshot.",
+                                "tooltip": "Percentage to trim from the right of each screenshot.",
                                 "type": "number",
                                 "default": DEFAULT_SCREENSHOT_TRIM_RIGHT_PERCENT,
                                 "min": 0,
@@ -1787,7 +1787,7 @@ async def send_manifest():
                             {
                                 "key": "screenshot-trim-bottom-percent",
                                 "label": "Screenshot Trim Bottom (%)",
-                                "description": "Percentage to trim from the bottom of each screenshot.",
+                                "tooltip": "Percentage to trim from the bottom of each screenshot.",
                                 "type": "number",
                                 "default": DEFAULT_SCREENSHOT_TRIM_BOTTOM_PERCENT,
                                 "min": 0,
@@ -1796,7 +1796,7 @@ async def send_manifest():
                             {
                                 "key": "screenshot-trim-left-percent",
                                 "label": "Screenshot Trim Left (%)",
-                                "description": "Percentage to trim from the left of each screenshot.",
+                                "tooltip": "Percentage to trim from the left of each screenshot.",
                                 "type": "number",
                                 "default": DEFAULT_SCREENSHOT_TRIM_LEFT_PERCENT,
                                 "min": 0,
