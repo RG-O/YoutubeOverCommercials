@@ -1670,10 +1670,17 @@ function displayPluginManifest(container, manifest, preferences = {}) {
     version.textContent = manifest.version;
 
     const description = container.querySelector("#plugin-description");
-    if (manifest.description) {
+    if (manifest?.description) {
         description.textContent = manifest.description;
     } else {
         description.remove();
+    }
+
+    const informationalURL = container.querySelector("#plugin-info-url");
+    if (manifest?.informationalURL) {
+        informationalURL.href = manifest.informationalURL;
+    } else {
+        informationalURL.remove();
     }
 
     const settings = container.querySelector("#plugin-settings");
@@ -1731,6 +1738,7 @@ function displayPluginManifest(container, manifest, preferences = {}) {
                         radio.dataset.key = field.key;
                         const radioLabel = document.createElement("label");
                         radioLabel.textContent = opt.label;
+                        //radioLabel.htmlFor = ???; //TODO: add this and all the other missing names, ids, and fors throughout these plugin settings
                         radioWrapper.appendChild(radio);
                         radioWrapper.appendChild(radioLabel);
                         if (opt?.tooltip) {

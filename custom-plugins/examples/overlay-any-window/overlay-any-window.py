@@ -360,7 +360,7 @@ async def handle_message(websocket, message):
                 mute_application_of_window(hwnd, mute=False)
 
             if settings["should_send_spacebar"]:
-                time.sleep(0.3)
+                time.sleep(0.5)
                 send_spacebar(hwnd)
 
         else:
@@ -368,7 +368,7 @@ async def handle_message(websocket, message):
 
             if settings["should_send_spacebar"]:
                 send_spacebar(hwnd)
-                time.sleep(0.3)
+                time.sleep(0.5)
 
             if settings["should_mute"]:
                 mute_application_of_window(hwnd, mute=True)
@@ -450,14 +450,15 @@ async def send_manifest(websocket):
         "data": {
             "name": "Overlay Any Window",
             "id": "overlay-any-window",
-            "version": "1.0.0",
+            "version": "1.0.1",
             "description": (
                 "Overlay any open Windows application. This plugin uses the "
                 "overlay and picture-in-picture size and location settings "
                 "from the extension's additional settings."
             ),
-            "primaryColor": "#12384d",
-            "secondaryColor": "#dadcdc",
+            "informationalURL": "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/overlay-any-window",
+            "primaryColor": "#ffffff",
+            "secondaryColor": "#0078D7",
             "capabilities": ["overlay"],
             "preferences": [
                 {
@@ -475,7 +476,7 @@ async def send_manifest(websocket):
                 {
                     "key": "should-mute-window",
                     "label": "Mute window program during commercials",
-                    "description": (
+                    "tooltip": (
                         "This mutes the entire application that owns the "
                         "selected window. If the application has multiple "
                         "windows open, all of them may be muted."
@@ -486,7 +487,7 @@ async def send_manifest(websocket):
                 {
                     "key": "should-send-spacebar",
                     "label": "Send spacebar keypress to window",
-                    "description": (
+                    "tooltip": (
                         "Send a spacebar command to try to play the selected "
                         "window's media when commercials begin and pause it "
                         "when commercials end. Start with the media paused."

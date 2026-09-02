@@ -180,10 +180,11 @@ async def send_manifest(ws):
                 "id": PLUGIN_ID,
                 "version": PLUGIN_VERSION,
                 "description": "My trigger plugin description.", # Optional
+                "informationalURL": "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins", # Optional
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional
                 "capabilities": ["trigger"], # Add "screenshots" for permission to receive screenshots #TODO get this permission security working on extension side
-                "preferences": [
+                "preferences": [ # Optional
                     {
                         "key": "text-field-example",
                         "label": "Text",
@@ -194,7 +195,7 @@ async def send_manifest(ws):
                     },
                     {
                         "key": "number-field-example",
-                        "label": "Text",
+                        "label": "Number",
                         "tooltip": "Example of a number field.", # Optional
                         "description": "Example of a number field.", # Optional
                         "type": "number",
@@ -248,7 +249,7 @@ async def send_manifest(ws):
                         "type": "textarea",
                         "default": "Default Text", # Optional
                     },
-                ], # Optional
+                ],
             },
             "meta": {
                 "display": "Sending Manifest",

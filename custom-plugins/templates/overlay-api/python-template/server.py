@@ -64,6 +64,7 @@ def plugin_manifest():
             "id": PLUGIN_ID,
             "version": PLUGIN_VERSION,
             "description": "My overlay plugin description.", # Optional
+            "informationalURL": "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins", # Optional
             "primaryColor": "#12384d", # Optional
             "secondaryColor": "#dadcdc", # Optional
             "capabilities": ["overlay"],
@@ -71,6 +72,7 @@ def plugin_manifest():
                 {
                     "key": "text-field-example",
                     "label": "Text",
+                    "tooltip": "Example of a text field.", # Optional
                     "description": "Example of a text field.", # Optional
                     "type": "text",
                     "default": "Default Text", # Optional
@@ -78,6 +80,7 @@ def plugin_manifest():
                 {
                     "key": "number-field-example",
                     "label": "Number",
+                    "tooltip": "Example of a number field.", # Optional
                     "description": "Example of a number field.", # Optional
                     "type": "number",
                     "default": 50, # Optional
@@ -85,6 +88,7 @@ def plugin_manifest():
                 {
                     "key": "checkbox-field-example",
                     "label": "Checkbox",
+                    "tooltip": "Example of a checkbox field.", # Optional
                     "description": "Example of a checkbox field.", # Optional
                     "type": "checkbox",
                     "default": False, # Optional
@@ -92,6 +96,7 @@ def plugin_manifest():
                 {
                     "key": "dropdown-field-example",
                     "label": "Dropdown",
+                    "tooltip": "Example of a dropdown field.", # Optional
                     "description": "Example of a dropdown field.", # Optional
                     "type": "select",
                     "options": [
@@ -103,17 +108,27 @@ def plugin_manifest():
                 {
                     "key": "radio-field-example",
                     "label": "Radio",
+                    "tooltip": "Example of a radio field.", # Optional
                     "description": "Example of a radio field.", # Optional
                     "type": "radio",
                     "options": [
-                        { "label": "Value 1", "value": "value-1" },
-                        { "label": "Value 2", "value": "value-2" },
+                        {
+                            "label": "Value 1",
+                            "tooltip": "Example of a radio button option - value 1", # Optional
+                            "value": "value-1"
+                        },
+                        {
+                            "label": "Value 2",
+                            "tooltip": "Example of a radio button option - value 2", # Optional
+                            "value": "value-2"
+                        },
                     ],
                     "default": "value-2",
                 },
                 {
                     "key": "textarea-field-example",
                     "label": "Text Area",
+                    "tooltip": "Example of a text area field.", # Optional
                     "description": "Example of a text area field.", # Optional
                     "type": "textarea",
                     "default": "Default Text", # Optional
