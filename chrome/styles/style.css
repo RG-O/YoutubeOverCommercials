@@ -40,13 +40,12 @@
     left: 20px !important;
     right: 20px !important;
     z-index: 2147483647 !important;
-    display: flex !important;
+    display: inline !important;
     flex-direction: row !important;
     flex-wrap: wrap !important;
     align-items: center !important;
     text-align: center !important;
     text-shadow: 0px 0px 15px black, 0px 0px 15px black, 0px 0px 15px black !important;
-    gap: 8px !important;
     pointer-events: none !important;
 }
 

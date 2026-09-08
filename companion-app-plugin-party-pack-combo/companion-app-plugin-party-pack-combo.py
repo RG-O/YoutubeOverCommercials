@@ -3787,6 +3787,30 @@ async def window_handle_client(websocket):
 
 
 async def window_handle_message(websocket, message):
+    """Handle an Overlay Any Window message with COM scoped to this plugin.
+
+    pycaw uses Windows COM internally. The Party Pack WebSocket loop runs on
+    a worker thread, and COM initialization is per-thread. Keep that Windows
+    requirement local to this plugin instead of initializing COM for every
+    plugin in the Party Pack.
+    """
+    # Reading the manifest only enumerates windows and does not use pycaw, so
+    # there is no reason to initialize COM for a manifest request.
+    if message.get("type") == "plugin_manifest":
+        await window_handle_message_with_com(websocket, message)
+        return
+
+    import comtypes
+
+    comtypes.CoInitialize()
+    try:
+        await window_handle_message_with_com(websocket, message)
+    finally:
+        comtypes.CoUninitialize()
+
+
+async def window_handle_message_with_com(websocket, message):
+    """Original Overlay Any Window message handling logic."""
     message_type = message.get("type")
     print(f"Received message: {message_type}")
 
@@ -4549,7 +4573,17 @@ async def voice_send_manifest(ws):
 
 
 # Start with defaults until preferences arrive from the extension.
-voice_apply_preferences({})
+# Do this silently so the voice plugin has no startup side effects before it is enabled.
+voice_TARGET_PHRASES = {
+    voice_DEFAULT_COMMERCIAL_PHRASE.lower(): {
+        "action": "commercial",
+        "emoji": voice_DEFAULT_COMMERCIAL_EMOJI,
+    },
+    voice_DEFAULT_CONTENT_PHRASE.lower(): {
+        "action": "content",
+        "emoji": voice_DEFAULT_CONTENT_EMOJI,
+    },
+}
 
 # --------------------------------------------------
 # Main
