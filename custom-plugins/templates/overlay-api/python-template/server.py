@@ -16,7 +16,7 @@ def custom_plugin_overlay():
     msg = request.json
     message_type = msg["type"]
     preferences = msg["data"]["preferences"]
-    custom_overlay_plugin_preferences = preferences.get("pluginOverlayPreferences", {}).get("preferences", {}) # First time plugin users might not have this when they call for manifest
+    custom_overlay_plugin_preferences = preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
 
     if message_type == "commercial_state_change":
         is_commercial = msg["data"]["isCommercialState"]

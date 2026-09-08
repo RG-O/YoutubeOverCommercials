@@ -32,7 +32,7 @@ async def handle_client(websocket):
 async def handle_message(ws, msg):
     message_type = msg["type"]
     preferences = msg["data"]["preferences"]
-    custom_overlay_plugin_preferences = preferences.get("pluginOverlayPreferences", {}).get("preferences", {}) # First time plugin users might not have this when they call for manifest
+    custom_overlay_plugin_preferences = preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")

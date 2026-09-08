@@ -16,8 +16,8 @@ import mediapipe as mp
 
 PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-PLUGIN_NAME = "Thumbs Down Commercials"
-PLUGIN_ID = "my-trigger-plugin-ws" # Must be unique
+PLUGIN_NAME = "Peace Out Commercials"
+PLUGIN_ID = "gesture-trigger-plugin"
 PLUGIN_VERSION = "1.1.0"
 
 # --------------------------------------------------
@@ -1004,7 +1004,7 @@ async def handle_message(ws, msg):
             )
         )
 
-        custom_trigger_plugin_preferences = general_preferences.get("pluginTriggerPreferences", {}).get("preferences", {})
+        custom_trigger_plugin_preferences = general_preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
         apply_plugin_preferences(custom_trigger_plugin_preferences)
 
         current_is_commercial = data.get("isCommercialState")
@@ -1148,7 +1148,7 @@ async def send_manifest(ws):
                         ),
                         "type": "select",
                         "options": gesture_options,
-                        "default": "Thumb_Down",
+                        "default": COMMERCIAL_GESTURE,
                     },
                     {
                         "key": "commercialSensitivity",
@@ -1174,7 +1174,7 @@ async def send_manifest(ws):
                             "Number of matching hands required to trigger commercial (1-5)."
                         ),
                         "type": "number",
-                        "default": 2,
+                        "default": COMMERCIAL_GESTURE_COUNT,
                         "min": 1,
                         "max": 4,
                     },
@@ -1186,7 +1186,7 @@ async def send_manifest(ws):
                         ),
                         "type": "select",
                         "options": gesture_options,
-                        "default": "Thumb_Up",
+                        "default": CONTENT_GESTURE,
                     },
                     {
                         "key": "contentSensitivity",
@@ -1212,7 +1212,7 @@ async def send_manifest(ws):
                             "Number of matching hands required to trigger content (1-5)."
                         ),
                         "type": "number",
-                        "default": 2,
+                        "default": CONTENT_GESTURE_COUNT,
                         "min": 1,
                         "max": 4,
                     },
@@ -1223,7 +1223,7 @@ async def send_manifest(ws):
                             "Total number of hands the model will recognize at a time (Recommended use less if can. Use more for crowded room.)."
                         ),
                         "type": "number",
-                        "default": 4,
+                        "default": TOTAL_HANDS_PROCESSED,
                     },
                     {
                         "key": "cameraResolution",
@@ -1244,7 +1244,7 @@ async def send_manifest(ws):
                                 "value": "1280x720"
                             }
                         ],
-                        "default": "native"
+                        "default": CAMERA_RESOLUTION
                     },
                     {
                         "key": "mirrorCamera",
@@ -1253,7 +1253,7 @@ async def send_manifest(ws):
                             "Flip the camera horizontally like a selfie preview."
                         ),
                         "type": "checkbox",
-                        "default": True,
+                        "default": MIRROR_CAMERA,
                     },
                     {
                         "key": "cooldownSeconds",
@@ -1263,7 +1263,7 @@ async def send_manifest(ws):
                             "trigger again."
                         ),
                         "type": "number",
-                        "default": 1.0,
+                        "default": COOLDOWN,
                         "min": 0.0,
                         "max": 10.0,
                         "step": 0.1,

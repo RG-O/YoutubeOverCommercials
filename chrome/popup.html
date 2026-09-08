@@ -113,15 +113,22 @@
         </div>
         <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
             <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
-                <div class="id-field-label">
-                    <label>WebSocket URL:</label>
+                <div class="id-field-label"><label>Plugin Type:</label></div>
+                <div class="id-input-row" style="margin-bottom: 5px;">
+                    <input type="radio" id="pluginCommercialTriggerFramework-ws" name="pluginCommercialTriggerFramework" data-sync="pluginCommercialTriggerFramework" value="ws" style="width: auto; height: auto;">
+                    <label for="pluginCommercialTriggerFramework-ws">WS</label>
+                    <input type="text" name="pluginCommercialTriggerWSURL" id="pluginCommercialTriggerWSURL" data-sync="pluginCommercialTriggerWSURL">
+                    <button id="pull-button-pluginCommercialTriggerWSURL" class="pull-id-button">&#128260;<span class="pull-id-tooltip">Refresh plugin manifest.</span></button>
                 </div>
                 <div class="id-input-row">
-                    <input type="text" name="pluginCommercialTriggerWSURL" id="pluginCommercialTriggerWSURL" data-sync="pluginCommercialTriggerWSURL">
-                    <button id="pull-button-pluginCommercialTriggerWSURL" class="pull-id-button">
-                        &#128260;
-                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
-                    </button>
+                    <input type="radio" id="pluginCommercialTriggerFramework-official-plugin-party-pack" name="pluginCommercialTriggerFramework" data-sync="pluginCommercialTriggerFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
+                    <label for="pluginCommercialTriggerFramework-official-plugin-party-pack">Official Plugin Party Pack &#127881;</label>
+                </div>
+                <div class="official-plugin-party-pack-trigger-panel" style="display: none;">
+                    <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any trigger plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
+                    <div class="official-plugin-party-pack-trigger-loading loading-spinner" style="display: none;"></div>
+                    <div class="official-plugin-party-pack-trigger-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
+                    <div class="official-plugin-party-pack-trigger-list settings-box"></div>
                 </div>
             </div>
             <div class="custom-plugin-trigger-messaging-container">
@@ -145,6 +152,7 @@
                 </div>
             </div>
         </div>
+
 
 
 
@@ -270,14 +278,21 @@
                         <span class="pull-id-tooltip">Refresh plugin manifest.</span>
                     </button>
                 </div>
-                <div class="id-input-row">
+                <div class="id-input-row" style="margin-bottom: 5px;">
                     <input type="radio" id="pluginOverlayFramework-ws" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
                     <label for="pluginOverlayFramework-ws">WS</label>
                     <input type="text" name="pluginOverlayWSURL" id="pluginOverlayWSURL" data-sync="pluginOverlayWSURL">
-                    <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">
-                        &#128260;
-                        <span class="pull-id-tooltip">Refresh plugin manifest.</span>
-                    </button>
+                    <button id="pull-button-pluginOverlayWSURL" class="pull-id-button">&#128260;<span class="pull-id-tooltip">Refresh plugin manifest.</span></button>
+                </div>
+                <div class="id-input-row">
+                    <input type="radio" id="pluginOverlayFramework-official-plugin-party-pack" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
+                    <label for="pluginOverlayFramework-official-plugin-party-pack">Official Plugin Party Pack &#127881;</label>
+                </div>
+                <div class="official-plugin-party-pack-overlay-panel" style="display: none;">
+                    <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any overlay plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
+                    <div class="official-plugin-party-pack-overlay-loading loading-spinner" style="display: none;"></div>
+                    <div class="official-plugin-party-pack-overlay-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
+                    <div class="official-plugin-party-pack-overlay-list settings-box"></div>
                 </div>
             </div>
             <div class="custom-plugin-overlay-messaging-container">
@@ -297,6 +312,7 @@
                 </div>
             </div>
         </div>
+
 
         <div style="padding-bottom: 15px"></div>
 
@@ -439,14 +455,21 @@
                             <span class="pull-id-tooltip">Refresh plugin manifest.</span>
                         </button>
                     </div>
-                    <div class="id-input-row">
+                    <div class="id-input-row" style="margin-bottom: 5px;">
                         <input type="radio" id="pluginOverlayFramework-wsDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="ws" style="width: auto; height: auto;">
-                        <label for="pluginOverlayFramework-ws">WS</label>
+                        <label for="pluginOverlayFramework-wsDuplicate">WS</label>
                         <input type="text" name="pluginOverlayWSURLDuplicate" id="pluginOverlayWSURLDuplicate" data-sync="pluginOverlayWSURL">
-                        <button id="pull-button-pluginOverlayWSURLDuplicate" class="pull-id-button">
-                            &#128260;
-                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
-                        </button>
+                        <button id="pull-button-pluginOverlayWSURLDuplicate" class="pull-id-button">&#128260;<span class="pull-id-tooltip">Refresh plugin manifest.</span></button>
+                    </div>
+                    <div class="id-input-row">
+                        <input type="radio" id="pluginOverlayFramework-official-plugin-party-packDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
+                        <label for="pluginOverlayFramework-official-plugin-party-packDuplicate">Official Plugin Party Pack &#127881;</label>
+                    </div>
+                    <div class="official-plugin-party-pack-overlay-panel" style="display: none;">
+                        <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any overlay plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
+                        <div class="official-plugin-party-pack-overlay-loading loading-spinner" style="display: none;"></div>
+                        <div class="official-plugin-party-pack-overlay-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
+                        <div class="official-plugin-party-pack-overlay-list settings-box"></div>
                     </div>
                 </div>
                 <div class="custom-plugin-overlay-messaging-container">
@@ -566,16 +589,23 @@
                 <input type="checkbox" name="isPluginCommercialTriggerMode" id="isPluginCommercialTriggerMode">
             </div>
             <div id="custom-plugin-trigger-settings-checkbox-duplicate" style="display: none;">
-                <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
-                    <div class="id-field-label">
-                        <label>WebSocket URL:</label>
+                <div class="plugin-url-wrapper settings-box">
+                    <div class="id-field-label"><label>Plugin Type:</label></div>
+                    <div class="id-input-row" style="margin-bottom: 5px;">
+                        <input type="radio" id="pluginCommercialTriggerFramework-wsDuplicate" name="pluginCommercialTriggerFrameworkDuplicate" data-sync="pluginCommercialTriggerFramework" value="ws" style="width: auto; height: auto;">
+                        <label for="pluginCommercialTriggerFramework-wsDuplicate">WS</label>
+                        <input type="text" name="pluginCommercialTriggerWSURLDuplicate" id="pluginCommercialTriggerWSURLDuplicate" data-sync="pluginCommercialTriggerWSURL">
+                        <button id="pull-button-pluginCommercialTriggerWSURLDuplicate" class="pull-id-button">&#128260;<span class="pull-id-tooltip">Refresh plugin manifest.</span></button>
                     </div>
                     <div class="id-input-row">
-                        <input type="text" name="pluginCommercialTriggerWSURLDuplicate" id="pluginCommercialTriggerWSURLDuplicate" data-sync="pluginCommercialTriggerWSURL">
-                        <button id="pull-button-pluginCommercialTriggerWSURLDuplicate" class="pull-id-button">
-                            &#128260;
-                            <span class="pull-id-tooltip">Refresh plugin manifest.</span>
-                        </button>
+                        <input type="radio" id="pluginCommercialTriggerFramework-official-plugin-party-packDuplicate" name="pluginCommercialTriggerFrameworkDuplicate" data-sync="pluginCommercialTriggerFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
+                        <label for="pluginCommercialTriggerFramework-official-plugin-party-packDuplicate">Official Plugin Party Pack &#127881;</label>
+                    </div>
+                    <div class="official-plugin-party-pack-trigger-panel" style="display: none;">
+                        <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any trigger plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
+                        <div class="official-plugin-party-pack-trigger-loading loading-spinner" style="display: none;"></div>
+                        <div class="official-plugin-party-pack-trigger-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
+                        <div class="official-plugin-party-pack-trigger-list settings-box"></div>
                     </div>
                 </div>
                 <div class="custom-plugin-trigger-messaging-container">
@@ -681,6 +711,8 @@
                 NOTE: This plugin has the ability to receive screenshots from browser while extension is in use.
             </div>
         </div>
+
+        <div id="official-plugin-party-pack-manifest-containers"></div>
 
         <div id="custom-plugin-dual-manifest-container" class="plugin-manifest-container settings-box" style="display: none;">
             <div class="plugin-title-container">

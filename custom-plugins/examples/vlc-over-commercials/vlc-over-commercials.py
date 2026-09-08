@@ -22,7 +22,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "VLC Over Commercials"
 PLUGIN_ID = "vlc-over-commercials"
-PLUGIN_VERSION = "1.0.0"
+PLUGIN_VERSION = "1.0.1"
 
 
 # -----------------------------------------------------------------------------
@@ -192,9 +192,7 @@ def safely_minimize_window(hwnd):
 def get_media_url_from_preferences(preferences, use_default=False):
     """Return the configured media URL, or None when it was not supplied."""
     media_url = (
-        preferences.get("raw", {})
-        .get("pluginOverlayPreferences", {})
-        .get("preferences", {})
+        preferences.get("custom_overlay_plugin_preferences", {})
         .get("url")
     )
 
@@ -871,7 +869,7 @@ def read_preferences(data):
         "pip_height": float(preferences.get("pipHeight", 30)),
         "pip_horizontal": preferences.get("pipLocationHorizontal", "right"),
         "pip_vertical": preferences.get("pipLocationVertical", "bottom"),
-        "raw": preferences,
+        "custom_overlay_plugin_preferences": preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
     }
 
 
@@ -983,9 +981,7 @@ def initialize_plugin(preferences):
         print(f"Original foreground window: {title}")
 
     should_clear_taskbar = (
-        preferences.get("raw", {})
-        .get("pluginOverlayPreferences", {})
-        .get("preferences", {})
+        preferences.get("custom_overlay_plugin_preferences", {})
         .get("shouldClearTaskbar", False)
     )
 

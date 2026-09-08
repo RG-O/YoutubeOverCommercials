@@ -10,6 +10,11 @@ import win32process
 
 from pycaw.pycaw import AudioUtilities, ISimpleAudioVolume
 
+PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
+
+PLUGIN_NAME = "Overlay Any Window"
+PLUGIN_ID = "overlay-any-window" # Must be unique
+PLUGIN_VERSION = "1.1.0"
 
 PORT = 64146
 SPACEBAR_KEY = 0x20
@@ -221,11 +226,7 @@ def restore_borders(hwnd):
 def get_overlay_settings(message):
     """Read the extension and plugin preferences from a message."""
     preferences = message.get("data", {}).get("preferences", {})
-
-    plugin_preferences = (
-        preferences.get("pluginOverlayPreferences", {})
-        .get("preferences", {})
-    )
+    plugin_preferences = preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
 
     return {
         "window_title": plugin_preferences.get("window-title", ""),
@@ -335,6 +336,8 @@ async def handle_message(websocket, message):
 
     if message_type == "init":
         make_borderless(hwnd)
+        remove_topmost(hwnd, width_percent=90, height_percent=85) # For some reason running this at the begining helps the window come forward later
+        time.sleep(0.5)
 
         if settings["is_pip_mode"]:
             show_pip_window(hwnd, settings)
@@ -368,7 +371,7 @@ async def handle_message(websocket, message):
 
             if settings["should_send_spacebar"]:
                 send_spacebar(hwnd)
-                time.sleep(0.5)
+                time.sleep(0.4)
 
             if settings["should_mute"]:
                 mute_application_of_window(hwnd, mute=True)
@@ -447,16 +450,16 @@ async def send_manifest(websocket):
     manifest = {
         "type": "plugin_manifest",
         "timestamp": time.time(),
+        "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
         "data": {
-            "name": "Overlay Any Window",
-            "id": "overlay-any-window",
-            "version": "1.0.1",
+            "name": PLUGIN_NAME,
+            "id": PLUGIN_ID,
+            "version": PLUGIN_VERSION,
             "description": (
-                "Overlay any open Windows application. This plugin uses the "
+                "Overlay any window from any open application. This plugin uses the "
                 "overlay and picture-in-picture size and location settings "
                 "from the extension's additional settings."
             ),
-            "informationalURL": "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/overlay-any-window",
             "primaryColor": "#ffffff",
             "secondaryColor": "#0078D7",
             "capabilities": ["overlay"],

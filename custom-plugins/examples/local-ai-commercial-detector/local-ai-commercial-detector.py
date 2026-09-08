@@ -265,9 +265,7 @@ async def handle_message(msg):
     message_type = msg["type"]
     data = msg.get("data", {})
     preferences = data.get("preferences", {})
-    custom_trigger_plugin_preferences = (
-        preferences.get("pluginTriggerPreferences", {}).get("preferences", {})
-    )
+    custom_trigger_plugin_preferences = preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")

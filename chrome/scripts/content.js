@@ -47,6 +47,11 @@ var triggerOfLastCommercialStateChange = 'none';
 var pluginCommercialTriggerIndicatorContainer;
 var pluginCommercialTriggerIndicator;
 var pluginCommercialTriggerDebugOverlay;
+// Party Pack trigger plugins each get their own persistent status display.
+// The plugin ID tells us which corner display a message belongs to.
+var partyPackTriggerIndicatorsById = {};
+var partyPackTriggerIndicatorContainersById = {};
+var partyPackTriggerIndicatorLocationsById = {};
 var totalFailedCommercialTriggerWSConnectAttempts = 0;
 var totalFailedOverlayWSConnectAttempts = 0;
 var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a different connection for this?
@@ -141,9 +146,12 @@ var pluginOverlayWSURL;
 var isPluginCommercialTriggerMode;
 var pluginCommercialTriggerWSURL;
 var isAnyPluginMode;
-var pluginTriggerPreferences;
-var pluginOverlayPreferences;
-var pluginDualPreferences;
+var pluginPreferencesById = {};
+var officialPluginPartyPack = {
+    wsURL: 'ws://localhost:64147',
+    triggerPluginIds: [],
+    overlayPluginIds: [],
+};
 //TODO: Add user preference for spotify to have audio come in gradually
 
 
@@ -203,7 +211,7 @@ function setOverlayVideo() {
         url = otherLiveURL;
     }
 
-    
+
     iFrame.src = url;
     iFrame.width = "100%";
     iFrame.height = "100%";
@@ -221,7 +229,7 @@ function showOverlayVideo() {
     setTimeout(() => {
         overlayVideo.classList.remove("hidden");
     }, 300);
-    
+
 }
 
 
@@ -436,6 +444,93 @@ function potentiallyIntrusiveSetup() {
 }
 
 
+async function loadActivePluginRuntimeConfig() {
+    const result = await chrome.storage.local.get(['activePluginRuntimeConfig']);
+    const activePluginRuntimeConfig = result.activePluginRuntimeConfig ?? {};
+
+    pluginPreferencesById = activePluginRuntimeConfig.pluginPreferencesById ?? {};
+    officialPluginPartyPack = activePluginRuntimeConfig.officialPluginPartyPack ?? {
+        wsURL: 'ws://localhost:64147',
+        triggerPluginIds: [],
+        overlayPluginIds: [],
+    };
+}
+
+
+function isOfficialPluginPartyPackTriggerMode() {
+    return isPluginCommercialTriggerMode &&
+        pluginCommercialTriggerFramework === 'official-plugin-party-pack';
+}
+
+
+function isOfficialPluginPartyPackOverlayMode() {
+    return isPluginOverlayMode &&
+        pluginOverlayFramework === 'official-plugin-party-pack';
+}
+
+
+function hasPluginWebSocketMode() {
+    return (
+        isPluginCommercialTriggerMode &&
+        (
+            pluginCommercialTriggerFramework === 'ws' ||
+            pluginCommercialTriggerFramework === 'official-plugin-party-pack'
+        )
+    ) || (
+            isPluginOverlayMode &&
+            (
+                pluginOverlayFramework === 'ws' ||
+                pluginOverlayFramework === 'official-plugin-party-pack'
+            )
+        );
+}
+
+
+function getPartyPackPluginIds() {
+    return new Set([
+        ...(officialPluginPartyPack.triggerPluginIds ?? []),
+        ...(officialPluginPartyPack.overlayPluginIds ?? []),
+    ]);
+}
+
+
+function activePluginHasCapabilityForMessage(message, capability) {
+    const partyPackPluginIds = getPartyPackPluginIds();
+
+    if (message.sender === 'party-pack-plugin') {
+        const pluginId = message.payload?.data?.pluginId;
+
+        if (pluginId) {
+            return pluginPreferencesById[pluginId]?.capabilities?.includes(capability) ?? false;
+        }
+
+        // Some bundle-wide messages, such as screenshot requests, may not have
+        // a pluginId. In that case, allow the request if at least one enabled
+        // Party Pack trigger plugin declared the capability.
+        return (officialPluginPartyPack.triggerPluginIds ?? []).some(id =>
+            pluginPreferencesById[id]?.capabilities?.includes(capability)
+        );
+    }
+
+    return Object.entries(pluginPreferencesById).some(([pluginId, pluginPreferences]) => {
+        if (partyPackPluginIds.has(pluginId)) {
+            return false;
+        }
+
+        if (!pluginPreferences?.capabilities?.includes(capability)) {
+            return false;
+        }
+
+        if (message.sender === 'dual-plugin') {
+            return pluginPreferences.capabilities.includes('trigger') &&
+                pluginPreferences.capabilities.includes('overlay');
+        }
+
+        return pluginPreferences.capabilities.includes('trigger');
+    });
+}
+
+
 function pluginInitiation() {
     if (isPluginCommercialTriggerMode) {
         pluginCommercialTriggerInitiation();
@@ -515,9 +610,8 @@ function sendMessageToPlugins(type) {
         pluginCommercialTriggerWSURL: pluginCommercialTriggerWSURL,
         isAnyPluginMode: isAnyPluginMode,
         isDebugMode: isDebugMode,
-        pluginTriggerPreferences: pluginTriggerPreferences,
-        pluginOverlayPreferences: pluginOverlayPreferences,
-        pluginDualPreferences: pluginDualPreferences,
+        pluginPreferencesById: pluginPreferencesById,
+        officialPluginPartyPack: officialPluginPartyPack,
     }
 
     const payload = {
@@ -552,7 +646,7 @@ function sendMessageToPlugins(type) {
     }
 
     //TODO: check value if still connected
-    if (isPluginCommercialTriggerMode || pluginOverlayFramework === 'ws') {
+    if (hasPluginWebSocketMode()) {
         if (type === "init") {
             chrome.runtime.sendMessage({
                 action: `${isFirefox ? "firefox" : "chrome"}-connect-to-ws-plugins`,
@@ -618,7 +712,7 @@ function muteMainVideo() {
                 });
 
             }
-            
+
 
         } else if (window.location.hostname == 'tv.youtube.com') {
 
@@ -802,7 +896,7 @@ function startCommercialMode() {
 chrome.runtime.onMessage.addListener(function (message) {
 
     if (message.action === "execute_manual_switch_function") {
-        
+
         //TODO: figure out isFirstRun, isAutoModeInitiated, and isAutoModeFirstCommercial and how they compare and contrast. can they be renamed or cleaned up? how do they relate to manual-clap mode
         //special actions for the very first time this is initiated on a page
         if (isFirstRun && !isAutoModeInitiated) {
@@ -859,13 +953,13 @@ chrome.runtime.onMessage.addListener(function (message) {
                             'isPluginOverlayMode',
                             'isPluginCommercialTriggerMode',
                             'pluginOverlayFramework',
+                            'pluginCommercialTriggerFramework',
                             'pluginOverlayAPIURL',
                             'pluginOverlayWSURL',
                             'pluginCommercialTriggerWSURL',
-                            'pluginTriggerPreferences',
-                            'pluginOverlayPreferences',
-                            'pluginDualPreferences',
-                        ], (result) => {
+                        ], async (result) => {
+
+                            await loadActivePluginRuntimeConfig();
 
                             //set them to default if not set by user yet
                             overlayVideoType = result.overlayVideoType ?? 'yt-playlist';
@@ -879,7 +973,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                             } else if (overlayVideoType === 'custom-plugin-overlay') {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false; //TODO: should I do this?
-                                isPluginOverlayMode = true; 
+                                isPluginOverlayMode = true;
                             } else {
                                 isAudioOnlyOverlay = false;
                                 isLiveOverlayVideo = false;
@@ -908,6 +1002,7 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isAnyPluginMode = true;
                             }
                             pluginOverlayFramework = result.pluginOverlayFramework ?? 'api';
+                            pluginCommercialTriggerFramework = result.pluginCommercialTriggerFramework ?? 'ws';
                             pluginOverlayAPIURL = result.pluginOverlayAPIURL ?? 'http://localhost:64144';
                             pluginOverlayWSURL = result.pluginOverlayWSURL ?? 'ws://localhost:64146';
                             pluginCommercialTriggerWSURL = result.pluginCommercialTriggerWSURL ?? 'ws://localhost:64145';
@@ -947,9 +1042,6 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 isDoubleClapOnlyReturnMode = false;
                             }
                             clapSensitivity = result.clapSensitivity ?? 40;
-                            pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
-                            pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
-                            pluginDualPreferences = result.pluginDualPreferences ?? {};
 
                             chrome.runtime.sendMessage({ action: "capture_main_video_tab_id" });
                             mainVideoCollection = document.getElementsByTagName('video');
@@ -1132,7 +1224,7 @@ function addMessageAlertToMainVideo(
     timeout = 7000,
 ) {
     const videos = document.querySelectorAll("video");
-    
+
     let color = "rgb(140, 179, 210)";
     if (type === "error") {
         color = "red";
@@ -1232,7 +1324,7 @@ function setBlockersAndPixelSelectionInstructions() {
         pipBlocker = document.createElement('div');
         pipBlocker.className = "ytoc-overlay-instructions";
         pipBlocker.style.backgroundColor = "rgb(240, 238, 236)";
-        
+
         insertLocationFullscreenElm.insertBefore(pipBlocker, null);
         pipBlockerText = document.createElement('div');
         pipBlockerText.style.color = "black";
@@ -1262,7 +1354,7 @@ function setBlockersAndPixelSelectionInstructions() {
     } else {
         setOverlaySizeAndLocation(overlayInstructions, videoOverlayWidth, videoOverlayHeight, overlayVideoLocationHorizontal, overlayVideoLocationVertical, "0");
     }
-    
+
 
     let iFrame = document.createElement('iframe');
     let iFrameSource = chrome.runtime.getURL('pixel-select-instructions.html');
@@ -1697,7 +1789,7 @@ function fullLogoSelectionBoxResize(event, startX, startY) {
 function fullLogoSelectionCompletion(event, startX, startY) {
     document.removeEventListener('mousemove', fullLogoSelectionBoxResize);
     advancedLogoSelectionBox.remove();
-    
+
     const endX = event.clientX;
     const endY = event.clientY;
 
@@ -2248,7 +2340,7 @@ function setAudioLevelIndicator() {
 function audioThresholdMonitor() {
 
     monitorIntervalID = setInterval(() => {
-        
+
         getAudioLevel().then(function (audioLevel) {
 
             setAudioLevelBar(audioLevel);
@@ -2355,9 +2447,9 @@ function audioThresholdMonitor() {
             cooldownCountRemaining--;
 
         })
-        .catch(function (error) {
-            console.error(error);
-        });
+            .catch(function (error) {
+                console.error(error);
+            });
 
     }, 1000);
 
@@ -2560,7 +2652,7 @@ function startListeningToTab() {
                     audioDataArray = new Uint8Array(audioAnalyzer.frequencyBinCount);
 
                     return;
-                    
+
                 }
             }
 
@@ -2740,7 +2832,7 @@ function pauseAutoMode(shouldDisplayMessage) {
     } else {
         pauseListeningToTab();
     }
-    
+
     if (shouldDisplayMessage) {
         addMessageAlertToMainVideo("Live Commercial Blocker extension paused. Set video back to fullscreen to resume. This message will disappear shortly.", "info", 9000);
     }
@@ -2769,7 +2861,7 @@ function resumeAutoMode() {
         startListeningToTab();
         audioThresholdMonitor();
     }
-    
+
 }
 
 
@@ -2904,10 +2996,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             //'pluginOverlayAPIURL',
             //'pluginOverlayWSURL',
             //'pluginCommercialTriggerWSURL',
-            'pluginTriggerPreferences',
-            'pluginOverlayPreferences',
-            'pluginDualPreferences',
-        ], (result) => {
+        ], async (result) => {
+
+            await loadActivePluginRuntimeConfig();
 
             //set them to default if not set by user yet
             mainVideoFade = result.mainVideoFade ?? 65;
@@ -2934,9 +3025,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 isDoubleClapOnlyReturnMode = false;
             }
             clapSensitivity = result.clapSensitivity ?? 40;
-            pluginTriggerPreferences = result.pluginTriggerPreferences ?? {};
-            pluginOverlayPreferences = result.pluginOverlayPreferences ?? {};
-            pluginDualPreferences = result.pluginDualPreferences ?? {};
 
             if (audioLevelThresholdLine) {
                 audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
@@ -3075,7 +3163,41 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
         if (isDebugMode) console.log(message);
 
-        if (message.sender === "trigger-plugin" || message.sender === "dual-plugin") {
+        const isPartyPackMessage = message.sender === "party-pack-plugin";
+        const partyPackMessagePluginId = message.payload?.data?.pluginId;
+        const isMessageFromEnabledPartyPackTrigger = !!(
+            partyPackMessagePluginId &&
+            (officialPluginPartyPack.triggerPluginIds ?? []).includes(partyPackMessagePluginId)
+        );
+        const isPartyPackTriggerMessage = isPartyPackMessage && (
+            isMessageFromEnabledPartyPackTrigger ||
+            message.payload?.type === "commercial_state_change" ||
+            message.payload?.type === "auto_commercial_blocked_state_change" ||
+            message.payload?.type === "request_screenshots" ||
+            !isOfficialPluginPartyPackOverlayMode()
+        );
+
+        // A Party Pack connection can serve trigger plugins, overlay plugins,
+        // or both. Connection-state updates are shown for every active role.
+        if (isPartyPackMessage && message.connectionState !== "connected") {
+            if (isOfficialPluginPartyPackTriggerMode()) {
+                if (message.connectionState === "failed") {
+                    totalFailedCommercialTriggerWSConnectAttempts++;
+                }
+                if (totalFailedCommercialTriggerWSConnectAttempts <= 3) {
+                    updateAllPartyPackTriggerIndicators(message.connectionMessage);
+                }
+            }
+
+            if (isOfficialPluginPartyPackOverlayMode()) {
+                let messageType = message.connectionState === "failed" ? "error" : "info";
+                addMessageAlertToMainVideo(message.connectionMessage, messageType);
+            }
+
+            return;
+        }
+
+        if (message.sender === "trigger-plugin" || message.sender === "dual-plugin" || isPartyPackTriggerMessage) {
 
             if (message.connectionState !== "connected") {
                 if (message.connectionState === "failed") {
@@ -3090,7 +3212,20 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             }
 
             if (message.payload?.meta?.display && message.payload.type !== "plugin_manifest") {
-                if (pluginCommercialTriggerIndicator) {
+                if (isPartyPackMessage) {
+                    const pluginId = message.payload?.data?.pluginId;
+
+                    if (pluginId) {
+                        updatePartyPackTriggerIndicator(
+                            pluginId,
+                            message.payload.meta.display
+                        );
+                    } else if (isDebugMode) {
+                        console.log(
+                            "Party Pack trigger display message did not include data.pluginId."
+                        );
+                    }
+                } else if (pluginCommercialTriggerIndicator) {
                     pluginCommercialTriggerIndicator.textContent = message.payload.meta.display;
                 }
             }
@@ -3144,10 +3279,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                         }
                     }
                 } else {
-                    if (
-                        (message.sender === "trigger-plugin" && pluginTriggerPreferences?.capabilities?.includes("screenshots")) ||
-                        (message.sender === "dual-plugin" && pluginDualPreferences?.capabilities?.includes("screenshots"))
-                    ) {
+                    if (activePluginHasCapabilityForMessage(message, "screenshots")) {
                         pluginScreenshotOptions = message.payload.data ?? {};
                         shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
                         if (shouldSendScreenshotsToTriggerPlugin) {
@@ -3193,7 +3325,10 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 console.log(message.payload.meta.debug);
             }
 
-        } else if (message.sender === "overlay-plugin") {
+        } else if (
+            message.sender === "overlay-plugin" ||
+            (isPartyPackMessage && isOfficialPluginPartyPackOverlayMode())
+        ) {
 
             let messageToDisplay = "Blank message from overlay plugin.";
             let messageDisplayTime = 2000;
@@ -3214,11 +3349,17 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                 if (message.payload?.meta?.display) {
                     messageToDisplay = message.payload.meta.display;
 
-                    if (message.payload?.meta?.messageDisplayTime) {
+                    if (message.payload?.meta?.displayTime !== undefined) {
+                        messageDisplayTime = message.payload.meta.displayTime;
+                    } else if (message.payload?.meta?.messageDisplayTime !== undefined) {
+                        // Backwards compatibility with older overlay plugins. //TODO: I don't actually need this
                         messageDisplayTime = message.payload.meta.messageDisplayTime;
                     }
 
-                    if (message.payload?.meta?.messageType) {
+                    if (message.payload?.meta?.displayType) {
+                        messageType = message.payload.meta.displayType;
+                    } else if (message.payload?.meta?.messageType) {
+                        // Backwards compatibility with older overlay plugins. //TODO: I don't actually need this
                         messageType = message.payload.meta.messageType;
                     }
                 }
@@ -3402,7 +3543,7 @@ function launchClapPort() {
     setTimeout(() => {
         //TODO: can I estiblish the port from the other file since I always know that comes second? If not, is there a cleaner way to do below?
         clapPort = chrome.runtime.connect({ name: "clap-detector" });
-        
+
         setTimeout(() => {
             try {
                 clapPort.postMessage({
@@ -3689,6 +3830,11 @@ function initiateClapIndicator() {
 
 //TODO: have this and initiateClapIndicator share a helper function
 function initiatePluginCommercialTriggerIndicator() {
+    // These DOM elements belong to the current fullscreen session.
+    partyPackTriggerIndicatorsById = {};
+    partyPackTriggerIndicatorContainersById = {};
+    partyPackTriggerIndicatorLocationsById = {};
+
     //TODO: add check to make sure user is still in fullscreen mode
     let insertLocation = document.fullscreenElement;
     if (insertLocation.nodeName == 'HTML') {
@@ -3757,6 +3903,128 @@ function initiatePluginCommercialTriggerIndicator() {
     }
 
     insertLocation.insertBefore(pluginCommercialTriggerIndicatorContainer, null);
+
+    // A normal trigger/dual plugin still uses the original single indicator.
+    // Party Pack trigger plugins are different because several can be enabled
+    // at once, so give each selected plugin its own persistent corner display.
+    if (isOfficialPluginPartyPackTriggerMode()) {
+        const triggerPluginIds = officialPluginPartyPack.triggerPluginIds ?? [];
+
+        if (triggerPluginIds.length > 0) {
+            const firstPluginId = triggerPluginIds[0];
+            partyPackTriggerIndicatorsById[firstPluginId] = pluginCommercialTriggerIndicator;
+            partyPackTriggerIndicatorContainersById[firstPluginId] = pluginCommercialTriggerIndicatorContainer;
+            partyPackTriggerIndicatorLocationsById[firstPluginId] = pluginCommercialTriggerIndicatorContainerLocation;
+            pluginCommercialTriggerIndicator.innerText = getPartyPackTriggerLoadingText(firstPluginId);
+
+            for (let i = 1; i < triggerPluginIds.length; i++) {
+                createAdditionalPartyPackTriggerIndicator(triggerPluginIds[i], insertLocation);
+            }
+        }
+    }
+}
+
+
+function getPartyPackTriggerLoadingText(pluginId) {
+    const pluginName = pluginPreferencesById[pluginId]?.name;
+    return pluginName ? `Loading ${pluginName}...` : 'Loading plugin...';
+}
+
+
+function getPartyPackTriggerOccupiedLocations() {
+    let otherOverlayLocations = [
+        { horizontal: overlayVideoLocationHorizontal, vertical: overlayVideoLocationVertical },
+    ];
+
+    if (isPiPMode && isLiveOverlayVideo) {
+        otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
+    }
+
+    if (commercialDetectionMode === 'auto-audio' || isDoubleClapMode) {
+        otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
+    }
+
+    for (const location of Object.values(partyPackTriggerIndicatorLocationsById)) {
+        otherOverlayLocations.push(location);
+    }
+
+    return otherOverlayLocations;
+}
+
+
+function createAdditionalPartyPackTriggerIndicator(pluginId, insertLocation = null) {
+    if (!pluginId || partyPackTriggerIndicatorsById[pluginId]) {
+        return partyPackTriggerIndicatorsById[pluginId];
+    }
+
+    if (!insertLocation) {
+        insertLocation = document.fullscreenElement;
+        if (!insertLocation) return null;
+        if (insertLocation.nodeName == 'HTML') {
+            insertLocation = document.getElementsByTagName('body')[0];
+        }
+    }
+
+    const location = getFreeCorner(getPartyPackTriggerOccupiedLocations());
+    const container = document.createElement('div');
+    container.classList = 'double-clap-indicator-container';
+
+    setOverlaySizeAndLocation(
+        container,
+        false,
+        false,
+        location.horizontal,
+        location.vertical,
+        '10px'
+    );
+
+    if (location.horizontal === 'right') {
+        container.style.textAlign = 'right';
+    }
+
+    const indicator = document.createElement('div');
+    indicator.innerText = getPartyPackTriggerLoadingText(pluginId);
+    container.appendChild(indicator);
+    insertLocation.insertBefore(container, null);
+
+    partyPackTriggerIndicatorsById[pluginId] = indicator;
+    partyPackTriggerIndicatorContainersById[pluginId] = container;
+    partyPackTriggerIndicatorLocationsById[pluginId] = location;
+
+    return indicator;
+}
+
+
+function updatePartyPackTriggerIndicator(pluginId, display) {
+    if (!pluginId) return;
+
+    let indicator = partyPackTriggerIndicatorsById[pluginId];
+
+    // This fallback also handles a plugin being enabled after the fullscreen
+    // indicator was initially created.
+    if (!indicator) {
+        indicator = createAdditionalPartyPackTriggerIndicator(pluginId);
+    }
+
+    if (indicator) {
+        indicator.textContent = display;
+    }
+}
+
+
+function updateAllPartyPackTriggerIndicators(display) {
+    const triggerPluginIds = officialPluginPartyPack.triggerPluginIds ?? [];
+
+    if (triggerPluginIds.length === 0) {
+        if (pluginCommercialTriggerIndicator) {
+            pluginCommercialTriggerIndicator.textContent = display;
+        }
+        return;
+    }
+
+    for (const pluginId of triggerPluginIds) {
+        updatePartyPackTriggerIndicator(pluginId, display);
+    }
 }
 
 

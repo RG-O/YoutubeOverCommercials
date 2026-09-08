@@ -11,6 +11,12 @@ import shutil
 import urllib.request
 import zipfile
 
+PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
+
+PLUGIN_NAME = "Say NO to Commercials"
+PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
+PLUGIN_VERSION = "1.0.1"
+
 PORT = 64145
 
 clients = set()
@@ -413,9 +419,7 @@ async def handle_message(ws, msg):
     message_type = msg.get("type")
     data = msg.get("data", {})
     full_preferences = data.get("preferences", {})
-    custom_trigger_plugin_preferences = full_preferences.get(
-        "pluginTriggerPreferences", {}
-    ).get("preferences", {})
+    custom_trigger_plugin_preferences = full_preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
 
     # Preference values are normally returned with init, but applying them
     # whenever present also supports preference updates without restarting.
@@ -485,40 +489,46 @@ async def send_manifest(ws):
         await ws.send(json.dumps({
             "type": "plugin_manifest",
             "timestamp": time.time(),
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
             "data": {
-                "name": "Say NO to Commercials",
-                "id": "my-trigger-plugin-ws", # Must be unique
-                "version": "1.0.0",
-                "description": "My trigger plugin description.", # Optional
-                "primaryColor": "#12384d", # Optional
-                "secondaryColor": "#dadcdc", # Optional
-                "capabilities": ["detection"], #TODO: delete this?
+                "name": PLUGIN_NAME,
+                "id": PLUGIN_ID,
+                "version": PLUGIN_VERSION,
+                "description": (
+                    "Use keywords and/or phrases to block out commercials! Note: If mic is "
+                    "close to TV speakers, it is best to set as single words that are not "
+                    "commonly used in the broadcast and to shout the word three times "
+                    "to guarantee trigger. Otherwise, set mic away from TV speakers for better results."
+                ),
+                "primaryColor": "#8B0000", # Optional
+                "secondaryColor": "#FFFFE0", # Optional
+                "capabilities": ["detection"],
                 "preferences": [
                     {
                         "key": "commercial-trigger-phrase",
                         "label": "Commercial Trigger Word or Phrase",
-                        "description": "Say this word or phrase to mark a commercial break.",
+                        "tooltip": "Say this word or phrase to mark a commercial break.",
                         "type": "text",
                         "default": DEFAULT_COMMERCIAL_PHRASE,
                     },
                     {
                         "key": "commercial-trigger-emoji",
                         "label": "Commercial Trigger Emoji",
-                        "description": "Emoji shown while waiting for the commercial trigger.",
+                        "tooltip": "Emoji shown while waiting for the commercial trigger.",
                         "type": "text",
                         "default": DEFAULT_COMMERCIAL_EMOJI,
                     },
                     {
                         "key": "content-trigger-phrase",
                         "label": "Content Trigger Word or Phrase",
-                        "description": "Say this word or phrase when regular content resumes.",
+                        "tooltip": "Say this word or phrase when regular content resumes.",
                         "type": "text",
                         "default": DEFAULT_CONTENT_PHRASE,
                     },
                     {
                         "key": "content-trigger-emoji",
                         "label": "Content Trigger Emoji",
-                        "description": "Emoji shown while waiting for the content trigger.",
+                        "tooltip": "Emoji shown while waiting for the content trigger.",
                         "type": "text",
                         "default": DEFAULT_CONTENT_EMOJI,
                     },
