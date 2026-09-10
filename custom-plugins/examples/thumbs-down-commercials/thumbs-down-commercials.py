@@ -1124,7 +1124,7 @@ async def send_manifest(ws):
                 "name": PLUGIN_NAME,
                 "id": PLUGIN_ID,
                 "version": PLUGIN_VERSION,
-                "tooltip": (
+                "description": (
                     "Use configurable MediaPipe hand gestures to switch "
                     "between commercial and content states."
                 ),

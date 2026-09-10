@@ -1256,11 +1256,19 @@ function getPluginManifests() {
 function getPluginOverlayManifest() {
     toggleOfficialPluginPartyPackFrameworkUI("overlay");
 
+    if (optionsForm.overlayVideoType.value !== 'custom-plugin-overlay' && optionsForm.isPluginOverlayMode.checked) {
+        document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'block';
+    } else {
+        document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'none';
+    }
+
+    //TODO: can this be combined with below instead of being its own completely separate thing?
     if (isOfficialPluginPartyPackOverlayMode()) {
         hideClass('custom-plugin-overlay-messaging-container');
         document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
         document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
         loadOfficialPluginPartyPack("overlay");
+        updateOfficialPluginPartyPackManifestVisibility();
         enableSaveButton();
         return;
     }
@@ -1268,12 +1276,6 @@ function getPluginOverlayManifest() {
     if (isAnyPluginOverlayMode()) {
         document.getElementById('save-button').disabled = true;
         displayClass('custom-plugin-overlay-messaging-container');
-
-        if (optionsForm.overlayVideoType.value !== 'custom-plugin-overlay' && optionsForm.isPluginOverlayMode.checked) {
-            document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'block';
-        } else {
-            document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'none';
-        }
 
         if (optionsForm.pluginOverlayFramework.value === 'api' && !hasAlreadyCalledPluginOverlayManifestViaAPI) {
             isPluginOverlayCallSuccess = false;
@@ -1297,6 +1299,7 @@ function getPluginOverlayManifest() {
         hideClass('custom-plugin-overlay-messaging-container');
         document.getElementById('custom-plugin-overlay-settings-checkbox-duplicate').style.display = 'none';
         document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'none';
+        updateOfficialPluginPartyPackManifestVisibility();
         document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
 
         if (hasLoadedDualPluginManifest && isPluginTriggerCallSuccess) {
@@ -1370,11 +1373,19 @@ function displayPluginOverlayManifestError() {
 function getPluginTriggerManifest() {
     toggleOfficialPluginPartyPackFrameworkUI("trigger");
 
+    if (optionsForm.commercialDetectionMode.value !== 'custom-plugin-trigger' && optionsForm.isPluginCommercialTriggerMode.checked) {
+        document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'block';
+    } else {
+        document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'none';
+    }
+
+    //TODO: can this be combined with below instead of being its own completely separate thing?
     if (isOfficialPluginPartyPackTriggerMode()) {
         hideClass('custom-plugin-trigger-messaging-container');
         document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
         document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
         loadOfficialPluginPartyPack("trigger");
+        updateOfficialPluginPartyPackManifestVisibility();
         enableSaveButton();
         return;
     }
@@ -1382,12 +1393,6 @@ function getPluginTriggerManifest() {
     if (isAnyPluginTriggerMode()) {
         document.getElementById('save-button').disabled = true;
         displayClass('custom-plugin-trigger-messaging-container');
-
-        if (optionsForm.commercialDetectionMode.value !== 'custom-plugin-trigger' && optionsForm.isPluginCommercialTriggerMode.checked) {
-            document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'block';
-        } else {
-            document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'none';
-        }
 
         if (!hasAlreadyCalledPluginTriggerManifestViaWS) {
             isPluginTriggerCallSuccess = false;
@@ -1406,6 +1411,7 @@ function getPluginTriggerManifest() {
         hideClass('custom-plugin-trigger-messaging-container');
         document.getElementById('custom-plugin-trigger-settings-checkbox-duplicate').style.display = 'none';
         document.getElementById('custom-plugin-trigger-manifest-container').style.display = 'none';
+        updateOfficialPluginPartyPackManifestVisibility();
         document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
 
         if (hasLoadedDualPluginManifest && isPluginOverlayCallSuccess) {
@@ -1763,12 +1769,14 @@ function updatePluginCommercialTriggerFramework() {
 
 function toggleOfficialPluginPartyPackFrameworkUI(role) {
     const isSelected = role === "overlay"
-        ? optionsForm.pluginOverlayFramework.value === 'official-plugin-party-pack'
-        : optionsForm.pluginCommercialTriggerFramework.value === 'official-plugin-party-pack';
+        ? isOfficialPluginPartyPackOverlayMode()
+        : isOfficialPluginPartyPackTriggerMode();
 
     document.querySelectorAll(`.official-plugin-party-pack-${role}-panel`).forEach(panel => {
         panel.style.display = isSelected ? 'block' : 'none';
     });
+
+    updateOfficialPluginPartyPackManifestVisibility();
 }
 
 
@@ -1792,17 +1800,21 @@ function displayPluginManifest(container, manifest, preferences = {}) {
     version.textContent = manifest.version;
 
     const description = container.querySelector("#plugin-description");
-    if (manifest?.description) {
-        description.textContent = manifest.description;
-    } else {
-        description.remove();
+    if (description) {
+        if (manifest?.description) {
+            description.textContent = manifest.description;
+        } else {
+            description.remove();
+        }
     }
 
     const informationalURL = container.querySelector("#plugin-info-url");
-    if (manifest?.informationalURL) {
-        informationalURL.href = manifest.informationalURL;
-    } else {
-        informationalURL.remove();
+    if (informationalURL) {
+        if (manifest?.informationalURL) {
+            informationalURL.href = manifest.informationalURL;
+        } else {
+            informationalURL.remove();
+        }
     }
 
     const settings = container.querySelector("#plugin-settings");
@@ -2094,6 +2106,7 @@ async function updateOfficialPluginPartyPackSelection(role, pluginId, isSelected
         removeOfficialPluginPartyPackPluginManifest(pluginId);
     }
 
+    updateOfficialPluginPartyPackManifestVisibility();
     enableSaveButton();
 }
 
@@ -2101,6 +2114,45 @@ async function updateOfficialPluginPartyPackSelection(role, pluginId, isSelected
 function isOfficialPluginPartyPackPluginSelectedAnywhere(pluginId) {
     return officialPluginPartyPackTriggerPluginIds.includes(pluginId) ||
         officialPluginPartyPackOverlayPluginIds.includes(pluginId);
+}
+
+
+// A Party Pack manifest should only be visible while that plugin is selected for
+// a Party Pack role that is actually active. We keep the checkbox selection in
+// memory so the user can switch away and back without losing their choices.
+function shouldDisplayOfficialPluginPartyPackManifest(pluginId) {
+    return (
+        isOfficialPluginPartyPackTriggerMode() &&
+        officialPluginPartyPackTriggerPluginIds.includes(pluginId)
+    ) || (
+            isOfficialPluginPartyPackOverlayMode() &&
+            officialPluginPartyPackOverlayPluginIds.includes(pluginId)
+        );
+}
+
+
+function updateOfficialPluginPartyPackManifestVisibility() {
+    // Only target the individual plugin manifest containers. The parent wrapper is named
+    // "official-plugin-party-pack-manifest-containers", so using only the ID prefix would
+    // accidentally match and hide the parent as well.
+    document.querySelectorAll('#official-plugin-party-pack-manifest-containers > .plugin-manifest-container').forEach(container => {
+        const pluginId = container.id.replace('official-plugin-party-pack-manifest-', '');
+        container.style.display = shouldDisplayOfficialPluginPartyPackManifest(pluginId) ? 'block' : 'none';
+    });
+}
+
+
+// Read the current checkbox state from the UI instead of relying only on the
+// remembered arrays. There are duplicate Party Pack controls in the popup, so
+// Set removes duplicate IDs.
+function getCheckedOfficialPluginPartyPackIds(role) {
+    const ids = new Set();
+
+    document.querySelectorAll(`[data-party-pack-role="${role}"][data-party-pack-plugin-id]:checked`).forEach(checkbox => {
+        ids.add(checkbox.dataset.partyPackPluginId);
+    });
+
+    return [...ids];
 }
 
 
@@ -2143,7 +2195,7 @@ async function displayOfficialPluginPartyPackPluginManifest(manifest) {
         document.getElementById("official-plugin-party-pack-manifest-containers").appendChild(container);
     }
 
-    container.style.display = "block";
+    container.style.display = shouldDisplayOfficialPluginPartyPackManifest(manifest.id) ? "block" : "none";
     const previousPreferences = await getLatestPluginPreferences(manifest.id);
     displayPluginManifest(container, manifest, previousPreferences);
 }
@@ -2184,6 +2236,12 @@ function createPluginManifestContainer(id) {
 
 
 async function saveOfficialPluginPartyPackPreferences() {
+    // Rebuild the remembered selection arrays from the actual checked boxes at save time.
+    // This prevents stale IDs from a previously displayed Party Pack selection from leaking
+    // into the saved/runtime configuration.
+    officialPluginPartyPackTriggerPluginIds = getCheckedOfficialPluginPartyPackIds("trigger");
+    officialPluginPartyPackOverlayPluginIds = getCheckedOfficialPluginPartyPackIds("overlay");
+
     const selectedPluginIds = [...new Set([
         ...officialPluginPartyPackTriggerPluginIds,
         ...officialPluginPartyPackOverlayPluginIds
@@ -2216,9 +2274,25 @@ async function getPluginPreferencesByIds(pluginIds) {
 
 
 async function saveActivePluginRuntimeConfig() {
+    // Use the checkbox state that exists right now. The arrays intentionally remember
+    // Party Pack choices across framework changes, but the runtime config should contain
+    // only plugins that are checked AND belong to a currently active Party Pack role.
+    const checkedTriggerPluginIds = getCheckedOfficialPluginPartyPackIds("trigger");
+    const checkedOverlayPluginIds = getCheckedOfficialPluginPartyPackIds("overlay");
+
+    officialPluginPartyPackTriggerPluginIds = checkedTriggerPluginIds;
+    officialPluginPartyPackOverlayPluginIds = checkedOverlayPluginIds;
+
+    const activePartyPackTriggerPluginIds = isOfficialPluginPartyPackTriggerMode()
+        ? checkedTriggerPluginIds
+        : [];
+    const activePartyPackOverlayPluginIds = isOfficialPluginPartyPackOverlayMode()
+        ? checkedOverlayPluginIds
+        : [];
+
     const pluginIds = new Set([
-        ...(isOfficialPluginPartyPackTriggerMode() ? officialPluginPartyPackTriggerPluginIds : []),
-        ...(isOfficialPluginPartyPackOverlayMode() ? officialPluginPartyPackOverlayPluginIds : [])
+        ...activePartyPackTriggerPluginIds,
+        ...activePartyPackOverlayPluginIds
     ]);
 
     if (optionsForm.pluginCommercialTriggerFramework.value === 'ws' && isAnyPluginTriggerMode() && pluginTriggerPreferences?.id) {
@@ -2238,8 +2312,8 @@ async function saveActivePluginRuntimeConfig() {
             pluginPreferencesById: pluginPreferencesById,
             officialPluginPartyPack: {
                 wsURL: OFFICIAL_PLUGIN_PARTY_PACK_WS_URL,
-                triggerPluginIds: isOfficialPluginPartyPackTriggerMode() ? [...officialPluginPartyPackTriggerPluginIds] : [],
-                overlayPluginIds: isOfficialPluginPartyPackOverlayMode() ? [...officialPluginPartyPackOverlayPluginIds] : []
+                triggerPluginIds: activePartyPackTriggerPluginIds,
+                overlayPluginIds: activePartyPackOverlayPluginIds
             }
         }
     });

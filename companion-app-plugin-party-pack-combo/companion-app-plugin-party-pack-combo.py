@@ -5727,7 +5727,7 @@ async def gesture_send_manifest(ws):
                 "name": gesture_PLUGIN_NAME,
                 "id": gesture_PLUGIN_ID,
                 "version": gesture_PLUGIN_VERSION,
-                "tooltip": (
+                "description": (
                     "Use configurable MediaPipe hand gestures to switch "
                     "between commercial and content states."
                 ),
