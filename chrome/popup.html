@@ -58,7 +58,7 @@
             <div id="companion-app-ping-error" class="error-box settings-box" style="display: none;">
                 <button id="companionAppPingRetry" class="button" style="float: right;">Try Again</button>
                 <div>
-                    Error reaching Advanced Logo Analyzer companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
+                    Error reaching <i>Advanced Logo Analyzer</i> companion app on this machine. Please start the companion app to use this mode. If you do not currently have the companion app, view these <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app/README.md#setup" target="_blank">instructions</a> on how to install.
                 </div>
             </div>
             <div id="companion-app-ping-success" class="success-box settings-box" style="display: none;">
@@ -109,7 +109,7 @@
 
         <div>
             <input type="radio" id="commercialDetectionMode-custom-plugin-trigger" name="commercialDetectionMode" value="custom-plugin-trigger">
-            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trigger the extension any way you can dream of with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-custom-plugin-trigger">Detection/Trigger Plugin &#129513;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Trigger the extension any way you can dream of with plugins!</span></span><span class="badge badge-advanced">Advanced</span>
         </div>
         <div id="custom-plugin-trigger" class="commercial-detection-mode-instructions-wrapper">
             <div id="custom-plugin-trigger-id-field-wrapper" class="plugin-url-wrapper settings-box">
@@ -124,12 +124,6 @@
                     <input type="radio" id="pluginCommercialTriggerFramework-official-plugin-party-pack" name="pluginCommercialTriggerFramework" data-sync="pluginCommercialTriggerFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
                     <label for="pluginCommercialTriggerFramework-official-plugin-party-pack">Official Plugin Party Pack &#127881;</label>
                 </div>
-                <div class="official-plugin-party-pack-trigger-panel" style="display: none;">
-                    <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any trigger plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
-                    <div class="official-plugin-party-pack-trigger-loading loading-spinner" style="display: none;"></div>
-                    <div class="official-plugin-party-pack-trigger-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
-                    <div class="official-plugin-party-pack-trigger-list settings-box"></div>
-                </div>
             </div>
             <div class="custom-plugin-trigger-messaging-container">
                 <div class="custom-plugin-trigger-loading loading-spinner"></div>
@@ -139,7 +133,7 @@
                     This mode can be used to code your own plugin to trigger the extension any way you would like! Instructions and templates for plugins can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#instructions" target="_blank">here</a>. Or you could check out some that the community or myself have already built <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md#my-plugins" target="_blank">here</a>. So far, I have built one that allows you to set a keyword or phrase to block or unblock commercials. For example, yell "tomato!" when a commercial starts to block it and then yell "banana!" to unblock when the game is back on!
                 </div>
                 <div class="custom-plugin-trigger-manifest-success success-box settings-box" style="display: none;">
-                    Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me, the community, or for instructions on how to build your own plugin!
+                    Trigger plugin successfully loaded. Scroll down to YOUR PLUGINS section to see plugin details/settings. Go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a> for more plugins built by me or the community or for instructions on how to build your own plugin!
                 </div>
                 <div class="custom-plugin-trigger-manifest-error error-box settings-box" style="display: none;">
                     <div>
@@ -151,6 +145,49 @@
                     Go to stream, make full screen, and hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate the extension with your plugin.
                 </div>
             </div>
+            <div class="official-plugin-party-pack-trigger-panel" style="display: none;">
+                <div class="official-plugin-party-pack-loading loading-spinner" style="display: none;"></div>
+                <div class="official-plugin-party-pack-additional-setup mode-how-to settings-box" style="display: none;">
+                    <b>ADDITIONAL SETUP REQUIRED</b><br />
+                    <br />
+                    To use this mode, you'll need to install the free <i>Advanced Logo Analyzer and Plugin Party Pack</i> companion app. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.<br />
+                    <br />
+                    Along with the <i>Advanced Logo Analyzer</i>, which you can use with the separate "Logo Edge Mismatch" mode above, this bundled desktop tray app comes with a collection of plugins to easily use alongside this extension. At the time of writting this the Official Plugin Party Pack contains the following plugins: <br />
+                    <ul>
+                        <li>
+                            Detection / Trigger Plugins:
+                            <ul>
+                                <li><b>Hand Gesture Commercial Trigger</b> - Make hand gestures towards your webcam to signify commercials starting or ending.</li>
+                                <li><b>Voice Commercial Trigger</b> - Say a custom word or phrase towards your mic to signify commercials starting or ending.</li>
+                                <li><b>AI Commercial Detector</b> - Use local AI model to determine whether or not broadcast is in commercial (requires install of Ollama and recommeded NVIDIA RTX 3060+ GPU with 8GB+ VRAM).</li>
+                            </ul>
+                        </li>
+                        <li>
+                            Overlay Plugins:
+                            <ul>
+                                <li><b>VLC Over Commercials</b> - Play or stream any media from VLC during commercials (requires install of VLC).</li>
+                                <li><b>Overlay Any Window</b> - Set any open window as the overlay.</li>
+                                <li><b>Commercial Push Notifications</b> - Sends ntfy notifications to your phone when commercial breaks start and end.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                    More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                </div>
+                <div class="official-plugin-party-pack-success success-box settings-box" style="display: none;">
+                    Plugin Party Pack successfully loaded. Select any plugins from the list below that you would like to enable. After selecting, scroll down to the very bottom to adjust specific plugin settings.
+                </div>
+                <div class="official-plugin-party-pack-error error-box settings-box" style="display: none;">
+                    Could not reach the Plugin Party Pack. Make sure the Plugin Party Pack is running on this computer. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                </div>
+                <div class="official-plugin-party-pack-list-container blue-settings-box settings-box" style="display: none;">
+                    <div>Party Pack Detection/Trigger Plugins:</div><br />
+                    <div class="official-plugin-party-pack-trigger-list"></div>
+                </div>
+                <div class="official-plugin-party-pack-instructions mode-how-to settings-box" style="display: none;">
+                    <b>HOW TO USE:</b><br />
+                    Go to stream, make full screen, and hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span> to initiate the extension with the plugin(s) you enabled above.
+                </div>
+            </div>
         </div>
 
 
@@ -158,7 +195,7 @@
 
         <h3>OVERLAY TYPE AND SOURCE</h3>
 
-        <div>
+        <div class="mode-screenshot-incompatible">
             <input type="radio" id="overlayVideoType-yt-playlist" name="overlayVideoType" value="yt-playlist">
             <label class="video-type-label" for="overlayVideoType-yt-playlist">YouTube Playlist</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays a YouTube playlist over commercials. Great for music video playlists and more!</span></span>
         </div>
@@ -175,7 +212,7 @@
             </div>
         </div>
 
-        <div>
+        <div class="mode-screenshot-incompatible">
             <input type="radio" id="overlayVideoType-yt-video" name="overlayVideoType" value="yt-video">
             <label class="video-type-label" for="overlayVideoType-yt-video">Single YouTube Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays just a single YT video over commercials. Great for longer YT videos.</span></span>
         </div>
@@ -192,7 +229,7 @@
             </div>
         </div>
 
-        <div>
+        <div class="mode-screenshot-incompatible">
             <input type="radio" id="overlayVideoType-yt-live" name="overlayVideoType" value="yt-live">
             <label class="video-type-label" for="overlayVideoType-yt-live">YouTube Live</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Plays a live YT video. Unlike the YT options above that pause the YT video when commercials end and play when they start, this mode just mutes and hides the live YT video when commercials are over, but continues to play. This is great for live play-by-play or reaction videos to watch them during the commercials of the game they are reacting to. Also try adjusting PiP settings down below!</span></span>
         </div>
@@ -226,7 +263,7 @@
             Will mute/unmute audio playing from other tabs.
         </div>
 
-        <div>
+        <div class="mode-screenshot-incompatible">
             <input type="radio" id="overlayVideoType-other-video" name="overlayVideoType" value="other-video">
             <label class="video-type-label" for="overlayVideoType-other-video">Any Video</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Can play videos from other websites, besides YouTube. Great for playing movies or shows over top of commercials. Doesn't work from all websites. If you run into issues, trying finding an ignore x-frame options/header browser extension (at your own risk) and using that along with this. Can also work with some local mp4 files if you give extension permissions.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
@@ -243,7 +280,7 @@
             </div>
         </div>
 
-        <div>
+        <div class="mode-screenshot-incompatible">
             <input type="radio" id="overlayVideoType-other-live" name="overlayVideoType" value="other-live">
             <label class="video-type-label" for="overlayVideoType-other-live">Any Live Stream</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Can play live videos/streams from other websites, besides YouTube. Great for watching other games during commercials of the main game you are watching. Also try adjusting PiP settings down below! Doesn't work from all websites. Troubleshooting Tips: Overlay stream doesn't mute/unmute? - Try checking "Non-YT Video Troubleshoot" toggle in advanced settings, refreshing, and trying again. Overlay stream is zoomed out or not centered within its window? -  Try checking "Non-YT Video Zoom" toggle in advanced settings, refreshing, and trying again. Overlay stream doesn't load at all? - Try finding and installing an ignore x-frame options/header browser extension (at your own risk), refreshing, and trying again.</span></span><span class="badge badge-experimental">Experimental</span>
         </div>
@@ -267,7 +304,7 @@
         <div id="custom-plugin-overlay" class="id-field-wrapper">
             <div class="plugin-url-wrapper blue-settings-box settings-box">
                 <div class="id-field-label">
-                    <label>API or WebSocket and URL:</label>
+                    <label>Plugin Type and URL:</label>
                 </div>
                 <div class="id-input-row" style="margin-bottom: 5px;">
                     <input type="radio" id="pluginOverlayFramework-api" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="api" style="width: auto; height: auto;">
@@ -288,12 +325,6 @@
                     <input type="radio" id="pluginOverlayFramework-official-plugin-party-pack" name="pluginOverlayFramework" data-sync="pluginOverlayFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
                     <label for="pluginOverlayFramework-official-plugin-party-pack">Official Plugin Party Pack &#127881;</label>
                 </div>
-                <div class="official-plugin-party-pack-overlay-panel" style="display: none;">
-                    <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any overlay plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
-                    <div class="official-plugin-party-pack-overlay-loading loading-spinner" style="display: none;"></div>
-                    <div class="official-plugin-party-pack-overlay-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
-                    <div class="official-plugin-party-pack-overlay-list settings-box"></div>
-                </div>
             </div>
             <div class="custom-plugin-overlay-messaging-container">
                 <div class="custom-plugin-overlay-loading loading-spinner"></div>
@@ -309,6 +340,45 @@
                     <div>
                         Error reaching plugin. Please check to make sure your plugin is running and the plugin URL settings above are set correctly for your plugin and then click the refresh button next to the plugin URL to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                     </div>
+                </div>
+            </div>
+            <div class="official-plugin-party-pack-overlay-panel" style="display: none;">
+                <div class="official-plugin-party-pack-loading loading-spinner" style="display: none;"></div>
+                <div class="official-plugin-party-pack-additional-setup mode-how-to settings-box" style="display: none;">
+                    <b>ADDITIONAL SETUP REQUIRED</b><br />
+                    <br />
+                    To use this mode, you'll need to install the free <i>Advanced Logo Analyzer and Plugin Party Pack</i> companion app. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.<br />
+                    <br />
+                    Along with the <i>Advanced Logo Analyzer</i>, which you can use with the separate "Logo Edge Mismatch" mode above, this bundled desktop tray app comes with a collection of plugins to easily use alongside this extension. At the time of writting this the Official Plugin Party Pack contains the following plugins: <br />
+                    <ul>
+                        <li>
+                            Detection / Trigger Plugins:
+                            <ul>
+                                <li><b>Hand Gesture Commercial Trigger</b> - Make hand gestures towards your webcam to signify commercials starting or ending.</li>
+                                <li><b>Voice Commercial Trigger</b> - Say a custom word or phrase towards your mic to signify commercials starting or ending.</li>
+                                <li><b>AI Commercial Detector</b> - Use local AI model to determine whether or not broadcast is in commercial (requires install of Ollama and recommeded NVIDIA RTX 3060+ GPU with 8GB+ VRAM).</li>
+                            </ul>
+                        </li>
+                        <li>
+                            Overlay Plugins:
+                            <ul>
+                                <li><b>VLC Over Commercials</b> - Play or stream any media from VLC during commercials (requires install of VLC).</li>
+                                <li><b>Overlay Any Window</b> - Set any open window as the overlay.</li>
+                                <li><b>Commercial Push Notifications</b> - Sends ntfy notifications to your phone when commercial breaks start and end.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                    More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                </div>
+                <div class="official-plugin-party-pack-success success-box settings-box" style="display: none;">
+                    Plugin Party Pack successfully loaded. Select any plugins from the list below that you would like to enable. After selecting, scroll down to the very bottom to adjust specific plugin settings.
+                </div>
+                <div class="official-plugin-party-pack-error error-box settings-box" style="display: none;">
+                    Could not reach the Plugin Party Pack. Make sure the Plugin Party Pack is running on this computer. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                </div>
+                <div class="official-plugin-party-pack-list-container blue-settings-box settings-box" style="display: none;">
+                    <div>Party Pack Overlay Plugins:</div><br />
+                    <div class="official-plugin-party-pack-overlay-list"></div>
                 </div>
             </div>
         </div>
@@ -465,12 +535,6 @@
                         <input type="radio" id="pluginOverlayFramework-official-plugin-party-packDuplicate" name="pluginOverlayFrameworkDuplicate" data-sync="pluginOverlayFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
                         <label for="pluginOverlayFramework-official-plugin-party-packDuplicate">Official Plugin Party Pack &#127881;</label>
                     </div>
-                    <div class="official-plugin-party-pack-overlay-panel" style="display: none;">
-                        <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any overlay plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
-                        <div class="official-plugin-party-pack-overlay-loading loading-spinner" style="display: none;"></div>
-                        <div class="official-plugin-party-pack-overlay-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
-                        <div class="official-plugin-party-pack-overlay-list settings-box"></div>
-                    </div>
                 </div>
                 <div class="custom-plugin-overlay-messaging-container">
                     <div class="custom-plugin-overlay-loading loading-spinner"></div>
@@ -486,6 +550,45 @@
                         <div>
                             Error reaching plugin. Please check to make sure your plugin is running and the plugin URL settings above are set correctly for your plugin and then click the refresh button next to the plugin URL to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                         </div>
+                    </div>
+                </div>
+                <div class="official-plugin-party-pack-overlay-panel" style="display: none;">
+                    <div class="official-plugin-party-pack-loading loading-spinner" style="display: none;"></div>
+                    <div class="official-plugin-party-pack-additional-setup mode-how-to settings-box" style="display: none;">
+                        <b>ADDITIONAL SETUP REQUIRED</b><br />
+                        <br />
+                        To use this mode, you'll need to install the free <i>Advanced Logo Analyzer and Plugin Party Pack</i> companion app. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.<br />
+                        <br />
+                        Along with the <i>Advanced Logo Analyzer</i>, which you can use with the separate "Logo Edge Mismatch" mode above, this bundled desktop tray app comes with a collection of plugins to easily use alongside this extension. At the time of writting this the Official Plugin Party Pack contains the following plugins: <br />
+                        <ul>
+                            <li>
+                                Detection / Trigger Plugins:
+                                <ul>
+                                    <li><b>Hand Gesture Commercial Trigger</b> - Make hand gestures towards your webcam to signify commercials starting or ending.</li>
+                                    <li><b>Voice Commercial Trigger</b> - Say a custom word or phrase towards your mic to signify commercials starting or ending.</li>
+                                    <li><b>AI Commercial Detector</b> - Use local AI model to determine whether or not broadcast is in commercial (requires install of Ollama and recommeded NVIDIA RTX 3060+ GPU with 8GB+ VRAM).</li>
+                                </ul>
+                            </li>
+                            <li>
+                                Overlay Plugins:
+                                <ul>
+                                    <li><b>VLC Over Commercials</b> - Play or stream any media from VLC during commercials (requires install of VLC).</li>
+                                    <li><b>Overlay Any Window</b> - Set any open window as the overlay.</li>
+                                    <li><b>Commercial Push Notifications</b> - Sends ntfy notifications to your phone when commercial breaks start and end.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                        More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                    </div>
+                    <div class="official-plugin-party-pack-success success-box settings-box" style="display: none;">
+                        Plugin Party Pack successfully loaded. Select any plugins from the list below that you would like to enable. After selecting, scroll down to the very bottom to adjust specific plugin settings.
+                    </div>
+                    <div class="official-plugin-party-pack-error error-box settings-box" style="display: none;">
+                        Could not reach the Plugin Party Pack. Make sure the Plugin Party Pack is running on this computer. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                    </div>
+                    <div class="official-plugin-party-pack-list-container blue-settings-box settings-box" style="display: none;">
+                        <div>Party Pack Overlay Plugins:</div><br />
+                        <div class="official-plugin-party-pack-overlay-list"></div>
                     </div>
                 </div>
             </div>
@@ -601,12 +704,6 @@
                         <input type="radio" id="pluginCommercialTriggerFramework-official-plugin-party-packDuplicate" name="pluginCommercialTriggerFrameworkDuplicate" data-sync="pluginCommercialTriggerFramework" value="official-plugin-party-pack" style="width: auto; height: auto;">
                         <label for="pluginCommercialTriggerFramework-official-plugin-party-packDuplicate">Official Plugin Party Pack &#127881;</label>
                     </div>
-                    <div class="official-plugin-party-pack-trigger-panel" style="display: none;">
-                        <div class="mode-how-to settings-box"><b>OFFICIAL PLUGIN PARTY PACK</b><br />Select any trigger plugins you would like to enable. Settings for a plugin are only loaded after you select it.</div>
-                        <div class="official-plugin-party-pack-trigger-loading loading-spinner" style="display: none;"></div>
-                        <div class="official-plugin-party-pack-trigger-error error-box settings-box" style="display: none;">Could not reach the Official Plugin Party Pack. Make sure the Party Pack is running on this computer.</div>
-                        <div class="official-plugin-party-pack-trigger-list settings-box"></div>
-                    </div>
                 </div>
                 <div class="custom-plugin-trigger-messaging-container">
                     <div class="custom-plugin-trigger-loading loading-spinner"></div>
@@ -622,6 +719,45 @@
                         <div>
                             Error reaching plugin WS. Please check to make sure your plugin WS is running and the WS URL above is set correctly and then click the refresh button next to the WS URL above to try to connect again. If you don't currently have a plugin, go <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/custom-plugins/README.md" target="_blank">here</a>!
                         </div>
+                    </div>
+                </div>
+                <div class="official-plugin-party-pack-trigger-panel" style="display: none;">
+                    <div class="official-plugin-party-pack-loading loading-spinner" style="display: none;"></div>
+                    <div class="official-plugin-party-pack-additional-setup mode-how-to settings-box" style="display: none;">
+                        <b>ADDITIONAL SETUP REQUIRED</b><br />
+                        <br />
+                        To use this mode, you'll need to install the free <i>Advanced Logo Analyzer and Plugin Party Pack</i> companion app. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.<br />
+                        <br />
+                        Along with the <i>Advanced Logo Analyzer</i>, which you can use with the separate "Logo Edge Mismatch" mode above, this bundled desktop tray app comes with a collection of plugins to easily use alongside this extension. At the time of writting this the Official Plugin Party Pack contains the following plugins: <br />
+                        <ul>
+                            <li>
+                                Detection / Trigger Plugins:
+                                <ul>
+                                    <li><b>Hand Gesture Commercial Trigger</b> - Make hand gestures towards your webcam to signify commercials starting or ending.</li>
+                                    <li><b>Voice Commercial Trigger</b> - Say a custom word or phrase towards your mic to signify commercials starting or ending.</li>
+                                    <li><b>AI Commercial Detector</b> - Use local AI model to determine whether or not broadcast is in commercial (requires install of Ollama and recommeded NVIDIA RTX 3060+ GPU with 8GB+ VRAM).</li>
+                                </ul>
+                            </li>
+                            <li>
+                                Overlay Plugins:
+                                <ul>
+                                    <li><b>VLC Over Commercials</b> - Play or stream any media from VLC during commercials (requires install of VLC).</li>
+                                    <li><b>Overlay Any Window</b> - Set any open window as the overlay.</li>
+                                    <li><b>Commercial Push Notifications</b> - Sends ntfy notifications to your phone when commercial breaks start and end.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                        More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                    </div>
+                    <div class="official-plugin-party-pack-success success-box settings-box" style="display: none;">
+                        Plugin Party Pack successfully loaded. Select any plugins from the list below that you would like to enable. After selecting, scroll down to the very bottom to adjust specific plugin settings.
+                    </div>
+                    <div class="official-plugin-party-pack-error error-box settings-box" style="display: none;">
+                        Could not reach the Plugin Party Pack. Make sure the Plugin Party Pack is running on this computer. More information and installation instructions can be found <a href="https://github.com/RG-O/YoutubeOverCommercials/blob/main/companion-app-plugin-party-pack-combo/README.md" target="_blank">here</a>.
+                    </div>
+                    <div class="official-plugin-party-pack-list-container blue-settings-box settings-box" style="display: none;">
+                        <div>Party Pack Detection/Trigger Plugins:</div><br />
+                        <div class="official-plugin-party-pack-trigger-list"></div>
                     </div>
                 </div>
             </div>

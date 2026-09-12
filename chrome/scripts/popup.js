@@ -33,7 +33,7 @@ var officialPluginPartyPackOverlayPluginIds = [];
 var officialPluginPartyPackLoadedRoles = new Set();
 var officialPluginPartyPackManifests = {};
 var officialPluginPartyPackManifestPromises = {};
-
+var hasPreviouslyInstalledPluginPartyPack;
 
 //variables that currently cannot be updated after initiation of the extension. declaring them here to see if user updates them to see if I should tell them to refresh.
 var overlayVideoType; //note: this variable can sorta change
@@ -99,6 +99,7 @@ chrome.storage.sync.get([
     'pluginCommercialTriggerWSURL',
     'hasPreviouslyInstalledPluginTrigger',
     'hasPreviouslyInstalledPluginOverlay',
+    'hasPreviouslyInstalledPluginPartyPack',
     'officialPluginPartyPackTriggerPluginIds',
     'officialPluginPartyPackOverlayPluginIds',
     'shouldDisplaySpotifyLyrics',
@@ -169,6 +170,7 @@ chrome.storage.sync.get([
     hasPreviouslyInstalledCompanionApp = result.hasPreviouslyInstalledCompanionApp ?? false;
     hasPreviouslyInstalledPluginTrigger = result.hasPreviouslyInstalledPluginTrigger ?? false;
     hasPreviouslyInstalledPluginOverlay = result.hasPreviouslyInstalledPluginOverlay ?? false;
+    hasPreviouslyInstalledPluginPartyPack = result.hasPreviouslyInstalledPluginPartyPack ?? false;
     // Plugin preferences are not loaded from sync. They are stored separately by plugin ID in local storage.
     pluginTriggerPreferences = {};
     pluginOverlayPreferences = {};
@@ -1414,6 +1416,8 @@ function getPluginTriggerManifest() {
         updateOfficialPluginPartyPackManifestVisibility();
         document.getElementById('custom-plugin-dual-manifest-container').style.display = 'none';
 
+        toggleFade(false, ".mode-screenshot-incompatible");
+
         if (hasLoadedDualPluginManifest && isPluginOverlayCallSuccess) {
             document.getElementById('custom-plugin-overlay-manifest-container').style.display = 'block';
         }
@@ -1431,6 +1435,8 @@ async function displayPluginTriggerManifestSuccess(manifest) {
     displayClass('plugins-section');
     displayClass('custom-plugin-trigger-manifest-success');
     displayClass('custom-plugin-trigger-instructions');
+
+    toggleFade(false, ".mode-screenshot-incompatible");
 
     enableSaveButton();
 
@@ -1928,6 +1934,7 @@ function displayPluginManifest(container, manifest, preferences = {}) {
 
     if (manifest?.capabilities?.includes("screenshots")) {
         container.querySelector("#plugin-screenshot-disclaimer").style.display = 'block';
+        toggleFade(true, ".mode-screenshot-incompatible");
     }
 
     buildFancyTooltipModal();
@@ -1982,14 +1989,62 @@ function getOfficialPluginPartyPackListContainers(role) {
 }
 
 
-function showOfficialPluginPartyPackLoading(role, isLoading) {
-    document.querySelectorAll(`.official-plugin-party-pack-${role}-loading`).forEach(element => {
+function showOfficialPluginPartyPackLoading(isLoading) {
+    document.querySelectorAll(`.official-plugin-party-pack-loading`).forEach(element => {
         element.style.display = isLoading ? "block" : "none";
     });
 
     if (isLoading) {
-        document.querySelectorAll(`.official-plugin-party-pack-${role}-error`).forEach(element => {
+        document.querySelectorAll(`.official-plugin-party-pack-error`).forEach(element => {
             element.style.display = "none";
+        });
+    }
+}
+
+
+function showOfficialPluginPartyPackSuccessUI() {
+    document.querySelectorAll('.official-plugin-party-pack-additional-setup').forEach(element => {
+        element.style.display = "none";
+    });
+
+    document.querySelectorAll('.official-plugin-party-pack-success').forEach(element => {
+        element.style.display = "block";
+    });
+    document.querySelectorAll('.official-plugin-party-pack-list-container').forEach(element => {
+        element.style.display = "block";
+    });
+    document.querySelectorAll('.official-plugin-party-pack-instructions').forEach(element => {
+        element.style.display = "block";
+    });
+
+    if (!hasPreviouslyInstalledPluginPartyPack) {
+        //knowing for next time if user has previously installed party pack to give them error instead of only instructions if app not found
+        hasPreviouslyInstalledPluginPartyPack = true;
+        chrome.storage.sync.set({ hasPreviouslyInstalledPluginPartyPack: hasPreviouslyInstalledPluginPartyPack });
+    }
+}
+
+
+function showOfficialPluginPartyPackErrorUI() {
+    if (hasPreviouslyInstalledPluginPartyPack) {
+        document.querySelectorAll('.official-plugin-party-pack-additional-setup').forEach(element => {
+            //element.style.display = "none"; //777 real line
+            console.log(element);
+            element.style.display = "block"; //777 debug line
+        });
+
+        document.querySelectorAll('.official-plugin-party-pack-error').forEach(element => {
+            element.style.display = "block";
+        });
+    } else {
+        document.querySelectorAll('.official-plugin-party-pack-error').forEach(element => {
+            //element.style.display = "none"; //777 real line
+            element.style.display = "block"; //777 debug line
+        });
+
+        document.querySelectorAll('.official-plugin-party-pack-additional-setup').forEach(element => {
+            console.log(element);
+            element.style.display = "block";
         });
     }
 }
@@ -2001,7 +2056,7 @@ async function loadOfficialPluginPartyPack(role) {
         return;
     }
 
-    showOfficialPluginPartyPackLoading(role, true);
+    showOfficialPluginPartyPackLoading(true);
 
     try {
         if (!officialPluginPartyPackManifest) {
@@ -2020,13 +2075,12 @@ async function loadOfficialPluginPartyPack(role) {
 
         buildOfficialPluginPartyPackChoices(role);
         officialPluginPartyPackLoadedRoles.add(role);
-        showOfficialPluginPartyPackLoading(role, false);
+        showOfficialPluginPartyPackLoading(false);
+        showOfficialPluginPartyPackSuccessUI();
     } catch (error) {
         console.log(error);
-        showOfficialPluginPartyPackLoading(role, false);
-        document.querySelectorAll(`.official-plugin-party-pack-${role}-error`).forEach(element => {
-            element.style.display = "block";
-        });
+        showOfficialPluginPartyPackLoading(false);
+        showOfficialPluginPartyPackErrorUI();
     }
 }
 
@@ -2139,6 +2193,12 @@ function updateOfficialPluginPartyPackManifestVisibility() {
         const pluginId = container.id.replace('official-plugin-party-pack-manifest-', '');
         container.style.display = shouldDisplayOfficialPluginPartyPackManifest(pluginId) ? 'block' : 'none';
     });
+
+    if (hasEnabledPluginWithScreenshotCapability()) {
+        toggleFade(true, ".mode-screenshot-incompatible");
+    } else {
+        toggleFade(false, ".mode-screenshot-incompatible");
+    }
 }
 
 
@@ -2371,6 +2431,39 @@ function sendOfficialPluginPartyPackRequest(payload) {
             }
         });
     });
+}
+
+
+function hasEnabledPluginWithScreenshotCapability() {
+    if (
+        isAnyPluginTriggerMode() &&
+        optionsForm.pluginCommercialTriggerFramework.value === 'ws' &&
+        pluginTriggerManifest?.capabilities?.includes('screenshots')
+    ) {
+        return true;
+    }
+
+    if (
+        isSetToDualPlugin() &&
+        pluginDualManifest?.capabilities?.includes('screenshots')
+    ) {
+        return true;
+    }
+
+    if (isOfficialPluginPartyPackTriggerMode()) {
+        const checkedTriggerPluginIds =
+            getCheckedOfficialPluginPartyPackIds('trigger');
+
+        for (const pluginId of checkedTriggerPluginIds) {
+            const manifest = officialPluginPartyPackManifests[pluginId];
+
+            if (manifest?.capabilities?.includes('screenshots')) {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 
@@ -2686,6 +2779,18 @@ function buildFancyTooltipModal() {
     modal.addEventListener("click", (event) => {
         if (event.target === modal) {
             closeTooltipModal();
+        }
+    });
+}
+
+
+function toggleFade(shouldToggleOn, selector) {
+    let elements = document.querySelectorAll(selector);
+    elements.forEach(element => {
+        if (shouldToggleOn) {
+            element.classList.add('faded-setting');
+        } else {
+            element.classList.remove('faded-setting');
         }
     });
 }

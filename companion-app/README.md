@@ -4,6 +4,8 @@
 
 This is a lightweight Python app that runs in the system tray and provides a local server (on `localhost:64143`) for the browser extension to communicate with.
 
+New! You can now alternatively install a version of this application that comes bundled with the Plugin Party Pack. Check that out [here](/companion-app-plugin-party-pack-combo) or stay on this page for just the Advanced Logo Analyzer.
+
 ## Features
 
 - Detects edges of channel logos using computer vision
@@ -20,8 +22,6 @@ This is a lightweight Python app that runs in the system tray and provides a loc
 3. Follow the installation wizard
 4. Run the application and it will appear in your system tray
 5. Open the browser extension settings and set to "Logo Edge Mismatch" commercial detection mode
-
-Note: This application has been created and tested with Windows. I'm hoping to borrow a Mac from a buddy soon to flesh it out on there, but in the meantime, technical users can try Option 2 below. Sorry Mac users! I haven't forgotten about you!
 
 ### Option 2 (Advanced): Run from Python
 

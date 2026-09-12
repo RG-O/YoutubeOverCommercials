@@ -1542,8 +1542,16 @@ async def send_manifest():
                         "id": PLUGIN_ID,
                         "version": PLUGIN_VERSION,
                         "description": (
-                            "Uses Ollama and a rolling screenshot window to detect "
-                            "TV commercial transitions."
+                            "This plugin uses Ollama and a rolling screenshot window to detect "
+                            "TV commercial transitions. Prior to first initiation you must first "
+                            "download and install Ollama to you computer. Once Ollama is running, "
+                            "open up your command prompt and run 'ollama pull qwen2.5vl:7b' to "
+                            "download your starter vision model. You can also use a different vision "
+                            "model if you would like. Once the model is done downloading "
+                            "(this starter model is about ~6GB), re-open this extension popup and "
+                            "select the model from the model list and save the extension settings. "
+                            "Then initiate the extension from where ever you stream from. Pro tip: "
+                            "Turn on Debug Mode in additional setting of extension to help with tinkering."
                         ),
                         "primaryColor": "#000000",
                         "secondaryColor": "#FFFFFF",
@@ -1603,7 +1611,9 @@ async def send_manifest():
                                 "tooltip": (
                                     "Prompt used while a commercial is active to decide "
                                     "whether regular programming has returned. "
-                                    "Try to have answer start with YES or NO."
+                                    "Try to have answer start with YES or NO. Pro tip: It can help "
+                                    "to modify this to mention the specific program you are "
+                                    "looking for like 'sports broadcast' or even 'football broadcast', etc."
                                 ),
                                 "type": "textarea",
                                 "default": DEFAULT_NON_COMMERCIAL_PROMPT,

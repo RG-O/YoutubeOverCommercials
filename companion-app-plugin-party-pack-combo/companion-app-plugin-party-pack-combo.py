@@ -72,23 +72,23 @@ PLUGIN_DEFINITIONS = {
         "source_key": "window",
         "name": "Overlay Any Window",
         "version": "1.1.0",
-        "description": "Uses any visible Windows application window as the commercial overlay.",
+        "description": "Uses any visible window as the commercial overlay.",
         "capabilities": ["overlay"],
         "adapter": "standard_ws",
     },
     "speak-keyword-trigger-plugin": {
         "source_key": "voice",
-        "name": "Say NO to Commercials",
+        "name": "Voice Commercial Trigger",
         "version": "1.0.1",
-        "description": "Uses offline Vosk speech recognition to trigger commercial/content state changes.",
+        "description": "Uses Vosk speech recognition model to trigger commercial / content state changes.",
         "capabilities": ["trigger"],
         "adapter": "standard_ws",
     },
     "gesture-trigger-plugin": {
         "source_key": "gesture",
-        "name": "Peace Out Commercials",
+        "name": "Hand Gesture Commercial Trigger",
         "version": "1.1.0",
-        "description": "Uses MediaPipe hand gestures to trigger commercial/content state changes.",
+        "description": "Uses MediaPipe hand gestures model to trigger commercial / content state changes.",
         "capabilities": ["trigger"],
         "adapter": "standard_ws",
     },
@@ -581,9 +581,9 @@ def start_tray():
         pystray.MenuItem("Exit", request_combined_shutdown),
     )
     icon = pystray.Icon(
-        "Live Commercial Blocker - Official Plugin Party Pack",
+        "Live Commercial Blocker - Advanced Logo Analyzer and Plugin Party Pack",
         build_tray_image(),
-        "Live Commercial Blocker - Official Plugin Party Pack",
+        "Live Commercial Blocker - Advanced Logo Analyzer and Plugin Party Pack",
         tray_menu,
     )
     icon.run()
@@ -3192,8 +3192,16 @@ async def ai_send_manifest():
                         "id": ai_PLUGIN_ID,
                         "version": ai_PLUGIN_VERSION,
                         "description": (
-                            "Uses Ollama and a rolling screenshot window to detect "
-                            "TV commercial transitions."
+                            "This plugin uses Ollama and a rolling screenshot window to detect "
+                            "TV commercial transitions. Prior to first initiation you must first "
+                            "download and install Ollama to you computer. Once Ollama is running, "
+                            "open up your command prompt and run 'ollama pull qwen2.5vl:7b' to "
+                            "download your starter vision model. You can also use a different vision "
+                            "model if you would like. Once the model is done downloading "
+                            "(this starter model is about ~6GB), re-open this extension popup and "
+                            "select the model from the model list and save the extension settings. "
+                            "Then initiate the extension from where ever you stream from. Pro tip: "
+                            "Turn on Debug Mode in additional setting of extension to help with tinkering."
                         ),
                         "primaryColor": "#000000",
                         "secondaryColor": "#FFFFFF",
@@ -3253,7 +3261,9 @@ async def ai_send_manifest():
                                 "tooltip": (
                                     "Prompt used while a commercial is active to decide "
                                     "whether regular programming has returned. "
-                                    "Try to have answer start with YES or NO."
+                                    "Try to have answer start with YES or NO. Pro tip: It can help "
+                                    "to modify this to mention the specific program you are "
+                                    "looking for like 'sports broadcast' or even 'football broadcast', etc."
                                 ),
                                 "type": "textarea",
                                 "default": ai_DEFAULT_NON_COMMERCIAL_PROMPT,
@@ -4042,7 +4052,7 @@ import zipfile
 
 voice_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-voice_PLUGIN_NAME = "Say NO to Commercials"
+voice_PLUGIN_NAME = "Voice Commercial Trigger"
 voice_PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
 voice_PLUGIN_VERSION = "1.0.1"
 
@@ -4619,7 +4629,7 @@ import mediapipe as mp
 
 gesture_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-gesture_PLUGIN_NAME = "Peace Out Commercials"
+gesture_PLUGIN_NAME = "Hand Gesture Commercial Trigger"
 gesture_PLUGIN_ID = "gesture-trigger-plugin"
 gesture_PLUGIN_VERSION = "1.1.0"
 

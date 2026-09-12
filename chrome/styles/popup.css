@@ -289,6 +289,18 @@ button {
     padding: 8px;
 }
 
+.faded-setting {
+    color: lightgray !important;
+}
+
+    .faded-setting * {
+        color: lightgray !important;
+    }
+
+    .faded-setting .badge {
+        display: none !important;
+    }
+
 .badge {
     font-size: 12px;
     margin-left: 4px;
