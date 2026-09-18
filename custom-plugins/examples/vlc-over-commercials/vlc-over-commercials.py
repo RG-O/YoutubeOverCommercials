@@ -183,14 +183,33 @@ def clear_media_history():
 
 
 def get_media_title(status, media_url):
+    """Get the best name for the Previously Played Media dropdown."""
     categories = status.get("information", {}).get("category", {})
     meta = categories.get("meta", {})
     if isinstance(meta, dict):
-        title = meta.get("title") or meta.get("filename")
+        title = meta.get("title")
+
+        filename = None
+        if not is_live_media(status):
+            filename = (
+                meta.get("filename")
+                or meta.get("file_name")
+                or meta.get("Filename")
+            )
+
+        # For non-live media, show both when VLC provides both pieces of
+        # information, for example: "Movie Name - MovieFilename.mp4".
+        if title and filename:
+            return f"{title} - {filename}"
+
         if title:
             return str(title)
-    clean_url = str(media_url).split("?", 1)[0].rstrip("/")
-    return clean_url.rsplit("/", 1)[-1] or str(media_url)
+
+        if filename:
+            return str(filename)
+
+    # Last choice: show the full URL so the dropdown always has a useful label.
+    return str(media_url)
 
 
 def remember_media(media_url, status=None):
@@ -1245,6 +1264,7 @@ app = Flask(__name__)
 @app.route("/custom-plugin-overlay-api", methods=["POST"])
 def custom_plugin_overlay():
     global is_commercial_state
+    global history_saving_disabled
 
     try:
         data = request.get_json(silent=True) or {}
