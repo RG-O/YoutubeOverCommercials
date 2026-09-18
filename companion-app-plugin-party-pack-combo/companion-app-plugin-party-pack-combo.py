@@ -95,7 +95,7 @@ PLUGIN_DEFINITIONS = {
     "vlc-over-commercials": {
         "source_key": "vlc",
         "name": "VLC Over Commercials",
-        "version": "1.0.1",
+        "version": "1.1.0",
         "description": "Automatically plays VLC media over commercial breaks.",
         "capabilities": ["overlay"],
         "adapter": "standard_ws",
@@ -5912,6 +5912,7 @@ async def gesture_main():
 # Prefix: vlc_
 # =============================================================================
 
+import json
 import os
 import re
 import subprocess
@@ -5924,7 +5925,6 @@ import win32api
 import win32con
 import win32gui
 import win32process
-from flask import Flask, jsonify, request
 
 
 # -----------------------------------------------------------------------------
@@ -5935,7 +5935,7 @@ vlc_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 vlc_PLUGIN_NAME = "VLC Over Commercials"
 vlc_PLUGIN_ID = "vlc-over-commercials"
-vlc_PLUGIN_VERSION = "1.0.1"
+vlc_PLUGIN_VERSION = "1.1.0"
 
 
 # -----------------------------------------------------------------------------
@@ -5946,13 +5946,15 @@ vlc_VLC_HTTP_URL = "http://localhost:8080/requests/status.json"
 vlc_VLC_HTTP_PASSWORD = "1234"
 vlc_VLC_HTTP_AUTH = ("", vlc_VLC_HTTP_PASSWORD)
 
-vlc_DEFAULT_MEDIA_URL = "file:///C:/Users/user/Downloads/video.mp4"
+vlc_DEFAULT_MEDIA_URL = "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm"
 vlc_DEFAULT_VOLUME = 256
 vlc_FALLBACK_VOLUME = 205
 vlc_FREEZE_TIMEOUT_SECONDS = 20
 vlc_AUDIO_TIMEOUT_SECONDS = 20
 vlc_HEALTH_CHECK_INTERVAL_SECONDS = 1
 vlc_WINDOW_SIZE_TOLERANCE_PIXELS = 2
+vlc_HISTORY_SAVE_INTERVAL_SECONDS = 5
+vlc_HISTORY_FILE = APP_DIR / "vlc_media_history.json"
 
 
 # -----------------------------------------------------------------------------
@@ -5976,6 +5978,8 @@ vlc_current_media_url = None
 vlc_current_media_has_audio = False
 vlc_is_commercial_state = False
 vlc_expected_commercial_window_rect = None
+vlc_history_saving_disabled = False
+vlc_last_history_save_time = 0
 
 vlc_health_monitor_thread = None
 vlc_health_monitor_stop_event = threading.Event()
@@ -6036,8 +6040,16 @@ def vlc_wait_for_process_window(process_id, timeout=15):
     return None
 
 
-def vlc_find_vlc_exe():
-    """Find VLC in its usual Windows installation folders."""
+def vlc_find_vlc_exe(custom_path=None):
+    """Use a custom VLC path first, then normal install folders."""
+    if custom_path:
+        custom_path = os.path.expandvars(os.path.expanduser(str(custom_path).strip()))
+        if os.path.isdir(custom_path):
+            custom_path = os.path.join(custom_path, "vlc.exe")
+        if os.path.isfile(custom_path):
+            return custom_path
+        raise FileNotFoundError(f"Could not find VLC at the custom path: {custom_path}")
+
     possible_paths = [
         r"C:\Program Files\VideoLAN\VLC\vlc.exe",
         r"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
@@ -6048,6 +6060,116 @@ def vlc_find_vlc_exe():
             return path
 
     return None
+
+
+def vlc_load_media_history():
+    """Load previously played media from disk."""
+    if not vlc_HISTORY_FILE.exists():
+        return {}
+    try:
+        with vlc_HISTORY_FILE.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError) as error:
+        print(f"Could not read media history: {error}")
+        return {}
+
+
+def vlc_save_media_history(history):
+    if vlc_history_saving_disabled:
+        return
+    try:
+        with vlc_HISTORY_FILE.open("w", encoding="utf-8") as file:
+            json.dump(history, file, indent=4, ensure_ascii=False)
+    except OSError as error:
+        print(f"Could not save media history: {error}")
+
+
+def vlc_clear_media_history():
+    try:
+        if vlc_HISTORY_FILE.exists():
+            vlc_HISTORY_FILE.unlink()
+        print("VLC media history cleared.")
+    except OSError as error:
+        print(f"Could not clear media history: {error}")
+
+
+def vlc_get_media_title(status, media_url):
+    """Get the best name for the Previously Played Media dropdown."""
+    categories = status.get("information", {}).get("category", {})
+    meta = categories.get("meta", {})
+    if isinstance(meta, dict):
+        title = meta.get("title")
+
+        filename = None
+        if not vlc_is_live_media(status):
+            filename = (
+                meta.get("filename")
+                or meta.get("file_name")
+                or meta.get("Filename")
+            )
+
+        # For non-live media, show both when VLC provides both pieces of
+        # information, for example: "Movie Name - MovieFilename.mp4".
+        if title and filename:
+            return f"{title} - {filename}"
+
+        if title:
+            return str(title)
+
+        if filename:
+            return str(filename)
+
+    # Last choice: show the full URL so the dropdown always has a useful label.
+    return str(media_url)
+
+
+def vlc_remember_media(media_url, status=None):
+    if vlc_history_saving_disabled or not media_url:
+        return
+    if status is None:
+        try:
+            status = vlc_get_vlc_status()
+        except requests.RequestException:
+            status = {}
+    history = vlc_load_media_history()
+    item = history.get(media_url, {})
+    item["url"] = media_url
+    item["title"] = vlc_get_media_title(status, media_url)
+    item["lastPlayed"] = time.time()
+    live = vlc_is_live_media(status) if status else item.get("isLive", True)
+    item["isLive"] = live
+    item["resumeTime"] = 0 if live else max(0, int(status.get("time", item.get("resumeTime", 0)) or 0))
+    history[media_url] = item
+    vlc_save_media_history(history)
+
+
+def vlc_get_saved_resume_time(media_url):
+    if vlc_history_saving_disabled:
+        return 0
+    item = vlc_load_media_history().get(media_url, {})
+    if item.get("isLive", True):
+        return 0
+    return max(0, int(item.get("resumeTime", 0) or 0))
+
+
+def vlc_save_current_media_progress():
+    if vlc_history_saving_disabled or not vlc_current_media_url:
+        return
+    try:
+        vlc_remember_media(vlc_current_media_url, vlc_get_vlc_status())
+    except requests.RequestException:
+        pass
+
+
+def vlc_get_history_dropdown_options():
+    options = [{"label": "None", "value": ""}]
+    items = sorted(vlc_load_media_history().values(), key=lambda item: item.get("lastPlayed", 0), reverse=True)
+    for item in items:
+        url = item.get("url")
+        if url:
+            options.append({"label": item.get("title") or url, "value": url})
+    return options
 
 
 def vlc_get_vlc_status(command=None, params=None, timeout=3):
@@ -6103,15 +6225,14 @@ def vlc_safely_minimize_window(hwnd):
 
 
 def vlc_get_media_url_from_preferences(preferences, use_default=False):
-    """Return the configured media URL, or None when it was not supplied."""
-    media_url = (
-        preferences.get("custom_overlay_plugin_preferences", {})
-        .get("url")
-    )
-
+    """Use typed URL first, otherwise the previously-played dropdown."""
+    plugin_preferences = preferences.get("custom_overlay_plugin_preferences", {})
+    media_url = str(plugin_preferences.get("url", "") or "").strip()
+    previous_media_url = str(plugin_preferences.get("previousMediaUrl", "") or "").strip()
     if media_url:
         return media_url
-
+    if previous_media_url:
+        return previous_media_url
     return vlc_DEFAULT_MEDIA_URL if use_default else None
 
 
@@ -6176,8 +6297,8 @@ def vlc_update_current_media_audio_status(timeout=5):
     return vlc_current_media_has_audio
 
 
-def vlc_switch_vlc_media(media_url, preserve_state=True):
-    """Replace VLC's current media without opening another VLC process."""
+def vlc_switch_vlc_media(media_url, preserve_state=True, resume_time=None):
+    """Replace VLC media while retaining reload locking and VOD resume."""
     global vlc_current_media_url
     global vlc_previous_overlay_width_percentage
     global vlc_previous_overlay_height_percentage
@@ -6198,6 +6319,14 @@ def vlc_switch_vlc_media(media_url, preserve_state=True):
         old_state = old_status.get("state")
         old_volume = old_status.get("volume")
 
+        if vlc_current_media_url:
+            vlc_save_current_media_progress()
+        if resume_time is None:
+            if media_url == vlc_current_media_url and old_status and not vlc_is_live_media(old_status):
+                resume_time = int(old_status.get("time", 0) or 0)
+            else:
+                resume_time = vlc_get_saved_resume_time(media_url)
+
         print(f"Switching VLC media to: {media_url}")
         vlc_send_vlc_command("pl_stop")
         vlc_send_vlc_command("in_play", {"input": media_url})
@@ -6208,6 +6337,17 @@ def vlc_switch_vlc_media(media_url, preserve_state=True):
 
         vlc_wait_for_vlc_playing(timeout=30)
         vlc_update_current_media_audio_status()
+
+        try:
+            new_status = vlc_get_vlc_status()
+            if not vlc_is_live_media(new_status) and resume_time and resume_time > 0:
+                print(f"Resuming media at {resume_time} seconds.")
+                vlc_send_vlc_command("seek", {"val": int(resume_time)})
+                time.sleep(0.25)
+                new_status = vlc_get_vlc_status()
+            vlc_remember_media(media_url, new_status)
+        except requests.RequestException:
+            pass
 
         if old_volume is not None:
             vlc_set_vlc_volume(int(old_volume))
@@ -6286,7 +6426,8 @@ def vlc_restore_expected_commercial_window(hwnd):
 
 
 def vlc_monitor_vlc_health():
-    """Monitor VLC for frozen video, dropped audio, and window size changes."""
+    """Monitor VLC health and periodically save non-live playback position."""
+    global vlc_last_history_save_time
     last_displayed_count = None
     last_frame_time = time.monotonic()
 
@@ -6330,6 +6471,11 @@ def vlc_monitor_vlc_health():
                         vlc_restore_expected_commercial_window(hwnd)
                 except win32gui.error:
                     pass
+
+        if (not vlc_history_saving_disabled and not vlc_is_live_media(status)
+                and time.monotonic() - vlc_last_history_save_time >= vlc_HISTORY_SAVE_INTERVAL_SECONDS):
+            vlc_remember_media(vlc_current_media_url, status)
+            vlc_last_history_save_time = time.monotonic()
 
         stats = status.get("stats", {})
 
@@ -6399,13 +6545,14 @@ def vlc_stop_health_monitor():
     """Tell the VLC health-monitor thread to stop."""
     vlc_health_monitor_stop_event.set()
 
-def vlc_open_vlc_with_media(media_url):
+
+def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
     """Start VLC and remember the main window owned by that process."""
     global vlc_vlc_process
     global vlc_vlc_window_handle
     global vlc_current_media_url
 
-    vlc_path = vlc_find_vlc_exe()
+    vlc_path = vlc_find_vlc_exe(custom_vlc_path)
     if not vlc_path:
         raise FileNotFoundError(
             "Could not find vlc.exe in Program Files or Program Files (x86)."
@@ -6460,6 +6607,17 @@ def vlc_open_vlc_with_media(media_url):
     print(
         f"Using VLC window hwnd={vlc_vlc_window_handle}, title={title!r}."
     )
+    saved_resume_time = vlc_get_saved_resume_time(media_url)
+    try:
+        status = vlc_get_vlc_status()
+        if not vlc_is_live_media(status) and saved_resume_time > 0:
+            print(f"Resuming media at {saved_resume_time} seconds.")
+            vlc_send_vlc_command("seek", {"val": saved_resume_time})
+            time.sleep(0.25)
+            status = vlc_get_vlc_status()
+        vlc_remember_media(media_url, status)
+    except requests.RequestException:
+        pass
 
 
 def vlc_get_vlc_video_dimensions():
@@ -6543,7 +6701,6 @@ def vlc_wait_for_setup_complete(timeout=30):
 def vlc_is_live_media(status):
     """Treat media without a known duration as a live stream."""
     length = status.get("length", 0)
-    print(f"Media length: {length}")
     return not length or length <= 0
 
 
@@ -6885,21 +7042,26 @@ def vlc_initialize_plugin(preferences):
     global vlc_original_foreground_window
     global vlc_is_setup_complete
     global vlc_saved_volume
+    global vlc_history_saving_disabled
+    global vlc_last_history_save_time
 
     vlc_is_setup_complete = False
+    plugin_preferences = preferences.get("custom_overlay_plugin_preferences", {})
+    vlc_history_saving_disabled = bool(plugin_preferences.get("clearAndDisableHistory", False))
+    if vlc_history_saving_disabled:
+        vlc_clear_media_history()
+    vlc_last_history_save_time = time.monotonic()
     vlc_original_foreground_window = win32gui.GetForegroundWindow()
 
     if vlc_original_foreground_window:
         title = win32gui.GetWindowText(vlc_original_foreground_window)
         print(f"Original foreground window: {title}")
 
-    should_clear_taskbar = (
-        preferences.get("custom_overlay_plugin_preferences", {})
-        .get("shouldClearTaskbar", False)
-    )
+    should_clear_taskbar = plugin_preferences.get("shouldClearTaskbar", False)
 
     media_url = vlc_get_media_url_from_preferences(preferences, use_default=True)
-    vlc_open_vlc_with_media(media_url)
+    custom_vlc_path = plugin_preferences.get("vlcPath", "")
+    vlc_open_vlc_with_media(media_url, custom_vlc_path=custom_vlc_path)
 
     print("Waiting for VLC to begin playing...")
     if not vlc_wait_for_vlc_playing():
@@ -6959,9 +7121,11 @@ def vlc_end_plugin():
     global vlc_current_media_url
     global vlc_current_media_has_audio
     global vlc_is_commercial_state
+    global vlc_history_saving_disabled
     global vlc_expected_commercial_window_rect
 
     vlc_stop_health_monitor()
+    vlc_save_current_media_progress()
 
     if vlc_is_original_foreground_window_topmost:
         vlc_set_original_window_topmost(False)
@@ -6998,7 +7162,6 @@ def vlc_end_plugin():
     vlc_is_setup_complete = False
     print("Extension stopped.")
 
-
 # -----------------------------------------------------------------------------
 # Party Pack WebSocket interface
 # -----------------------------------------------------------------------------
@@ -7033,10 +7196,11 @@ async def vlc_send_manifest(websocket):
                 "Automatically plays VLC media over commercial breaks. "
                 "Install the latest VLC version and close VLC before "
                 "starting the plugin. Note: This plugin uses the overlay "
-                "and pip size and location settings in additional "
-                "settings above. VLC is a trademark of the VideoLAN "
-                "organization. This plugin is not affiliated with VLC or "
-                "VideoLAN."
+                "and PiP size and location settings in additional "
+                "settings above. Some helpful VLC keyboard shortcuts: "
+                "Adjust volume = Ctrl + Up/Down, Show/Hide UI: Ctrl + H. "
+                "VLC is a trademark of the VideoLAN organization. "
+                "This plugin is not affiliated with VLC or VideoLAN."
             ),
             "primaryColor": "#E85E00",
             "secondaryColor": "#f2c7aa",
@@ -7046,23 +7210,63 @@ async def vlc_send_manifest(websocket):
                     "key": "url",
                     "label": "Video URL",
                     "description": (
-                        "A show/movie stream URL, live-stream URL, or local "
+                        "Enter a show/movie stream URL, live-stream URL, or local "
+                        "file URL. Leave blank to play previously watched from "
+                        "dropdown below."
+                    ),
+                    "tooltip": (
+                        "Enter a show/movie stream URL, live-stream URL, or local "
                         "file URL. Local file URL format example: "
                         "file:///C:/Users/user/Downloads/video.mp4"
+                        "This field takes priority over Previously Played "
+                        "Media below. Leave it blank to use the dropdown."
                     ),
                     "type": "text",
                     "default": "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm",
                 },
                 {
+                    "key": "previousMediaUrl",
+                    "label": "Previously Played Media",
+                    "description": (
+                        "Choose previously played media. "
+                        "Leave Video URL field above blank to play from this dropdown."
+                    ),
+                    "type": "select",
+                    "default": "",
+                    "options": vlc_get_history_dropdown_options(),
+                },
+                {
                     "key": "shouldClearTaskbar",
                     "label": "Should Attempt to Hide Taskbar",
-                    "description": (
+                    "tooltip": (
                         "When VLC opens, it sometimes has the Windows taskbar display. "
                         "This can quickly be fixed by clicking on the browser stream, "
                         "but this setting attempts to dismiss it for you to save a click. "
                     ),
                     "type": "checkbox",
-                    "default": True,
+                    "default": False,
+                },
+                {
+                    "key": "clearAndDisableHistory",
+                    "label": "Clear and Stop Saving Media History",
+                    "description": (
+                        "When checked, saved URLs and resume positions are cleared "
+                        "and no new history is saved. Uncheck it to begin saving again."
+                    ),
+                    "type": "checkbox",
+                    "default": False,
+                },
+                {
+                    "key": "vlcPath",
+                    "label": "Special VLC Application Path",
+                    "description": (
+                        "**Optional** Leave blank to automatically look in the normal "
+                        "Program Files locations. If plugin has issues finding the VLC "
+                        "application on your PC, enter either the full path to "
+                        "vlc.exe or the folder containing vlc.exe."
+                    ),
+                    "type": "text",
+                    "default": "",
                 },
             ],
         },
@@ -7071,12 +7275,9 @@ async def vlc_send_manifest(websocket):
 
 
 async def vlc_handle_message(websocket, message):
-    """Handle Party Pack messages directly over WebSocket.
-
-    VLC is now a first-class WS plugin. Its old Flask/API transport is no
-    longer used; only the underlying VLC/window-control functions remain.
-    """
+    """Handle VLC as a normal Party Pack WebSocket overlay plugin."""
     global vlc_is_commercial_state
+    global vlc_history_saving_disabled
 
     message_type = message.get("type")
 
@@ -7085,6 +7286,11 @@ async def vlc_handle_message(websocket, message):
         return
 
     preferences = vlc_read_preferences(message)
+    plugin_preferences = preferences.get("custom_overlay_plugin_preferences", {})
+    disable_history = bool(plugin_preferences.get("clearAndDisableHistory", False))
+    if disable_history and not vlc_history_saving_disabled:
+        await asyncio.to_thread(vlc_clear_media_history)
+    vlc_history_saving_disabled = disable_history
 
     if message_type == "init":
         await asyncio.to_thread(vlc_initialize_plugin, preferences)
@@ -7105,10 +7311,9 @@ async def vlc_handle_message(websocket, message):
         if not hwnd:
             raise RuntimeError("Could not find VLC window.")
 
-        is_commercial = bool(message.get("data", {}).get("isCommercialState", False))
-        vlc_is_commercial_state = is_commercial
+        vlc_is_commercial_state = bool(message.get("data", {}).get("isCommercialState", False))
 
-        if is_commercial:
+        if vlc_is_commercial_state:
             print("Starting VLC overlay.")
             await asyncio.to_thread(vlc_update_media_url_if_changed, preferences)
             await asyncio.to_thread(vlc_show_commercial_overlay, hwnd, preferences)

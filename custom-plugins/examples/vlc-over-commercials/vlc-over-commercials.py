@@ -1145,13 +1145,10 @@ def initialize_plugin(preferences):
         title = win32gui.GetWindowText(original_foreground_window)
         print(f"Original foreground window: {title}")
 
-    should_clear_taskbar = (
-        preferences.get("custom_overlay_plugin_preferences", {})
-        .get("shouldClearTaskbar", False)
-    )
+    should_clear_taskbar = plugin_preferences.get("shouldClearTaskbar", False)
 
     media_url = get_media_url_from_preferences(preferences, use_default=True)
-    custom_vlc_path = preferences.get("custom_overlay_plugin_preferences", {}).get("vlcPath", "")
+    custom_vlc_path = plugin_preferences.get("vlcPath", "")
     open_vlc_with_media(media_url, custom_vlc_path=custom_vlc_path)
 
     print("Waiting for VLC to begin playing...")
@@ -1315,6 +1312,7 @@ def custom_plugin_overlay():
 
             if is_fullscreen:
                 print("User entered browser fullscreen.")
+                update_media_url_if_changed(preferences)
                 resume_fullscreen(hwnd, preferences)
             else:
                 print("User exited browser fullscreen.")
@@ -1382,10 +1380,11 @@ def plugin_manifest():
                     "Automatically plays VLC media over commercial breaks. "
                     "Install the latest VLC version and close VLC before "
                     "starting the plugin. Note: This plugin uses the overlay "
-                    "and pip size and location settings in additional "
-                    "settings above. VLC is a trademark of the VideoLAN "
-                    "organization. This plugin is not affiliated with VLC or "
-                    "VideoLAN."
+                    "and PiP size and location settings in additional "
+                    "settings above. Some helpful VLC keyboard shortcuts: "
+                    "Adjust volume: Ctrl + Up/Down, Show/Hide UI: Ctrl + H. "
+                    "VLC is a trademark of the VideoLAN organization. "
+                    "This plugin is not affiliated with VLC or VideoLAN."
                 ),
                 "primaryColor": "#E85E00",
                 "secondaryColor": "#f2c7aa",
