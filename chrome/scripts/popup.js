@@ -2028,9 +2028,7 @@ function showOfficialPluginPartyPackSuccessUI() {
 function showOfficialPluginPartyPackErrorUI() {
     if (hasPreviouslyInstalledPluginPartyPack) {
         document.querySelectorAll('.official-plugin-party-pack-additional-setup').forEach(element => {
-            //element.style.display = "none"; //777 real line
-            console.log(element);
-            element.style.display = "block"; //777 debug line
+            element.style.display = "none";
         });
 
         document.querySelectorAll('.official-plugin-party-pack-error').forEach(element => {
@@ -2038,12 +2036,10 @@ function showOfficialPluginPartyPackErrorUI() {
         });
     } else {
         document.querySelectorAll('.official-plugin-party-pack-error').forEach(element => {
-            //element.style.display = "none"; //777 real line
-            element.style.display = "block"; //777 debug line
+            element.style.display = "none";
         });
 
         document.querySelectorAll('.official-plugin-party-pack-additional-setup').forEach(element => {
-            console.log(element);
             element.style.display = "block";
         });
     }
