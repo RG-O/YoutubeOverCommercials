@@ -57,6 +57,8 @@ PLUGIN_DEFINITIONS = {
         "name": "Commercial Push Notifications",
         "version": "1.0.0",
         "description": "Sends ntfy notifications when commercial breaks start and end.",
+        "primaryColor": "#317f6f",
+        "secondaryColor": "#ffffff",
         "capabilities": ["overlay"],
         "adapter": "standard_ws",
     },
@@ -65,6 +67,8 @@ PLUGIN_DEFINITIONS = {
         "name": "AI Commercial Detector",
         "version": "1.8.1",
         "description": "Uses a local Ollama vision model to detect transitions into and out of commercials.",
+        "primaryColor": "#000000",
+        "secondaryColor": "#FFFFFF",
         "capabilities": ["trigger"],
         "adapter": "ai_ws",
     },
@@ -73,6 +77,8 @@ PLUGIN_DEFINITIONS = {
         "name": "Overlay Any Window",
         "version": "1.1.0",
         "description": "Uses any visible window as the commercial overlay.",
+        "primaryColor": "#ffffff",
+        "secondaryColor": "#3b93d9",
         "capabilities": ["overlay"],
         "adapter": "standard_ws",
     },
@@ -81,6 +87,8 @@ PLUGIN_DEFINITIONS = {
         "name": "Voice Commercial Trigger",
         "version": "1.0.1",
         "description": "Uses Vosk speech recognition model to trigger commercial / content state changes.",
+        "primaryColor": "#8B0000",
+        "secondaryColor": "#FFFFE0",
         "capabilities": ["trigger"],
         "adapter": "standard_ws",
     },
@@ -89,6 +97,8 @@ PLUGIN_DEFINITIONS = {
         "name": "Hand Gesture Commercial Trigger",
         "version": "1.1.0",
         "description": "Uses MediaPipe hand gestures model to trigger commercial / content state changes.",
+        "primaryColor": "#2a5ac0",
+        "secondaryColor": "#FFDE34",
         "capabilities": ["trigger"],
         "adapter": "standard_ws",
     },
@@ -97,6 +107,8 @@ PLUGIN_DEFINITIONS = {
         "name": "VLC Over Commercials",
         "version": "1.1.0",
         "description": "Automatically plays VLC media over commercial breaks.",
+        "primaryColor": "#E85E00",
+        "secondaryColor": "#f0ccb4",
         "capabilities": ["overlay"],
         "adapter": "standard_ws",
     },
@@ -273,7 +285,9 @@ async def send_bundle_manifest(websocket):
             "name": definition["name"],
             "id": plugin_id,
             "version": definition["version"],
-            "description": definition["description"],
+            "description": definition.get("description"),
+            "primaryColor": definition.get("primaryColor"),
+            "secondaryColor": definition.get("secondaryColor"),
             "capabilities": definition["capabilities"],
         })
 
@@ -3976,7 +3990,7 @@ async def window_send_manifest(websocket):
                 "from the extension's additional settings."
             ),
             "primaryColor": "#ffffff",
-            "secondaryColor": "#0078D7",
+            "secondaryColor": "#3b93d9",
             "capabilities": ["overlay"],
             "preferences": [
                 {
@@ -4539,8 +4553,8 @@ async def voice_send_manifest(ws):
                     "commonly used in the broadcast and to shout the word three times "
                     "to guarantee trigger. Otherwise, set mic away from TV speakers for better results."
                 ),
-                "primaryColor": "#8B0000", # Optional
-                "secondaryColor": "#FFFFE0", # Optional
+                "primaryColor": "#8B0000",
+                "secondaryColor": "#FFFFE0",
                 "capabilities": ["detection"],
                 "preferences": [
                     {
@@ -4571,7 +4585,7 @@ async def voice_send_manifest(ws):
                         "type": "text",
                         "default": voice_DEFAULT_CONTENT_EMOJI,
                     },
-                ], # Optional
+                ],
             },
             "meta": {
                 "display": "Sending Manifest",
@@ -5742,7 +5756,7 @@ async def gesture_send_manifest(ws):
                     "between commercial and content states."
                 ),
                 "primaryColor": "#2a5ac0",
-                "secondaryColor": "#FFDE34", ##FFDE34 ##FFCC22
+                "secondaryColor": "#FFDE34",
                 "capabilities": ["detection"],
                 "preferences": [
                     {
@@ -7203,7 +7217,7 @@ async def vlc_send_manifest(websocket):
                 "This plugin is not affiliated with VLC or VideoLAN."
             ),
             "primaryColor": "#E85E00",
-            "secondaryColor": "#f2c7aa",
+            "secondaryColor": "#f0ccb4",
             "capabilities": ["overlay"],
             "preferences": [
                 {

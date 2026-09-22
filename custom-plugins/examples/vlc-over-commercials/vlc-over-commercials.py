@@ -1387,7 +1387,7 @@ def plugin_manifest():
                     "This plugin is not affiliated with VLC or VideoLAN."
                 ),
                 "primaryColor": "#E85E00",
-                "secondaryColor": "#f2c7aa",
+                "secondaryColor": "#f0ccb4",
                 "capabilities": ["overlay"],
                 "preferences": [
                     {

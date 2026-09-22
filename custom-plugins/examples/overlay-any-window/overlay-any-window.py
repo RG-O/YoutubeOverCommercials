@@ -461,7 +461,7 @@ async def send_manifest(websocket):
                 "from the extension's additional settings."
             ),
             "primaryColor": "#ffffff",
-            "secondaryColor": "#0078D7",
+            "secondaryColor": "#3b93d9",
             "capabilities": ["overlay"],
             "preferences": [
                 {

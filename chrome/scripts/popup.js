@@ -1796,11 +1796,11 @@ function displayPluginManifest(container, manifest, preferences = {}) {
         container.style.color = '#fff' //white
     }
 
-    container.style.backgroundColor = secondaryColor; //greyblue
+    container.style.backgroundColor = secondaryColor;
 
     const title = container.querySelector("#plugin-title");
     title.textContent = manifest.name;
-    title.style.color = primaryColor; //black
+    title.style.color = primaryColor;
 
     const version = container.querySelector("#plugin-version");
     version.textContent = manifest.version;
@@ -2095,17 +2095,24 @@ function buildOfficialPluginPartyPackChoices(role) {
         container.replaceChildren();
 
         matchingPlugins.forEach(plugin => {
+            const primaryColor = plugin.primaryColor ?? "#000"; //black
+            const secondaryColor = plugin.secondaryColor ?? "#dadcdc"; //greyblue
+
             const wrapper = document.createElement("div");
-            wrapper.className = "general-field";
+            wrapper.className = "general-field settings-box";
+            wrapper.style.color = primaryColor;
+            wrapper.style.backgroundColor = secondaryColor;
 
             const label = document.createElement("label");
             label.className = "checkbox-label";
+            label.style.fontWeight = "700";
             label.htmlFor = `official-plugin-party-pack-${role}-${containerIndex}-${plugin.id}`;
             label.textContent = plugin.name;
 
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.id = `official-plugin-party-pack-${role}-${containerIndex}-${plugin.id}`;
+            checkbox.style.accentColor = primaryColor;
             checkbox.dataset.partyPackPluginId = plugin.id;
             checkbox.dataset.partyPackRole = role;
             checkbox.checked = selectedIds.includes(plugin.id);
@@ -2115,15 +2122,13 @@ function buildOfficialPluginPartyPackChoices(role) {
             });
 
             wrapper.appendChild(label);
-            wrapper.appendChild(checkbox);
 
             if (plugin.description) {
-                const description = document.createElement("div");
-                description.className = "note";
-                description.textContent = plugin.description;
-                wrapper.appendChild(description);
+                const tooltip = buildTooltip(plugin.description, primaryColor);
+                wrapper.appendChild(tooltip);
             }
 
+            wrapper.appendChild(checkbox);
             container.appendChild(wrapper);
         });
     });

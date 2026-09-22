@@ -91,7 +91,7 @@ button {
     margin-bottom: 5px;
 }
 
-.id-field-wrapper input, .plugin-url-wrapper input {
+.id-field-wrapper input[type=text], .plugin-url-wrapper input {
     width: 100%;
     -moz-box-sizing: border-box;
     -webkit-box-sizing: border-box;
