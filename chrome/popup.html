@@ -890,9 +890,34 @@
     <div class="sticky-buttons">
         <button class="button" id="save-button">Save & Apply</button>
         <button class="button" id="close-button">Cancel</button>
-        <a href="https://www.buymeacoffee.com/ryango" target="_blank">
-            <img id="buy-me-coffee" style="height: 40px; float: right;" src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=coffee&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" />
-        </a>
+        <div id="stJudeFundraiser" class="st-jude-fundraiser" title="Please donate towards my St. Jude fundraiser!">
+            <div class="st-jude-logo">
+                <img src="st-jude-icon.png" alt="St. Jude">
+            </div>
+
+            <div class="fundraiser-progress-section">
+                <div class="fundraiser-progress">
+                    <div id="fundraiserProgressBar" class="fundraiser-progress-bar"></div>
+                </div>
+
+                <div class="fundraiser-stats">
+                    <span>
+                        <strong id="fundraiserRaised">$0</strong>
+                        <span class="fundraiser-goal"> / <span id="fundraiserGoal">$0</span></span>
+                    </span>
+
+                    <span class="fundraiser-supporters">
+                        <span class="supporter-icon">&#9823;</span>
+                        <span id="fundraiserSupporters">0</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="fundraiser-donate">
+                Donate
+                <span class="donate-arrow">›</span>
+            </div>
+        </div>
     </div>
 
     <script src="scripts/popup.js"></script>

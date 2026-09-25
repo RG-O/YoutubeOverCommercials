@@ -1582,6 +1582,9 @@ async def send_manifest():
                                 "type": "select",
                                 "options": [
                                     {"label": "Runtime Default", "value": "runtime-default"},
+                                    {"label": "1K tokens (not recommended)", "value": "1000"},
+                                    {"label": "2K tokens (not recommended)", "value": "2000"},
+                                    {"label": "3K tokens (not recommended)", "value": "3000"},
                                     {"label": "4,096 tokens", "value": "4096"},
                                     {"label": "5K tokens", "value": "5000"},
                                     {"label": "6K tokens", "value": "6000"},

@@ -3245,7 +3245,10 @@ async def ai_send_manifest():
                                 ),
                                 "type": "select",
                                 "options": [
-                                    {"label": "Runtime Default", "value": "runtime-default"},
+                                    {"label": "Runtime Default (recommended)", "value": "runtime-default"},
+                                    {"label": "1,024 tokens (not recommended)", "value": "1024"},
+                                    {"label": "2,048 tokens (not recommended)", "value": "2048"},
+                                    {"label": "3K tokens (not recommended)", "value": "3000"},
                                     {"label": "4,096 tokens", "value": "4096"},
                                     {"label": "5K tokens", "value": "5000"},
                                     {"label": "6K tokens", "value": "6000"},

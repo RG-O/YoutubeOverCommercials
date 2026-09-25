@@ -62,7 +62,15 @@ class WSClient {
     send(payload) {
         if (!this.connected) return;
 
-        this.ws.send(JSON.stringify(payload));
+        if (!(payload instanceof Blob)) {
+            payload = JSON.stringify(payload);
+        }
+
+        this.ws.send(payload);
+    }
+
+    get bufferedAmount() {
+        return this.ws?.bufferedAmount ?? 0;
     }
 
     disconnect() {
@@ -73,28 +81,62 @@ class WSClient {
 
 const ws = {
     isInContentFrame: typeof mainVideoCollection !== 'undefined',
-    isFirefox: false,
+    isFirefox: false, //note: the true value comes from the callers so no need to adjust in firefox version
     isFirefoxPopup: false,
     firefoxInitConfig: window.__extensionConfig,
     isPluginCommercialTriggerWS: false,
     isPluginOverlayWS: false,
     isDualWS: false,
+    isOfficialPluginPartyPackTriggerWS: false,
+    isOfficialPluginPartyPackOverlayWS: false,
+    isOfficialPluginPartyPackWS: false,
     //TODO: start montitoring and accounting for full life cycles in here
     hasPluginCommercialTriggerWSConnected: false,
     hasPluginOverlayWSConnected: false,
     hasDualWSConnected: false,
+    hasOfficialPluginPartyPackWSConnected: false,
     totalWSConnectionsInQueue: 0,
     pluginCommercialTriggerWSOpenedBy: "none",
     pluginOverlayWSOpenedBy: "none",
     dualWSOpenedBy: "none",
+    officialPluginPartyPackWSOpenedBy: "none",
     initWSPlugins(payload) {
-        ws.isPluginCommercialTriggerWS = (payload.data.preferences.isPluginCommercialTriggerMode && payload.data.preferences.pluginCommercialTriggerFramework === 'ws');
-        ws.isPluginOverlayWS = (payload.data.preferences.isPluginOverlayMode && payload.data.preferences.pluginOverlayFramework === 'ws');
-        ws.isDualWS = (ws.isPluginCommercialTriggerWS && ws.isPluginOverlayWS && payload.data.preferences.pluginCommercialTriggerWSURL === payload.data.preferences.pluginOverlayWSURL);
+        ws.isPluginCommercialTriggerWS = (
+            payload.data.preferences.isPluginCommercialTriggerMode &&
+            payload.data.preferences.pluginCommercialTriggerFramework === 'ws'
+        );
+        ws.isPluginOverlayWS = (
+            payload.data.preferences.isPluginOverlayMode &&
+            payload.data.preferences.pluginOverlayFramework === 'ws'
+        );
+        ws.isDualWS = (
+            ws.isPluginCommercialTriggerWS &&
+            ws.isPluginOverlayWS &&
+            payload.data.preferences.pluginCommercialTriggerWSURL === payload.data.preferences.pluginOverlayWSURL
+        );
+
+        ws.isOfficialPluginPartyPackTriggerWS = (
+            payload.data.preferences.isPluginCommercialTriggerMode &&
+            payload.data.preferences.pluginCommercialTriggerFramework === 'official-plugin-party-pack'
+        );
+        ws.isOfficialPluginPartyPackOverlayWS = (
+            payload.data.preferences.isPluginOverlayMode &&
+            payload.data.preferences.pluginOverlayFramework === 'official-plugin-party-pack'
+        );
+        ws.isOfficialPluginPartyPackWS = (
+            ws.isOfficialPluginPartyPackTriggerWS ||
+            ws.isOfficialPluginPartyPackOverlayWS
+        );
+
         ws.isFirefox = payload.data.utilities.isFirefox ?? false;
         ws.isFirefoxPopup = payload.data.utilities.isFirefoxPopup ?? false;
 
-        if (ws.hasPluginCommercialTriggerWSConnected || ws.hasPluginOverlayWSConnected || ws.hasDualWSConnected) {
+        if (
+            ws.hasPluginCommercialTriggerWSConnected ||
+            ws.hasPluginOverlayWSConnected ||
+            ws.hasDualWSConnected ||
+            ws.hasOfficialPluginPartyPackWSConnected
+        ) {
             ws.sendMessageToWSPlugins(payload);
         }
 
@@ -121,18 +163,37 @@ const ws = {
             ws.initDual(payload);
             ws.hasDualWSConnected = true;
         }
+
+        // Trigger and overlay Party Pack plugins always share one hard-coded
+        // Party Pack WebSocket connection.
+        if (ws.isOfficialPluginPartyPackWS && !ws.hasOfficialPluginPartyPackWSConnected) {
+            ws.totalWSConnectionsInQueue++;
+            ws.officialPluginPartyPackWSOpenedBy = payload.meta.wsOpenedBy;
+
+            ws.initOfficialPluginPartyPack(payload);
+            ws.hasOfficialPluginPartyPackWSConnected = true;
+        }
     },
     sendMessageToWSPlugins(payload) {
         if (ws.isPluginCommercialTriggerWS && !ws.isDualWS && ws.hasPluginCommercialTriggerWSConnected) {
             ws.sendToTrigger(payload);
         }
 
-        if (ws.isPluginOverlayWS && !ws.isDualWS && ws.hasPluginOverlayWSConnected) {
+        if (ws.isPluginOverlayWS && !ws.isDualWS && ws.hasPluginOverlayWSConnected && !(payload instanceof Blob)) {
             ws.sendToOverlay(payload);
         }
 
         if (ws.isDualWS && ws.hasDualWSConnected) {
             ws.sendToDual(payload);
+        }
+
+        if (ws.isOfficialPluginPartyPackWS && ws.hasOfficialPluginPartyPackWSConnected) {
+            // Binary screenshots only need to go to the Party Pack when at
+            // least one Party Pack trigger plugin is active. JSON lifecycle
+            // messages go to the Party Pack for trigger and/or overlay use.
+            if (!(payload instanceof Blob) || ws.isOfficialPluginPartyPackTriggerWS) {
+                ws.sendToOfficialPluginPartyPack(payload);
+            }
         }
     },
     initTrigger(payload) {
@@ -201,6 +262,11 @@ const ws = {
                 "Failed to send message to trigger plugin",
             );
 
+            return;
+        }
+
+        if (payload instanceof Blob && triggerWS.bufferedAmount > 0) {
+            console.log("Screenshot queue backlogged. Dropping screenshot.");
             return;
         }
 
@@ -348,6 +414,83 @@ const ws = {
 
         dualWS.send(payload);
     },
+    initOfficialPluginPartyPack(payload) {
+        const partyPackURL = payload.data.preferences.officialPluginPartyPack?.wsURL ?? "ws://localhost:64147";
+        officialPluginPartyPackWS = new WSClient(partyPackURL, "Official Plugin Party Pack");
+
+        officialPluginPartyPackWS.onOpen = () => {
+            ws.totalWSConnectionsInQueue--;
+
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "party-pack-plugin",
+                "started",
+                "Official Plugin Party Pack connected",
+            );
+
+            officialPluginPartyPackWS.send(payload);
+        };
+
+        officialPluginPartyPackWS.onMessage = ws.handleOfficialPluginPartyPackMessage;
+
+        officialPluginPartyPackWS.onClose = ({ wasConnected }) => {
+            if (!wasConnected) {
+                ws.totalWSConnectionsInQueue--;
+
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "party-pack-plugin",
+                    "failed",
+                    "Failed to connect to Official Plugin Party Pack",
+                );
+            } else {
+                ws.forwardMessageFromPluginWSClient(
+                    null,
+                    "party-pack-plugin",
+                    "disconnected",
+                    "Official Plugin Party Pack disconnected",
+                );
+            }
+        };
+
+        officialPluginPartyPackWS.onReconnect = () => {
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "party-pack-plugin",
+                "reconnecting",
+                "Attempting to reconnect to Official Plugin Party Pack...",
+            );
+        };
+
+        officialPluginPartyPackWS.connect();
+    },
+    handleOfficialPluginPartyPackMessage(msg) {
+        ws.forwardMessageFromPluginWSClient(
+            msg,
+            "party-pack-plugin",
+            "connected",
+            "Official Plugin Party Pack connected",
+        );
+    },
+    sendToOfficialPluginPartyPack(payload) {
+        if (!officialPluginPartyPackWS || !officialPluginPartyPackWS.connected) {
+            ws.forwardMessageFromPluginWSClient(
+                null,
+                "party-pack-plugin",
+                "failed",
+                "Failed to send message to Official Plugin Party Pack",
+            );
+
+            return;
+        }
+
+        if (payload instanceof Blob && officialPluginPartyPackWS.bufferedAmount > 0) {
+            console.log("Official Plugin Party Pack screenshot queue backlogged. Dropping screenshot.");
+            return;
+        }
+
+        officialPluginPartyPackWS.send(payload);
+    },
     forwardMessageFromPluginWSClient(payload, sender, connectionState, connectionMessage) {
         let message = {
             action: "forward_message_from_plugin_ws",
@@ -359,6 +502,7 @@ const ws = {
             pluginCommercialTriggerWSOpenedBy: ws.pluginCommercialTriggerWSOpenedBy,
             pluginOverlayWSOpenedBy: ws.pluginOverlayWSOpenedBy,
             dualWSOpenedBy: ws.dualWSOpenedBy,
+            officialPluginPartyPackWSOpenedBy: ws.officialPluginPartyPackWSOpenedBy,
             totalWSConnectionsInQueue: ws.totalWSConnectionsInQueue,
             isFirefox: ws.isFirefox,
         }

@@ -402,10 +402,9 @@ chrome.storage.sync.get([
     });
 
     // Official Plugin Party Pack lists are only requested when the user actually selects Party Pack mode.
-    //clear cache on buy me a coffee image to show updated supporter count
-    document.getElementById('buy-me-coffee').src = `https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=${today}&slug=ryango&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff`;
 
     buildFancyTooltipModal();
+    loadFundraiser();
 
     //check if user granted extension mic access for later double clap mode checks
     navigator.permissions.query({ name: "microphone" }).then((result) => {
@@ -2795,3 +2794,67 @@ function toggleFade(shouldToggleOn, selector) {
         }
     });
 }
+
+
+// for Every.org fundraiser button with progress bar
+const EVERYORG_PUBLIC_API_KEY = "pk_live_5e365d59bbbf2586a5e2c6b4afd44bf1";
+const EVERYORG_NONPROFIT_SLUG = "st-jude-childrens-research-hospital";
+const EVERYORG_FUNDRAISER_SLUG = "live-commercial-blocker";
+
+const API_URL =
+    `https://partners.every.org/v0.2/nonprofit/${EVERYORG_NONPROFIT_SLUG}` +
+    `/fundraiser/${EVERYORG_FUNDRAISER_SLUG}` +
+    `?apiKey=${EVERYORG_PUBLIC_API_KEY}`;
+
+const DONATE_URL = `https://www.every.org/${EVERYORG_NONPROFIT_SLUG}/f/${EVERYORG_FUNDRAISER_SLUG}`;
+
+async function loadFundraiser() {
+    try {
+        const response = await fetch(API_URL);
+
+        if (!response.ok) {
+            throw new Error(`Every.org API returned ${response.status}`);
+        }
+
+        const responseData = await response.json();
+
+        const fundraiser = responseData.data.fundraiser;
+        const raisedData = fundraiser.raisedData;
+
+        // Every.org returns monetary amounts in cents.
+        const raised = Number(raisedData.raised) / 100;
+        const goal = Number(raisedData.goalAmount) / 100;
+        const supporters = Number(raisedData.supporters) || 0;
+
+        // Don't allow the progress bar to extend beyond the button.
+        const progressPercent =
+            goal > 0
+                ? Math.min((raised / goal) * 100, 100)
+                : 0;
+
+        document.getElementById("fundraiserRaised").textContent = formatMoney(raised);
+        document.getElementById("fundraiserGoal").textContent = formatMoney(goal);
+        document.getElementById("fundraiserSupporters").textContent = supporters.toLocaleString();
+        document.getElementById("fundraiserProgressBar").style.width = `${progressPercent}%`;
+
+    } catch (error) {
+        console.error("Unable to load St. Jude fundraiser:", error);
+    }
+}
+
+
+function formatMoney(amount) {
+    return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0
+    }).format(amount);
+}
+
+
+// Open the Every.org fundraiser when the button is clicked
+document.getElementById("stJudeFundraiser").addEventListener("click", () => {
+    chrome.tabs.create({
+        url: DONATE_URL
+    });
+});

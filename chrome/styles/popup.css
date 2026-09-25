@@ -593,6 +593,118 @@ datalist {
     margin-bottom: 9px;
 }
 
+
+/*----- st. jude fundraiser -----*/
+
+.st-jude-fundraiser {
+    width: 200px;
+    height: 40px;
+    float: right;
+    box-sizing: border-box;
+    display: flex;
+    gap: 1px;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+    font-family: Arial, sans-serif;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+    .st-jude-fundraiser:hover {
+        background: #fafafa;
+        border-color: #bbb;
+    }
+
+.st-jude-logo {
+    width: 38px;
+    height: 100%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+    .st-jude-logo img {
+        max-width: 29px;
+        max-height: 29px;
+        object-fit: contain;
+    }
+
+.fundraiser-progress-section {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 6px 5px 0;
+}
+
+.fundraiser-progress {
+    width: 100%;
+    height: 5px;
+    background: #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.fundraiser-progress-bar {
+    width: 0;
+    height: 100%;
+    background: #d7194a;
+    border-radius: 10px;
+    transition: width 0.5s ease;
+}
+
+.fundraiser-stats {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    white-space: nowrap;
+    font-size: 9px;
+    line-height: 1;
+    color: #555;
+}
+
+#fundraiserRaised {
+    color: #222;
+    font-size: 10px;
+}
+
+.fundraiser-goal {
+    color: #777;
+}
+
+.fundraiser-supporters {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+}
+
+.supporter-icon {
+    font-size: 8px;
+}
+
+.fundraiser-donate {
+    height: 24px;
+    padding: 0 7px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    border-left: 1px solid #ddd;
+    color: #d7194a;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.donate-arrow {
+    margin-left: 2px;
+    font-size: 16px;
+    line-height: 1;
+}
+
 /*----- pixel-select-instructions.html specific styling below -----*/
 .overlay-video {
     position: fixed;
