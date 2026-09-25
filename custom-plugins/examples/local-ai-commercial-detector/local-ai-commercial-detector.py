@@ -12,7 +12,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.8.1"
+PLUGIN_VERSION = "1.8.2"
 
 PORT = 64145
 
@@ -157,9 +157,16 @@ async def handle_client(connection):
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
+        # Stop any in-flight Ollama work before clearing session data. This keeps
+        # a result from the old connection from leaking into a later session.
         await cancel_analysis_task()
         websocket = None
-        print("Client disconnected")
+
+        # Clear screenshots and all other connection-specific runtime state as soon
+        # as the session ends. reset_runtime_state() also runs when a new client
+        # connects, but doing it here releases the old screenshots immediately.
+        reset_runtime_state()
+        print("Client disconnected; session state cleared")
 
 
 def reset_runtime_state():
@@ -314,7 +321,11 @@ async def handle_message(msg):
             consecutive_yes_count = 0
             start_state_change_cooldown(is_commercial)
             resize_screenshot_buffer_for_current_state()
-            await request_screenshots()
+
+            # Only reconfigure browser screenshot capture when the settings sent
+            # by request_screenshots() actually differ between the two states.
+            if screenshot_request_settings_differ_by_state():
+                await request_screenshots()
 
         print(
             "Commercial state confirmed by extension. "
@@ -775,6 +786,21 @@ def get_active_screenshot_max_height():
     return regular_screenshot_max_height
 
 
+def screenshot_request_settings_differ_by_state():
+    """Return True when changing commercial state changes screenshot capture settings.
+
+    request_screenshots() sends frequency, max width/height, and shared trim values.
+    The trim values do not have commercial/non-commercial counterparts, so only the
+    state-specific values below can require a new request after a state change.
+    """
+    return (
+        regular_screenshot_frequency_milliseconds
+        != commercial_screenshot_frequency_milliseconds
+        or regular_screenshot_max_width != commercial_screenshot_max_width
+        or regular_screenshot_max_height != commercial_screenshot_max_height
+    )
+
+
 def start_state_change_cooldown(new_commercial_state):
     """Start the cooldown for the direction of a confirmed state change."""
     global cooldown_until
@@ -1086,9 +1112,10 @@ async def analyze_screenshot_batch(
             full_debug,
         )
 
-        # Immediately tell the browser to use the screenshot frequency and
-        # dimensions for the newly active state. Shared trim values are included too.
-        await request_screenshots()
+        # Only tell the browser to reconfigure screenshot capture if the values
+        # request_screenshots() sends are different for commercials vs programming.
+        if screenshot_request_settings_differ_by_state():
+            await request_screenshots()
 
     except asyncio.CancelledError:
         raise
@@ -1581,9 +1608,9 @@ async def send_manifest():
                                 ),
                                 "type": "select",
                                 "options": [
-                                    {"label": "Runtime Default", "value": "runtime-default"},
-                                    {"label": "1K tokens (not recommended)", "value": "1000"},
-                                    {"label": "2K tokens (not recommended)", "value": "2000"},
+                                    {"label": "Runtime Default (recommended)", "value": "runtime-default"},
+                                    {"label": "1,024 tokens (not recommended)", "value": "1024"},
+                                    {"label": "2,048 tokens (not recommended)", "value": "2048"},
                                     {"label": "3K tokens (not recommended)", "value": "3000"},
                                     {"label": "4,096 tokens", "value": "4096"},
                                     {"label": "5K tokens", "value": "5000"},

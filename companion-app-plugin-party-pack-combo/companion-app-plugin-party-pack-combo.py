@@ -394,6 +394,10 @@ async def cleanup_plugin(websocket, plugin_id):
                 pass
             module.websocket = None
 
+            # Clear screenshots and all other AI connection-specific state so a
+            # later Party Pack session cannot inherit data from this one.
+            module.reset_runtime_state()
+
         elif plugin_id == "speak-keyword-trigger-plugin":
             module.listening_active.clear()
             task = getattr(module, "listening_task", None)
@@ -1676,7 +1680,7 @@ ai_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 ai_PLUGIN_NAME = "AI Commercial Detector"
 ai_PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-ai_PLUGIN_VERSION = "1.8.1"
+ai_PLUGIN_VERSION = "1.8.2"
 
 ai_PORT = 64145
 
@@ -1821,9 +1825,15 @@ async def ai_handle_client(connection):
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
+        # Stop any in-flight Ollama work before clearing session data. This keeps
+        # a result from the old connection from leaking into a later session.
         await ai_cancel_analysis_task()
         ai_websocket = None
-        print("Client disconnected")
+
+        # Clear screenshots and all other connection-specific runtime state as soon
+        # as the session ends. The Party Pack cleanup path does this too.
+        ai_reset_runtime_state()
+        print("Client disconnected; session state cleared")
 
 
 def ai_reset_runtime_state():
@@ -1978,7 +1988,11 @@ async def ai_handle_message(msg):
             ai_consecutive_yes_count = 0
             ai_start_state_change_cooldown(is_commercial)
             ai_resize_screenshot_buffer_for_current_state()
-            await ai_request_screenshots()
+
+            # Only reconfigure browser screenshot capture when the settings sent
+            # by request_screenshots() actually differ between the two states.
+            if ai_screenshot_request_settings_differ_by_state():
+                await ai_request_screenshots()
 
         print(
             "Commercial state confirmed by extension. "
@@ -2439,6 +2453,21 @@ def ai_get_active_screenshot_max_height():
     return ai_regular_screenshot_max_height
 
 
+def ai_screenshot_request_settings_differ_by_state():
+    """Return True when changing commercial state changes screenshot capture settings.
+
+    request_screenshots() sends frequency, max width/height, and shared trim values.
+    The trim values do not have commercial/non-commercial counterparts, so only the
+    state-specific values below can require a new request after a state change.
+    """
+    return (
+        ai_regular_screenshot_frequency_milliseconds
+        != ai_commercial_screenshot_frequency_milliseconds
+        or ai_regular_screenshot_max_width != ai_commercial_screenshot_max_width
+        or ai_regular_screenshot_max_height != ai_commercial_screenshot_max_height
+    )
+
+
 def ai_start_state_change_cooldown(new_commercial_state):
     """Start the cooldown for the direction of a confirmed state change."""
     global ai_cooldown_until
@@ -2750,9 +2779,10 @@ async def ai_analyze_screenshot_batch(
             full_debug,
         )
 
-        # Immediately tell the browser to use the screenshot frequency and
-        # dimensions for the newly active state. Shared trim values are included too.
-        await ai_request_screenshots()
+        # Only tell the browser to reconfigure screenshot capture if the values
+        # request_screenshots() sends are different for commercials vs programming.
+        if ai_screenshot_request_settings_differ_by_state():
+            await ai_request_screenshots()
 
     except asyncio.CancelledError:
         raise
