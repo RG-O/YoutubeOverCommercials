@@ -654,7 +654,7 @@ datalist {
     height: 100%;
     background: #d7194a;
     border-radius: 10px;
-    transition: width 0.5s ease;
+    transition: width 0.7s ease;
 }
 
 .fundraiser-stats {
@@ -704,6 +704,7 @@ datalist {
     font-size: 16px;
     line-height: 1;
 }
+
 
 /*----- pixel-select-instructions.html specific styling below -----*/
 .overlay-video {

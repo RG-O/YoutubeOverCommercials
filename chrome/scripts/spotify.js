@@ -158,19 +158,16 @@ function checkElement(element) {
 
         processedLyricElements.add(el);
 
-        console.log('Matched element:', el);
-
         const lyric = el.innerText?.trim();
 
         if (lyric && lyric !== currentLyric) {
             currentLyric = lyric;
-            console.log('Current lyric:', lyric);
             shipTextToContent(lyric);
         }
     }
 }
 
-function lyricsObserver(mainViewContainer) {
+function lyricsObserver(containerWithLyrics) {
     const observer = new MutationObserver(mutations => {
         for (const mutation of mutations) {
             if (mutation.type === 'attributes') {
@@ -187,7 +184,7 @@ function lyricsObserver(mainViewContainer) {
         }
     });
 
-    observer.observe(mainViewContainer, {
+    observer.observe(containerWithLyrics, {
         attributes: true,
         attributeFilter: ['class', 'style'],
         childList: true,
@@ -195,7 +192,7 @@ function lyricsObserver(mainViewContainer) {
     });
 
     // Check anything that already exists before the observer started.
-    checkElement(mainViewContainer);
+    checkElement(containerWithLyrics);
 }
 
 
@@ -267,12 +264,21 @@ function initialSetup() {
 
                                 lyricsButton.click();
 
-                                const mainViewContainer = document.getElementsByClassName('main-view-container')[0];
-                                if (mainViewContainer) {
-                                    lyricsObserver(mainViewContainer);
-                                } else {
-                                    shipTextToContent('Error getting lyrics from spotify');
-                                }
+                                //waiting briefly for lyrics preview to go away and full lyrics page to display //TODO: have this more exact
+                                setTimeout(() => {
+
+                                    //TODO: get it to work for scenario where first song doesn't have lyrics but second one does
+                                    //TODO: add a specific amount of time to give up on this
+                                    waitForElement('[data-testid="lyrics-line"]').then((firstLyricsLine) => {
+                                        const containerWithLyrics = firstLyricsLine.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement; //TODO: Find something more stable to grab onto or just grab whole page?
+                                        if (containerWithLyrics) {
+                                            lyricsObserver(containerWithLyrics);
+                                        } else {
+                                            shipTextToContent('Error getting lyrics from spotify');
+                                        }
+                                    });
+
+                                }, 3000);
 
                             } else {
                                 shipTextToContent('Error getting lyrics from spotify');

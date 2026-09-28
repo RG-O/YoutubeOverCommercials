@@ -188,29 +188,62 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         } else if (message.action == 'capture-screenshot-plugin') {
 
             if (viewing) {
+                const trimTopPercent = message.options.trimOptionsPercentages.top ?? 0;
+                const trimRightPercent = message.options.trimOptionsPercentages.right ?? 0;
+                const trimBottomPercent = message.options.trimOptionsPercentages.bottom ?? 0;
+                const trimLeftPercent = message.options.trimOptionsPercentages.left ?? 0;
+
                 const MAX_WIDTH = message.options.maxDimensionsPixels.width ?? 500;
                 const MAX_HEIGHT = message.options.maxDimensionsPixels.height ?? 300;
 
                 const videoWidth = videoElement.videoWidth;
                 const videoHeight = videoElement.videoHeight;
 
+                // Calculate how many pixels to trim from each side
+                const trimTop = videoHeight * (trimTopPercent / 100);
+                const trimRight = videoWidth * (trimRightPercent / 100);
+                const trimBottom = videoHeight * (trimBottomPercent / 100);
+                const trimLeft = videoWidth * (trimLeftPercent / 100);
+
+                // Calculate the source area AFTER trimming
+                const sourceX = trimLeft;
+                const sourceY = trimTop;
+                const sourceWidth = videoWidth - trimLeft - trimRight;
+                const sourceHeight = videoHeight - trimTop - trimBottom;
+
+                // Scale the trimmed image to fit within the maximum dimensions
                 const scale = Math.min(
-                    MAX_WIDTH / videoWidth,
-                    MAX_HEIGHT / videoHeight,
-                    1 // Prevent upscaling smaller videos
+                    MAX_WIDTH / sourceWidth,
+                    MAX_HEIGHT / sourceHeight,
+                    1 // Prevent upscaling smaller images
                 );
 
-                const screenshotWidth = Math.round(videoWidth * scale);
-                const screenshotHeight = Math.round(videoHeight * scale);
+                const screenshotWidth = Math.round(sourceWidth * scale);
+                const screenshotHeight = Math.round(sourceHeight * scale);
 
-                if (!pluginCanvas || previousPluginScreenshotMaxWidth !== MAX_WIDTH || previousPluginScreenshotMaxHeight !== MAX_HEIGHT) {
+                if (
+                    !pluginCanvas ||
+                    pluginCanvas.width !== screenshotWidth ||
+                    pluginCanvas.height !== screenshotHeight
+                ) {
                     createPluginCanvas(screenshotWidth, screenshotHeight);
                 }
 
                 previousPluginScreenshotMaxWidth = MAX_WIDTH;
                 previousPluginScreenshotMaxHeight = MAX_HEIGHT;
 
-                ctx.drawImage(videoElement, 0, 0, screenshotWidth, screenshotHeight); //TODO: add trim options
+                // Draw only the trimmed portion of the video
+                ctx.drawImage(
+                    videoElement,
+                    sourceX,
+                    sourceY,
+                    sourceWidth,
+                    sourceHeight,
+                    0,
+                    0,
+                    screenshotWidth,
+                    screenshotHeight
+                );
 
                 pluginCanvas.toBlob((blob) => {
                     if (blob && pluginWSScript) {

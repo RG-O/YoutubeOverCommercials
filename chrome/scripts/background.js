@@ -447,6 +447,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 
+//TODO: figure out why firefox keeps saying "Error: Promised response from onMessage listener went out of scope" here when mute other tab overlay is used
+//TODO: really I should figure out why this happens all over the place even for chrome
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "background_update_preferences") {
 
@@ -567,16 +569,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
 
-    if (request.action === 'firefox-capture-screenshot' || request.action === 'firefox-advanced-logo-analysis') {
+    if (request.action === 'firefox-capture-screenshot' || request.action === 'firefox-advanced-logo-analysis' || request.action === 'firefox-capture-screenshot-plugin') {
+
+        const options = {};
+        options.format = (request.action === 'firefox-capture-screenshot-plugin') ? 'jpeg' : 'png';
+        if (request.rect) {
+            options.rect = request.rect;
+        }
 
         //TODO: can I make this only capture the video so it doesn't matter if it is full screen (would need to work out the coordinates too) - I don't think this is possible?
         chrome.tabs.captureVisibleTab(
 
             sender.tab.windowId,
-            {
-                format: 'png'
-                , rect: request.rect
-            },
+            options,
             function (dataUrl) {
 
                 if (request.action === 'firefox-advanced-logo-analysis') {

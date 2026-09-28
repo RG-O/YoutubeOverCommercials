@@ -81,7 +81,7 @@ class WSClient {
 
 const ws = {
     isInContentFrame: typeof mainVideoCollection !== 'undefined',
-    isFirefox: false,
+    isFirefox: false, //note: the true value comes from the callers so no need to adjust in firefox version
     isFirefoxPopup: false,
     firefoxInitConfig: window.__extensionConfig,
     isPluginCommercialTriggerWS: false,

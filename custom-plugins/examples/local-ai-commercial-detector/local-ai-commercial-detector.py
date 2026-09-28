@@ -3,6 +3,9 @@ import json
 import re
 import subprocess
 import time
+
+import cv2
+import numpy as np
 from collections import deque
 
 import ollama
@@ -12,7 +15,7 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "AI Commercial Detector"
 PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
-PLUGIN_VERSION = "1.8.2"
+PLUGIN_VERSION = "1.8.3"
 
 PORT = 64145
 
@@ -129,6 +132,13 @@ gpu_checked = False
 # older preference version is ignored so it cannot affect the new configuration.
 preference_version = 0
 
+# Debug screenshot preview. Debug mode is supplied by the extension through
+# msg.data.preferences.isDebugMode; it is not a plugin-manifest preference.
+is_debug_mode = False
+DEBUG_WINDOW_NAME = "AI Commercial Detector - Debug Preview"
+debug_preview_frozen = False
+debug_latest_screenshot = None
+
 
 async def handle_client(connection):
     """Handle the one WebSocket connection used by this plugin."""
@@ -161,6 +171,7 @@ async def handle_client(connection):
         # a result from the old connection from leaking into a later session.
         await cancel_analysis_task()
         websocket = None
+        close_debug_window()
 
         # Clear screenshots and all other connection-specific runtime state as soon
         # as the session ends. reset_runtime_state() also runs when a new client
@@ -203,6 +214,9 @@ def reset_runtime_state():
     global non_commercial_prompt
     global gpu_checked
     global preference_version
+    global is_debug_mode
+    global debug_preview_frozen
+    global debug_latest_screenshot
 
     commercial_state = False
 
@@ -250,6 +264,67 @@ def reset_runtime_state():
     gpu_checked = False
     preference_version = 0
 
+    is_debug_mode = False
+    debug_preview_frozen = False
+    debug_latest_screenshot = None
+
+
+def close_debug_window():
+    """Close the OpenCV debug preview window if it exists."""
+    try:
+        cv2.destroyWindow(DEBUG_WINDOW_NAME)
+        cv2.waitKey(1)
+    except cv2.error:
+        # The window may not have been created yet.
+        pass
+
+
+def show_debug_screenshot(screenshot_bytes, label):
+    """Decode and display one JPEG in the debug preview window."""
+    if not is_debug_mode:
+        return
+
+    try:
+        image_array = np.frombuffer(screenshot_bytes, dtype=np.uint8)
+        frame = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+        if frame is None:
+            print("Debug preview could not decode screenshot")
+            return
+
+        # Keep one window and put the preview mode in its title bar rather than
+        # drawing over the screenshot, so the displayed pixels remain unchanged.
+        cv2.imshow(DEBUG_WINDOW_NAME, frame)
+        try:
+            cv2.setWindowTitle(DEBUG_WINDOW_NAME, f"{DEBUG_WINDOW_NAME} - {label}")
+        except (AttributeError, cv2.error):
+            pass
+        cv2.waitKey(1)
+    except cv2.error as exc:
+        print(f"Debug preview failed: {exc}")
+
+
+def update_debug_mode(preferences):
+    """Apply msg.data.preferences.isDebugMode for the current session."""
+    global is_debug_mode
+    global debug_preview_frozen
+    global debug_latest_screenshot
+
+    new_debug_mode = bool(preferences.get("isDebugMode", False))
+    if new_debug_mode == is_debug_mode:
+        return
+
+    is_debug_mode = new_debug_mode
+    debug_preview_frozen = False
+
+    if is_debug_mode:
+        print("Debug screenshot preview enabled")
+        if debug_latest_screenshot is not None:
+            show_debug_screenshot(debug_latest_screenshot, "Live")
+    else:
+        print("Debug screenshot preview disabled")
+        debug_latest_screenshot = None
+        close_debug_window()
+
 
 async def cancel_analysis_task():
     """Cancel the current Ollama analysis task, if one is running."""
@@ -273,6 +348,11 @@ async def handle_message(msg):
     data = msg.get("data", {})
     preferences = data.get("preferences", {})
     custom_trigger_plugin_preferences = preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
+
+    # Debug mode belongs to the extension's general preferences, not this
+    # plugin's manifest preferences. Apply it whenever the extension sends it.
+    if "isDebugMode" in preferences:
+        update_debug_mode(preferences)
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")
@@ -897,8 +977,17 @@ def build_current_preferences_debug():
 
 async def handle_screenshot(screenshot_bytes):
     global screenshot_version
+    global debug_latest_screenshot
 
     print(f"Received screenshot as JPEG: {len(screenshot_bytes)} bytes")
+
+    # Always remember the newest screenshot in debug mode. While an Ollama call
+    # is running, keep the visible window frozen on the last image in the batch
+    # actually sent to the model.
+    if is_debug_mode:
+        debug_latest_screenshot = screenshot_bytes
+        if not debug_preview_frozen:
+            show_debug_screenshot(screenshot_bytes, "Live")
 
     screenshot_buffer.append(screenshot_bytes)
     screenshot_version += 1
@@ -943,6 +1032,14 @@ async def maybe_start_analysis():
     state_at_start = commercial_state
     preference_version_at_start = preference_version
 
+    # Freeze the debug preview on the final screenshot in the exact batch being
+    # handed to Ollama. Incoming screenshots can continue filling the rolling
+    # buffer without replacing this preview until the analysis finishes.
+    if is_debug_mode and screenshots:
+        global debug_preview_frozen
+        debug_preview_frozen = True
+        show_debug_screenshot(screenshots[-1], "Last image sent to model")
+
     last_llm_call_time = now
     last_analyzed_screenshot_version = screenshot_version
     analysis_task = asyncio.create_task(
@@ -963,6 +1060,7 @@ async def analyze_screenshot_batch(
     global consecutive_yes_count
     global commercial_state
     global gpu_checked
+    global debug_preview_frozen
 
     try:
         print(
@@ -1162,6 +1260,13 @@ async def analyze_screenshot_batch(
         current_task = asyncio.current_task()
         if analysis_task is current_task:
             analysis_task = None
+
+        # Resume live debug preview after this model call. If screenshots arrived
+        # while the preview was frozen, jump directly to the newest one. A new
+        # model call may immediately freeze it again on its own final batch image.
+        debug_preview_frozen = False
+        if is_debug_mode and debug_latest_screenshot is not None and websocket is not None:
+            show_debug_screenshot(debug_latest_screenshot, "Live")
 
         # Important for frequency=0: if at least one screenshot arrived while
         # Ollama was working, immediately check whether another analysis can be

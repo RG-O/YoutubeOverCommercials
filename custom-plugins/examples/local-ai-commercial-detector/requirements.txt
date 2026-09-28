@@ -1,2 +1,4 @@
 websockets
 ollama
+opencv-python
+numpy

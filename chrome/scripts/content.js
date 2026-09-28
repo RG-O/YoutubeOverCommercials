@@ -47,8 +47,6 @@ var triggerOfLastCommercialStateChange = 'none';
 var pluginCommercialTriggerIndicatorContainer;
 var pluginCommercialTriggerIndicator;
 var pluginCommercialTriggerDebugOverlay;
-// Party Pack trigger plugins each get their own persistent status display.
-// The plugin ID tells us which corner display a message belongs to.
 var partyPackTriggerIndicatorsById = {};
 var partyPackTriggerIndicatorContainersById = {};
 var partyPackTriggerIndicatorLocationsById = {};
@@ -58,7 +56,13 @@ var pluginCommercialTriggerFramework = 'ws'; //TODO: will there ever be a differ
 var havePluginsBeenInitiated = false;
 var pluginScreenshotOptions;
 var shouldSendScreenshotsToTriggerPlugin = false;
-var pluginScreenshotIntervalID;
+var previousPluginScreenshotFrequencyMilliseconds;
+var currentPluginScreenshotsAbortController = null;
+var previousPluginScreenshotMaxWidthFirefox;
+var previousPluginScreenshotMaxHeightFirefox;
+var pluginOffscreenCanvasFirefox;
+var pluginCTXFirefox;
+
 //Advanced Logo Analysis Variables:
 var advancedLogoSelectionTopLeftLocation;
 var advancedLogoSelectionBottomRightLocation;
@@ -675,18 +679,115 @@ function sendMessageToPlugins(type) {
 }
 
 
-function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
+async function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
+    if (currentPluginScreenshotsAbortController) {
+        currentPluginScreenshotsAbortController.abort();
+        console.log("Previous plugin screenshots loop forcefully overruled.");
+    }
 
-    pluginScreenshotIntervalID = setInterval(() => {
+    const controller = new AbortController();
+    currentPluginScreenshotsAbortController = controller;
+    const { signal } = controller;
 
-        chrome.runtime.sendMessage({
-            target: "offscreen",
-            action: "capture-screenshot-plugin",
-            options: pluginScreenshotOptions,
-        });
+    try {
+        while (!signal.aborted) {
+            const startTime = performance.now();
 
-    }, pluginScreenshotOptions.frequencyMilliseconds);
+            try {
+                if (isFirefox) {
+                    const response = await chrome.runtime.sendMessage({ action: "firefox-capture-screenshot-plugin" });
+                    if (response.error) throw new Error(response.error);
 
+                    if (signal.aborted) return;
+
+                    const res = await fetch(response.imgSrc);
+                    const blob = await res.blob();
+                    const imageBitmap = await createImageBitmap(blob);
+
+                    if (signal.aborted) {
+                        imageBitmap.close();
+                        return;
+                    }
+
+                    const MAX_WIDTH = pluginScreenshotOptions.maxDimensionsPixels.width ?? 500;
+                    const MAX_HEIGHT = pluginScreenshotOptions.maxDimensionsPixels.height ?? 300;
+
+                    const scale = Math.min(
+                        MAX_WIDTH / windowWidth, //TODO: do I need to consider window.devicePixelRatio like google mentioned?
+                        MAX_HEIGHT / windowHeight,
+                        1 // Prevent upscaling smaller videos
+                    );
+
+                    const screenshotWidth = Math.round(windowWidth * scale); //TODO: do I need to consider window.devicePixelRatio like google mentioned?
+                    const screenshotHeight = Math.round(windowHeight * scale);
+
+                    if (!pluginOffscreenCanvasFirefox || previousPluginScreenshotMaxWidthFirefox !== MAX_WIDTH || previousPluginScreenshotMaxHeightFirefox !== MAX_HEIGHT) {
+                        createPluginOffscreenCanvasFirefox(screenshotWidth, screenshotHeight);
+                    }
+
+                    previousPluginScreenshotMaxWidthFirefox = MAX_WIDTH;
+                    previousPluginScreenshotMaxHeightFirefox = MAX_HEIGHT;
+
+                    pluginCTXFirefox.drawImage(imageBitmap, 0, 0, screenshotWidth, screenshotHeight); //TODO: add trim options
+
+                    imageBitmap.close();
+
+                    const finalBlob = await pluginOffscreenCanvasFirefox.convertToBlob({ type: 'image/jpeg', quality: 0.80 });
+
+                    if (signal.aborted) return;
+
+                    ws.sendMessageToWSPlugins(finalBlob);
+                } else {
+                    chrome.runtime.sendMessage({
+                        target: "offscreen",
+                        action: "capture-screenshot-plugin",
+                        options: pluginScreenshotOptions,
+                    });
+                }
+            } catch (err) {
+                console.error("Plugin screenshots loop error:", err);
+            }
+
+            const elapsed = performance.now() - startTime;
+            const delay = Math.max(pluginScreenshotOptions.frequencyMilliseconds - elapsed, 0);
+
+            if (delay > 0) {
+                await new Promise((resolve, reject) => {
+                    const timeoutId = setTimeout(() => {
+                        signal.removeEventListener('abort', onAbort);
+                        resolve();
+                    }, delay);
+
+                    function onAbort() {
+                        clearTimeout(timeoutId);
+                        reject(new DOMException("Aborted", "AbortError"));
+                    }
+
+                    signal.addEventListener('abort', onAbort, { once: true });
+                });
+            }
+        }
+    } catch (err) {
+        if (err.name !== 'AbortError') console.error("Plugin screenshots loop fatal error:", err);
+    } finally {
+        if (currentPluginScreenshotsAbortController === controller) {
+            currentPluginScreenshotsAbortController = null;
+        }
+    }
+}
+
+
+function createPluginOffscreenCanvasFirefox(width, height) {
+    pluginOffscreenCanvasFirefox = new OffscreenCanvas(width, height);
+    pluginCTXFirefox = pluginOffscreenCanvasFirefox.getContext('2d', { willReadFrequently: true });
+}
+
+
+function stopScreenshotsToTriggerPluginLoop() {
+    if (currentPluginScreenshotsAbortController) {
+        currentPluginScreenshotsAbortController.abort();
+        currentPluginScreenshotsAbortController = null;
+    }
 }
 
 
@@ -2824,7 +2925,7 @@ function pauseAutoMode(shouldDisplayMessage) {
     }
 
     if (shouldSendScreenshotsToTriggerPlugin) {
-        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+        stopScreenshotsToTriggerPluginLoop();
     }
 
     if (commercialDetectionMode !== 'auto-audio') {
@@ -3145,6 +3246,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             }
 
+            //TODO: have this only display different messages depending on if update needs refresh or not
             addMessageAlertToMainVideo('Preferences Updated! You may now resume fullscreen and enjoy :)', 'info');
             //TODO: add as option to addMessageAlertToMainVideo
             document.addEventListener('fullscreenchange', () => {
@@ -3262,18 +3364,19 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
                     if (shouldSendScreenshotsToTriggerPlugin) {
                         if (document.fullscreenElement) {
-                            //give a half sec for tab viewing to start (if triggered due to fullscreen resume)
+                            stopScreenshotsToTriggerPluginLoop();
+                            //add time to let last cycle end
                             setTimeout(() => {
-                                clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
                                 sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
-                            }, 500);
+                                previousPluginScreenshotFrequencyMilliseconds = pluginScreenshotOptions.frequencyMilliseconds ?? 1000;
+                            }, Math.max(previousPluginScreenshotFrequencyMilliseconds, 500)); //note: waiting at least a half sec for startViewingTab to start from resumeAutoMode, in case plugin calls this on fullscreen resume
                         } else {
                             addMessageAlertToMainVideo("Plugin requested screenshot settings update but video must be in fullscreen for screenshots to send.");
                             //TODO: add wait for fullscreen here
                         }
                     } else {
                         //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
-                        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                        stopScreenshotsToTriggerPluginLoop();
                         if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
                             pauseViewingTab();
                         }
@@ -3282,6 +3385,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     if (activePluginHasCapabilityForMessage(message, "screenshots")) {
                         pluginScreenshotOptions = message.payload.data ?? {};
                         shouldSendScreenshotsToTriggerPlugin = pluginScreenshotOptions.shouldSendScreenshots ?? false;
+                        previousPluginScreenshotFrequencyMilliseconds = pluginScreenshotOptions.frequencyMilliseconds ?? 1000;
                         if (shouldSendScreenshotsToTriggerPlugin) {
                             if (document.fullscreenElement) {
                                 windowWidth = window.innerWidth;
@@ -3298,7 +3402,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                             }
                         } else {
                             //TODO: can this be done less confusingly and more holistically by updating pauseAutoMode(false) and calling that instead?
-                            clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+                            stopScreenshotsToTriggerPluginLoop();
                             if (commercialDetectionMode.indexOf('auto-pixel') < 0) {
                                 pauseViewingTab();
                             }

@@ -293,8 +293,9 @@ chrome.storage.sync.get([
         pingCompanionApp();
     });
 
-    //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
     if (isFirefox) {
+        document.getElementsByClassName('sticky-buttons')[0].style.width = '100%';
+        //adding experimental tag to auto audio detect mode because it doesn't work as universally for firefox
         document.getElementsByClassName('firefox-experimental')[0].style.display = 'inline';
         //document.getElementsByTagName('body')[0].style.width = '400px';
         document.getElementsByTagName('body')[0].style.paddingRight = '18px';
@@ -2016,6 +2017,8 @@ function showOfficialPluginPartyPackSuccessUI() {
         element.style.display = "block";
     });
 
+    buildFancyTooltipModal();
+
     if (!hasPreviouslyInstalledPluginPartyPack) {
         //knowing for next time if user has previously installed party pack to give them error instead of only instructions if app not found
         hasPreviouslyInstalledPluginPartyPack = true;
@@ -2838,6 +2841,7 @@ async function loadFundraiser() {
         document.getElementById("fundraiserProgressBar").style.width = `${progressPercent}%`;
 
     } catch (error) {
+        //TODO: remove progress bar, etc. when error occurs. link should still be fine.
         console.error("Unable to load St. Jude fundraiser:", error);
     }
 }
