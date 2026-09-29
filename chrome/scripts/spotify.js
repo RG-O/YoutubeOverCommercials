@@ -6,9 +6,16 @@ var lyricsBox;
 var hasFirstSongPlayed = false;
 var isInitialSetupComplete = false;
 var extensionInitConfig = window.__extensionConfig ?? {};
+var isDebugMode = extensionInitConfig.isDebugMode ?? false;
 var shouldDisplayLyrics = extensionInitConfig.shouldDisplaySpotifyLyrics ?? false;
+var isFirefox = extensionInitConfig.isFirefox ?? false;
 var currentLyric;
 
+if (isDebugMode) {
+    console.log("isDebugMode = " + isDebugMode);
+    console.log("isFirefox = " + isFirefox);
+    console.log("shouldDisplayLyrics = " + shouldDisplayLyrics);
+}
 
 //run initialSetup() as soon as DOM is loaded
 if (document.readyState === 'loading') {
@@ -143,27 +150,26 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
 const processedLyricElements = new WeakSet();
 
 function matchesComputedStyle(element) {
-    return getComputedStyle(element).viewTimeline === '--scroll-to-viewport-button-anim';
+    return isFirefox
+        ? getComputedStyle(element).color === 'rgb(255, 255, 255)'
+        : getComputedStyle(element).viewTimeline === '--scroll-to-viewport-button-anim'; //TODO: which one is more dependable?
 }
 
 function checkElement(element) {
     if (!(element instanceof Element)) return;
 
-    // Check this element plus all descendants.
-    const elements = [element, ...element.querySelectorAll('*')];
+    // Only consider this exact element.
+    if (!element.matches('[data-testid="lyrics-line"]')) return;
+    if (!matchesComputedStyle(element)) return;
+    if (processedLyricElements.has(element)) return;
 
-    for (const el of elements) {
-        if (!matchesComputedStyle(el)) continue;
-        if (processedLyricElements.has(el)) continue;
+    processedLyricElements.add(element);
 
-        processedLyricElements.add(el);
+    const lyric = element.innerText?.trim();
 
-        const lyric = el.innerText?.trim();
-
-        if (lyric && lyric !== currentLyric) {
-            currentLyric = lyric;
-            shipTextToContent(lyric);
-        }
+    if (lyric && lyric !== currentLyric) {
+        currentLyric = lyric;
+        shipTextToContent(lyric);
     }
 }
 
@@ -271,6 +277,7 @@ function initialSetup() {
                                     //TODO: add a specific amount of time to give up on this
                                     waitForElement('[data-testid="lyrics-line"]').then((firstLyricsLine) => {
                                         const containerWithLyrics = firstLyricsLine.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement; //TODO: Find something more stable to grab onto or just grab whole page?
+                                        if (isDebugMode) console.log(containerWithLyrics);
                                         if (containerWithLyrics) {
                                             lyricsObserver(containerWithLyrics);
                                         } else {
@@ -278,7 +285,7 @@ function initialSetup() {
                                         }
                                     });
 
-                                }, 3000);
+                                }, 4000);
 
                             } else {
                                 shipTextToContent('Error getting lyrics from spotify');

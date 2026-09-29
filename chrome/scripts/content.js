@@ -438,7 +438,11 @@ function potentiallyIntrusiveSetup() {
 
     if (overlayVideoType === 'spotify') {
         setTimeout(() => {
-            chrome.runtime.sendMessage({ action: "open_spotify" });
+            chrome.runtime.sendMessage({
+                action: "open_spotify",
+                isDebugMode: isDebugMode,
+                isFirefox: isFirefox,
+            });
             window.addEventListener('beforeunload', closeSpotify);
         }, spotifyDelay);
         //note: pluginInitiation() called later when spotify mode used
@@ -695,6 +699,7 @@ async function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
 
             try {
                 if (isFirefox) {
+                    //TODO: figure out low quality for firefox images
                     const response = await chrome.runtime.sendMessage({ action: "firefox-capture-screenshot-plugin" });
                     if (response.error) throw new Error(response.error);
 
@@ -709,30 +714,65 @@ async function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
                         return;
                     }
 
+                    const trimTopPercent = pluginScreenshotOptions.trimOptionsPercentages.top ?? 0;
+                    const trimRightPercent = pluginScreenshotOptions.trimOptionsPercentages.right ?? 0;
+                    const trimBottomPercent = pluginScreenshotOptions.trimOptionsPercentages.bottom ?? 0;
+                    const trimLeftPercent = pluginScreenshotOptions.trimOptionsPercentages.left ?? 0;
+
                     const MAX_WIDTH = pluginScreenshotOptions.maxDimensionsPixels.width ?? 500;
                     const MAX_HEIGHT = pluginScreenshotOptions.maxDimensionsPixels.height ?? 300;
 
+                    const imageWidth = imageBitmap.width;
+                    const imageHeight = imageBitmap.height;
+
+                    const trimTop = imageHeight * (trimTopPercent / 100);
+                    const trimRight = imageWidth * (trimRightPercent / 100);
+                    const trimBottom = imageHeight * (trimBottomPercent / 100);
+                    const trimLeft = imageWidth * (trimLeftPercent / 100);
+
+                    const sourceX = trimLeft;
+                    const sourceY = trimTop;
+                    const sourceWidth = imageWidth - trimLeft - trimRight;
+                    const sourceHeight = imageHeight - trimTop - trimBottom;
+
                     const scale = Math.min(
-                        MAX_WIDTH / windowWidth, //TODO: do I need to consider window.devicePixelRatio like google mentioned?
-                        MAX_HEIGHT / windowHeight,
-                        1 // Prevent upscaling smaller videos
+                        MAX_WIDTH / sourceWidth,
+                        MAX_HEIGHT / sourceHeight,
+                        1 // Prevent upscaling smaller images
                     );
 
-                    const screenshotWidth = Math.round(windowWidth * scale); //TODO: do I need to consider window.devicePixelRatio like google mentioned?
-                    const screenshotHeight = Math.round(windowHeight * scale);
+                    const screenshotWidth = Math.round(sourceWidth * scale);
+                    const screenshotHeight = Math.round(sourceHeight * scale);
 
-                    if (!pluginOffscreenCanvasFirefox || previousPluginScreenshotMaxWidthFirefox !== MAX_WIDTH || previousPluginScreenshotMaxHeightFirefox !== MAX_HEIGHT) {
+                    if (
+                        !pluginOffscreenCanvasFirefox ||
+                        pluginOffscreenCanvasFirefox.width !== screenshotWidth ||
+                        pluginOffscreenCanvasFirefox.height !== screenshotHeight
+                    ) {
                         createPluginOffscreenCanvasFirefox(screenshotWidth, screenshotHeight);
                     }
 
                     previousPluginScreenshotMaxWidthFirefox = MAX_WIDTH;
                     previousPluginScreenshotMaxHeightFirefox = MAX_HEIGHT;
 
-                    pluginCTXFirefox.drawImage(imageBitmap, 0, 0, screenshotWidth, screenshotHeight); //TODO: add trim options
+                    pluginCTXFirefox.drawImage(
+                        imageBitmap,
+                        sourceX,
+                        sourceY,
+                        sourceWidth,
+                        sourceHeight,
+                        0,
+                        0,
+                        screenshotWidth,
+                        screenshotHeight
+                    );
 
                     imageBitmap.close();
 
-                    const finalBlob = await pluginOffscreenCanvasFirefox.convertToBlob({ type: 'image/jpeg', quality: 0.80 });
+                    const finalBlob = await pluginOffscreenCanvasFirefox.convertToBlob({
+                        type: "image/jpeg",
+                        quality: 0.9
+                    });
 
                     if (signal.aborted) return;
 
