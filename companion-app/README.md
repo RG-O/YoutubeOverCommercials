@@ -4,7 +4,7 @@
 
 This is a lightweight Python app that runs in the system tray and provides a local server (on `localhost:64143`) for the browser extension to communicate with.
 
-New! You can now alternatively install a version of this application that comes bundled with the Plugin Party Pack. Check that out [here](/companion-app-plugin-party-pack-combo) or stay on this page for just the Advanced Logo Analyzer.
+NEW! You can now alternatively install a version of this application that comes bundled with the Plugin Party Pack. Check that out [here](/companion-app-plugin-party-pack-combo) or stay on this page for just the lightweight Advanced Logo Analyzer.
 
 ## Features
 

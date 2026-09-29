@@ -249,7 +249,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                     if (blob && pluginWSScript) {
                         ws.sendMessageToWSPlugins(blob);
                     }
-                }, "image/jpeg", 0.8);
+                }, "image/jpeg", 0.85);
 
             } else {
 

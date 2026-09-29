@@ -46,14 +46,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
                     chrome.storage.sync.get(['shouldDisplaySpotifyLyrics'], (result) => {
 
-                        let shouldDisplaySpotifyLyrics = result.shouldDisplaySpotifyLyrics ?? true;
+                        const extensionConfig = {
+                            shouldDisplaySpotifyLyrics: result.shouldDisplaySpotifyLyrics ?? true,
+                            isDebugMode: message.isDebugMode ?? false,
+                            isFirefox: message.isFirefox ?? false,
+                        };
 
                         chrome.scripting.executeScript({
                             target: { tabId: tab.id, frameIds: [0] },
-                            func: (shouldDisplaySpotifyLyrics) => {
-                                window.__extensionConfig = { shouldDisplaySpotifyLyrics };
+                            func: (config) => {
+                                window.__extensionConfig = config;
                             },
-                            args: [shouldDisplaySpotifyLyrics],
+                            args: [extensionConfig],
                         })
                             .then(() => {
                                 chrome.scripting.executeScript({

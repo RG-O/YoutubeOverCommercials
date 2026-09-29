@@ -57,10 +57,9 @@ var havePluginsBeenInitiated = false;
 var pluginScreenshotOptions;
 var shouldSendScreenshotsToTriggerPlugin = false;
 var previousPluginScreenshotFrequencyMilliseconds;
-var pluginScreenshotIntervalID; //TODO: rename to include chrome
+var currentPluginScreenshotsAbortController = null;
 var previousPluginScreenshotMaxWidthFirefox;
 var previousPluginScreenshotMaxHeightFirefox;
-var currentAbortController = null; //TODO: rename
 var pluginOffscreenCanvasFirefox;
 var pluginCTXFirefox;
 
@@ -439,7 +438,11 @@ function potentiallyIntrusiveSetup() {
 
     if (overlayVideoType === 'spotify') {
         setTimeout(() => {
-            chrome.runtime.sendMessage({ action: "open_spotify" });
+            chrome.runtime.sendMessage({
+                action: "open_spotify",
+                isDebugMode: isDebugMode,
+                isFirefox: isFirefox,
+            });
             window.addEventListener('beforeunload', closeSpotify);
         }, spotifyDelay);
         //note: pluginInitiation() called later when spotify mode used
@@ -680,34 +683,14 @@ function sendMessageToPlugins(type) {
 }
 
 
-function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
-    if (isFirefox) {
-        sendScreenshotsToTriggerPluginLoopFirefox(pluginScreenshotOptions);
-    } else {
-        sendScreenshotsToTriggerPluginLoopChrome(pluginScreenshotOptions);
-    }
-}
-
-
-function sendScreenshotsToTriggerPluginLoopChrome(pluginScreenshotOptions) {
-    pluginScreenshotIntervalID = setInterval(() => {
-        chrome.runtime.sendMessage({
-            target: "offscreen",
-            action: "capture-screenshot-plugin",
-            options: pluginScreenshotOptions,
-        });
-    }, pluginScreenshotOptions.frequencyMilliseconds);
-}
-
-
-async function sendScreenshotsToTriggerPluginLoopFirefox(pluginScreenshotOptions) {
-    if (currentAbortController) {
-        currentAbortController.abort();
+async function sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions) {
+    if (currentPluginScreenshotsAbortController) {
+        currentPluginScreenshotsAbortController.abort();
         console.log("Previous plugin screenshots loop forcefully overruled.");
     }
 
     const controller = new AbortController();
-    currentAbortController = controller;
+    currentPluginScreenshotsAbortController = controller;
     const { signal } = controller;
 
     try {
@@ -715,48 +698,91 @@ async function sendScreenshotsToTriggerPluginLoopFirefox(pluginScreenshotOptions
             const startTime = performance.now();
 
             try {
-                const response = await chrome.runtime.sendMessage({ action: "firefox-capture-screenshot-plugin" });
-                if (response.error) throw new Error(response.error);
+                if (isFirefox) {
+                    const response = await chrome.runtime.sendMessage({ action: "firefox-capture-screenshot-plugin" });
+                    if (response.error) throw new Error(response.error);
 
-                if (signal.aborted) return;
+                    if (signal.aborted) return;
 
-                const res = await fetch(response.imgSrc);
-                const blob = await res.blob();
-                const imageBitmap = await createImageBitmap(blob);
+                    const res = await fetch(response.imgSrc);
+                    const blob = await res.blob();
+                    const imageBitmap = await createImageBitmap(blob);
 
-                if (signal.aborted) {
+                    if (signal.aborted) {
+                        imageBitmap.close();
+                        return;
+                    }
+
+                    const trimTopPercent = pluginScreenshotOptions.trimOptionsPercentages.top ?? 0;
+                    const trimRightPercent = pluginScreenshotOptions.trimOptionsPercentages.right ?? 0;
+                    const trimBottomPercent = pluginScreenshotOptions.trimOptionsPercentages.bottom ?? 0;
+                    const trimLeftPercent = pluginScreenshotOptions.trimOptionsPercentages.left ?? 0;
+
+                    const MAX_WIDTH = pluginScreenshotOptions.maxDimensionsPixels.width ?? 500;
+                    const MAX_HEIGHT = pluginScreenshotOptions.maxDimensionsPixels.height ?? 300;
+
+                    const imageWidth = imageBitmap.width;
+                    const imageHeight = imageBitmap.height;
+
+                    const trimTop = imageHeight * (trimTopPercent / 100);
+                    const trimRight = imageWidth * (trimRightPercent / 100);
+                    const trimBottom = imageHeight * (trimBottomPercent / 100);
+                    const trimLeft = imageWidth * (trimLeftPercent / 100);
+
+                    const sourceX = trimLeft;
+                    const sourceY = trimTop;
+                    const sourceWidth = imageWidth - trimLeft - trimRight;
+                    const sourceHeight = imageHeight - trimTop - trimBottom;
+
+                    const scale = Math.min(
+                        MAX_WIDTH / sourceWidth,
+                        MAX_HEIGHT / sourceHeight,
+                        1 // Prevent upscaling smaller images
+                    );
+
+                    const screenshotWidth = Math.round(sourceWidth * scale);
+                    const screenshotHeight = Math.round(sourceHeight * scale);
+
+                    if (
+                        !pluginOffscreenCanvasFirefox ||
+                        pluginOffscreenCanvasFirefox.width !== screenshotWidth ||
+                        pluginOffscreenCanvasFirefox.height !== screenshotHeight
+                    ) {
+                        createPluginOffscreenCanvasFirefox(screenshotWidth, screenshotHeight);
+                    }
+
+                    previousPluginScreenshotMaxWidthFirefox = MAX_WIDTH;
+                    previousPluginScreenshotMaxHeightFirefox = MAX_HEIGHT;
+
+                    pluginCTXFirefox.drawImage(
+                        imageBitmap,
+                        sourceX,
+                        sourceY,
+                        sourceWidth,
+                        sourceHeight,
+                        0,
+                        0,
+                        screenshotWidth,
+                        screenshotHeight
+                    );
+
                     imageBitmap.close();
-                    return;
+
+                    const finalBlob = await pluginOffscreenCanvasFirefox.convertToBlob({
+                        type: "image/jpeg",
+                        quality: 0.9
+                    });
+
+                    if (signal.aborted) return;
+
+                    ws.sendMessageToWSPlugins(finalBlob);
+                } else {
+                    chrome.runtime.sendMessage({
+                        target: "offscreen",
+                        action: "capture-screenshot-plugin",
+                        options: pluginScreenshotOptions,
+                    });
                 }
-
-                const MAX_WIDTH = pluginScreenshotOptions.maxDimensionsPixels.width ?? 500;
-                const MAX_HEIGHT = pluginScreenshotOptions.maxDimensionsPixels.height ?? 300;
-
-                const scale = Math.min(
-                    MAX_WIDTH / windowWidth, //TODO: do I need to consider window.devicePixelRatio like google mentioned?
-                    MAX_HEIGHT / windowHeight,
-                    1 // Prevent upscaling smaller videos
-                );
-
-                const screenshotWidth = Math.round(windowWidth * scale); //TODO: do I need to consider window.devicePixelRatio like google mentioned?
-                const screenshotHeight = Math.round(windowHeight * scale);
-
-                if (!pluginOffscreenCanvasFirefox || previousPluginScreenshotMaxWidthFirefox !== MAX_WIDTH || previousPluginScreenshotMaxHeightFirefox !== MAX_HEIGHT) {
-                    createPluginOffscreenCanvasFirefox(screenshotWidth, screenshotHeight);
-                }
-
-                previousPluginScreenshotMaxWidthFirefox = MAX_WIDTH;
-                previousPluginScreenshotMaxHeightFirefox = MAX_HEIGHT;
-
-                pluginCTXFirefox.drawImage(imageBitmap, 0, 0, screenshotWidth, screenshotHeight); //TODO: add trim options
-
-                imageBitmap.close();
-
-                const finalBlob = await pluginOffscreenCanvasFirefox.convertToBlob({ type: 'image/jpeg', quality: 0.80 });
-
-                if (signal.aborted) return;
-
-                ws.sendMessageToWSPlugins(finalBlob);
             } catch (err) {
                 console.error("Plugin screenshots loop error:", err);
             }
@@ -783,8 +809,8 @@ async function sendScreenshotsToTriggerPluginLoopFirefox(pluginScreenshotOptions
     } catch (err) {
         if (err.name !== 'AbortError') console.error("Plugin screenshots loop fatal error:", err);
     } finally {
-        if (currentAbortController === controller) {
-            currentAbortController = null;
+        if (currentPluginScreenshotsAbortController === controller) {
+            currentPluginScreenshotsAbortController = null;
         }
     }
 }
@@ -797,13 +823,9 @@ function createPluginOffscreenCanvasFirefox(width, height) {
 
 
 function stopScreenshotsToTriggerPluginLoop() {
-    if (isFirefox) {
-        if (currentAbortController) {
-            currentAbortController.abort();
-            currentAbortController = null;
-        }
-    } else {
-        clearInterval(pluginScreenshotIntervalID); //TODO: is it fine to run this even if not set?
+    if (currentPluginScreenshotsAbortController) {
+        currentPluginScreenshotsAbortController.abort();
+        currentPluginScreenshotsAbortController = null;
     }
 }
 
@@ -3386,7 +3408,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
                             setTimeout(() => {
                                 sendScreenshotsToTriggerPluginLoop(pluginScreenshotOptions);
                                 previousPluginScreenshotFrequencyMilliseconds = pluginScreenshotOptions.frequencyMilliseconds ?? 1000;
-                            }, previousPluginScreenshotFrequencyMilliseconds);
+                            }, Math.max(previousPluginScreenshotFrequencyMilliseconds, 500)); //note: waiting at least a half sec for startViewingTab to start from resumeAutoMode, in case plugin calls this on fullscreen resume
                         } else {
                             addMessageAlertToMainVideo("Plugin requested screenshot settings update but video must be in fullscreen for screenshots to send.");
                             //TODO: add wait for fullscreen here
