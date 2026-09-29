@@ -3,6 +3,9 @@ var constraints;
 var media;
 var videoElement;
 var canvas;
+var pluginCanvas;
+var previousPluginScreenshotMaxWidth = 0;
+var previousPluginScreenshotMaxHeight = 0;
 var ctx;
 var viewing = false;
 var audioContext;
@@ -77,6 +80,14 @@ function createCanvas(width, height) {
     //canvas.width = 30; //debug-high
     //canvas.height = 30; //debug-high
     ctx = canvas.getContext('2d', { willReadFrequently: true });
+}
+
+
+function createPluginCanvas(width, height) {
+    pluginCanvas = document.createElement('canvas');
+    pluginCanvas.width = width;
+    pluginCanvas.height = height;
+    ctx = pluginCanvas.getContext('2d', { willReadFrequently: true });
 }
 
 
@@ -173,6 +184,79 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             let audioLevel = Math.round(averageVolume * 100 / 127);
 
             sendResponse({ audioLevel: audioLevel });
+
+        } else if (message.action == 'capture-screenshot-plugin') {
+
+            if (viewing) {
+                const trimTopPercent = message.options.trimOptionsPercentages.top ?? 0;
+                const trimRightPercent = message.options.trimOptionsPercentages.right ?? 0;
+                const trimBottomPercent = message.options.trimOptionsPercentages.bottom ?? 0;
+                const trimLeftPercent = message.options.trimOptionsPercentages.left ?? 0;
+
+                const MAX_WIDTH = message.options.maxDimensionsPixels.width ?? 500;
+                const MAX_HEIGHT = message.options.maxDimensionsPixels.height ?? 300;
+
+                const videoWidth = videoElement.videoWidth;
+                const videoHeight = videoElement.videoHeight;
+
+                // Calculate how many pixels to trim from each side
+                const trimTop = videoHeight * (trimTopPercent / 100);
+                const trimRight = videoWidth * (trimRightPercent / 100);
+                const trimBottom = videoHeight * (trimBottomPercent / 100);
+                const trimLeft = videoWidth * (trimLeftPercent / 100);
+
+                // Calculate the source area AFTER trimming
+                const sourceX = trimLeft;
+                const sourceY = trimTop;
+                const sourceWidth = videoWidth - trimLeft - trimRight;
+                const sourceHeight = videoHeight - trimTop - trimBottom;
+
+                // Scale the trimmed image to fit within the maximum dimensions
+                const scale = Math.min(
+                    MAX_WIDTH / sourceWidth,
+                    MAX_HEIGHT / sourceHeight,
+                    1 // Prevent upscaling smaller images
+                );
+
+                const screenshotWidth = Math.round(sourceWidth * scale);
+                const screenshotHeight = Math.round(sourceHeight * scale);
+
+                if (
+                    !pluginCanvas ||
+                    pluginCanvas.width !== screenshotWidth ||
+                    pluginCanvas.height !== screenshotHeight
+                ) {
+                    createPluginCanvas(screenshotWidth, screenshotHeight);
+                }
+
+                previousPluginScreenshotMaxWidth = MAX_WIDTH;
+                previousPluginScreenshotMaxHeight = MAX_HEIGHT;
+
+                // Draw only the trimmed portion of the video
+                ctx.drawImage(
+                    videoElement,
+                    sourceX,
+                    sourceY,
+                    sourceWidth,
+                    sourceHeight,
+                    0,
+                    0,
+                    screenshotWidth,
+                    screenshotHeight
+                );
+
+                pluginCanvas.toBlob((blob) => {
+                    if (blob && pluginWSScript) {
+                        ws.sendMessageToWSPlugins(blob);
+                    }
+                }, "image/jpeg", 0.85);
+
+            } else {
+
+                //startViewing(constraints);
+                //TODO: something
+
+            }
 
         }
     }

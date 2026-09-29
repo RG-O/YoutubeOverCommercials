@@ -2,9 +2,20 @@
 var playButton;
 var nextButton;
 var nowPlayingWidget;
+var lyricsBox;
 var hasFirstSongPlayed = false;
 var isInitialSetupComplete = false;
+var extensionInitConfig = window.__extensionConfig ?? {};
+var isDebugMode = extensionInitConfig.isDebugMode ?? false;
+var shouldDisplayLyrics = extensionInitConfig.shouldDisplaySpotifyLyrics ?? false;
+var isFirefox = extensionInitConfig.isFirefox ?? false;
+var currentLyric;
 
+if (isDebugMode) {
+    console.log("isDebugMode = " + isDebugMode);
+    console.log("isFirefox = " + isFirefox);
+    console.log("shouldDisplayLyrics = " + shouldDisplayLyrics);
+}
 
 //run initialSetup() as soon as DOM is loaded
 if (document.readyState === 'loading') {
@@ -27,7 +38,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             play();
             hasFirstSongPlayed = true;
         }
-        
     }
 });
 
@@ -57,7 +67,8 @@ function play() {
 
         }
 
-        shipNowPlaying();
+        let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+        shipTextToContent(text);
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
 
@@ -71,7 +82,7 @@ function next() {
         //note: only need to hit next button because as of 10/29/24 spotify automatically starts playing after next button is clicked
         nextButton.click();
 
-        //note: don't need to run shipNowPlaying() because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
+        //note: don't need to run shipTextToContent(text) because nowPlayingWidgetObserver() will detect that the song changed and send the song/artist
 
     } else if (playButton != null) {
 
@@ -82,7 +93,8 @@ function next() {
 
         }
 
-        shipNowPlaying();
+        let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+        shipTextToContent(text);
 
     } //TODO: add else here to close spotify and then show an error on the main tab saying there was and issue and to refresh
 
@@ -122,7 +134,8 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
     const observer = new MutationObserver((mutationsList) => {
         for (let mutation of mutationsList) {
             if (mutation.type === 'attributes' && mutation.attributeName === 'aria-label') {
-                shipNowPlaying();
+                let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+                shipTextToContent(text);
             }
         }
     });
@@ -134,9 +147,62 @@ function nowPlayingWidgetObserver(nowPlayingWidget) {
 }
 
 
-function shipNowPlaying() {
+const processedLyricElements = new WeakSet();
 
-    let text = nowPlayingWidget.ariaLabel ?? 'Playing Spotify';
+function matchesComputedStyle(element) {
+    return isFirefox
+        ? getComputedStyle(element).color === 'rgb(255, 255, 255)'
+        : getComputedStyle(element).viewTimeline === '--scroll-to-viewport-button-anim'; //TODO: which one is more dependable?
+}
+
+function checkElement(element) {
+    if (!(element instanceof Element)) return;
+
+    // Only consider this exact element.
+    if (!element.matches('[data-testid="lyrics-line"]')) return;
+    if (!matchesComputedStyle(element)) return;
+    if (processedLyricElements.has(element)) return;
+
+    processedLyricElements.add(element);
+
+    const lyric = element.innerText?.trim();
+
+    if (lyric && lyric !== currentLyric) {
+        currentLyric = lyric;
+        shipTextToContent(lyric);
+    }
+}
+
+function lyricsObserver(containerWithLyrics) {
+    const observer = new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+            if (mutation.type === 'attributes') {
+                checkElement(mutation.target);
+            }
+
+            if (mutation.type === 'childList') {
+                mutation.addedNodes.forEach(node => {
+                    if (node instanceof Element) {
+                        checkElement(node);
+                    }
+                });
+            }
+        }
+    });
+
+    observer.observe(containerWithLyrics, {
+        attributes: true,
+        attributeFilter: ['class', 'style'],
+        childList: true,
+        subtree: true,
+    });
+
+    // Check anything that already exists before the observer started.
+    checkElement(containerWithLyrics);
+}
+
+
+function shipTextToContent(text) {
 
     chrome.runtime.sendMessage({
         action: "background_update_logo_text",
@@ -194,6 +260,36 @@ function initialSetup() {
 
                             nowPlayingWidget = document.querySelector('[data-testid="now-playing-widget"]');
                             nowPlayingWidgetObserver(nowPlayingWidget);
+
+                        }
+
+                        if (shouldDisplayLyrics) {
+
+                            const lyricsButton = document.querySelector('[data-testid="lyrics-button"]');
+                            if (lyricsButton) {
+
+                                lyricsButton.click();
+
+                                //waiting briefly for lyrics preview to go away and full lyrics page to display //TODO: have this more exact
+                                setTimeout(() => {
+
+                                    //TODO: get it to work for scenario where first song doesn't have lyrics but second one does
+                                    //TODO: add a specific amount of time to give up on this
+                                    waitForElement('[data-testid="lyrics-line"]').then((firstLyricsLine) => {
+                                        const containerWithLyrics = firstLyricsLine.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement.parentElement; //TODO: Find something more stable to grab onto or just grab whole page?
+                                        if (isDebugMode) console.log(containerWithLyrics);
+                                        if (containerWithLyrics) {
+                                            lyricsObserver(containerWithLyrics);
+                                        } else {
+                                            shipTextToContent('Error getting lyrics from spotify');
+                                        }
+                                    });
+
+                                }, 4000);
+
+                            } else {
+                                shipTextToContent('Error getting lyrics from spotify');
+                            }
 
                         }
 

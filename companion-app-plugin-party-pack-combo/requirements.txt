@@ -1,0 +1,16 @@
+websockets
+Flask
+numpy
+opencv-python
+Pillow
+pystray
+ollama
+aiohttp
+mediapipe
+pygrabber
+sounddevice
+vosk
+pycaw
+pywin32
+requests
+PyInstaller

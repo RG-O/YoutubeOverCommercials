@@ -9,14 +9,15 @@ import base64
 import platform
 import aiohttp
 
+from pygrabber.dshow_graph import FilterGraph
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import mediapipe as mp
 
 PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-PLUGIN_NAME = "Thumbs Down Commercials"
-PLUGIN_ID = "my-trigger-plugin-ws" # Must be unique
+PLUGIN_NAME = "Peace Out Commercials"
+PLUGIN_ID = "gesture-trigger-plugin"
 PLUGIN_VERSION = "1.1.0"
 
 # --------------------------------------------------
@@ -38,9 +39,9 @@ CAMERA_INDEX = 0
 MIRROR_CAMERA = True
 
 # default values
-COMMERCIAL_GESTURE = "Thumb_Down"
+COMMERCIAL_GESTURE = "Victory"
 CONTENT_GESTURE = "ILoveYou"
-COMMERCIAL_GESTURE_COUNT = 2
+COMMERCIAL_GESTURE_COUNT = 1
 CONTENT_GESTURE_COUNT = 1
 TOTAL_HANDS_PROCESSED = 4
 
@@ -71,7 +72,11 @@ THRESHOLDS = [
 
 CAMERA_RESOLUTION = "native"
 
-VISIBILITY_THRESHOLD = 0.50
+# Sensitivity scale: 1 = less sensitive, 5 = more sensitive.
+# A value of 3 uses THRESHOLDS exactly as defined above.
+COMMERCIAL_SENSITIVITY = 3
+CONTENT_SENSITIVITY = 3
+
 COOLDOWN = 1.0
 
 SNAPSHOT_MAX_WIDTH = 400
@@ -192,24 +197,57 @@ def get_video_capture_backend():
 
 
 def get_available_cameras(max_index=10):
-    """Return camera options OpenCV can successfully open."""
+    """
+    Return available cameras for the manifest.
+
+    On Windows, pygrabber is used to get each camera's DirectShow-friendly
+    device name. The stored value remains the numeric camera index expected
+    by OpenCV.
+    """
     cameras = []
+
+    if platform.system() == "Windows":
+        try:
+            graph = FilterGraph()
+            camera_names = graph.get_input_devices()
+
+            for index, name in enumerate(camera_names):
+                cameras.append({
+                    "label": f"{name} (Camera {index})",
+                    "value": str(index),
+                })
+
+            if cameras:
+                return cameras
+
+        except Exception as error:
+            print(f"Could not get camera names with pygrabber: {error}")
+
+    # Fallback for non-Windows systems or if pygrabber enumeration fails.
     backend = get_video_capture_backend()
 
     for index in range(max_index):
         cap = cv2.VideoCapture(index, backend)
-        if cap.isOpened():
-            success, _ = cap.read()
-            if success:
-                cameras.append({
-                    "label": f"Camera {index}",
-                    "value": str(index),
-                })
-        cap.release()
+
+        try:
+            if cap.isOpened():
+                success, _ = cap.read()
+
+                if success:
+                    cameras.append({
+                        "label": f"Camera {index}",
+                        "value": str(index),
+                    })
+
+        finally:
+            cap.release()
 
     # Always provide a usable option even if probing is blocked by another app.
     if not cameras:
-        cameras.append({"label": "Camera 0", "value": "0"})
+        cameras.append({
+            "label": "Camera 0",
+            "value": "0",
+        })
 
     return cameras
 
@@ -222,7 +260,8 @@ def apply_plugin_preferences(preferences):
     global CONTENT_GESTURE
     global COMMERCIAL_GESTURE_COUNT
     global CONTENT_GESTURE_COUNT
-    global VISIBILITY_THRESHOLD
+    global COMMERCIAL_SENSITIVITY
+    global CONTENT_SENSITIVITY
     global COOLDOWN
     global TOTAL_HANDS_PROCESSED
 
@@ -299,16 +338,28 @@ def apply_plugin_preferences(preferences):
         print("Invalid totalHandsProcessed preference")
 
     try:
-        VISIBILITY_THRESHOLD = float(clamp(
-            float(preferences.get(
-                "minimumGestureConfidence",
-                VISIBILITY_THRESHOLD,
+        COMMERCIAL_SENSITIVITY = int(clamp(
+            int(preferences.get(
+                "commercialSensitivity",
+                COMMERCIAL_SENSITIVITY,
             )),
-            0.0,
-            1.0,
+            1,
+            5,
         ))
     except (TypeError, ValueError):
-        print("Invalid minimumGestureConfidence preference")
+        print("Invalid commercialSensitivity preference")
+
+    try:
+        CONTENT_SENSITIVITY = int(clamp(
+            int(preferences.get(
+                "contentSensitivity",
+                CONTENT_SENSITIVITY,
+            )),
+            1,
+            5,
+        ))
+    except (TypeError, ValueError):
+        print("Invalid contentSensitivity preference")
 
     try:
         COOLDOWN = float(clamp(
@@ -330,7 +381,8 @@ def apply_plugin_preferences(preferences):
             "commercialGestureCount": COMMERCIAL_GESTURE_COUNT,
             "contentGesture": CONTENT_GESTURE,
             "contentGestureCount": CONTENT_GESTURE_COUNT,
-            "minimumGestureConfidence": VISIBILITY_THRESHOLD,
+            "commercialSensitivity": COMMERCIAL_SENSITIVITY,
+            "contentSensitivity": CONTENT_SENSITIVITY,
             "cooldownSeconds": COOLDOWN,
         },
     )
@@ -473,10 +525,42 @@ def frame_to_base64(frame, max_width=SNAPSHOT_MAX_WIDTH, max_height=SNAPSHOT_MAX
 def find_gesture_config(gesture_name):
     return TARGET_GESTURES.get(gesture_name)
 
-def passes_threshold(confidence, duration):
-    for min_confidence, min_duration in THRESHOLDS:
+def get_sensitivity_thresholds(sensitivity):
+    """
+    Shift only the confidence values in THRESHOLDS.
+
+    Sensitivity 1 is the least sensitive, 5 is the most sensitive,
+    and 3 reproduces THRESHOLDS exactly. Timing values are never changed.
+    """
+    sensitivity = int(clamp(sensitivity, 1, 5))
+
+    if sensitivity < 3:
+        # 1 -> +0.09, 2 -> +0.045
+        confidence_shift = (3 - sensitivity) * 0.045
+    else:
+        # 3 -> 0.00, 4 -> -0.04, 5 -> -0.08
+        confidence_shift = -(sensitivity - 3) * 0.04
+
+    return [
+        (
+            float(clamp(min_confidence + confidence_shift, 0.01, 0.99)),
+            min_duration,
+        )
+        for min_confidence, min_duration in THRESHOLDS
+    ]
+
+def get_gesture_sensitivity(config):
+    if config["action"] == "commercial":
+        return COMMERCIAL_SENSITIVITY
+
+    return CONTENT_SENSITIVITY
+
+
+def passes_threshold(confidence, duration, sensitivity):
+    for min_confidence, min_duration in get_sensitivity_thresholds(sensitivity):
         if confidence >= min_confidence and duration >= min_duration:
             return True
+
     return False
 
 # --------------------------------------------------
@@ -544,7 +628,6 @@ async def process_gesture_group(ws, gesture_name, hands, now, frame):
     matching_hands = [
         hand for hand in hands
         if hand["gesture_name"] == gesture_name
-        and hand["confidence"] >= VISIBILITY_THRESHOLD
     ]
 
     current_count = len(matching_hands)
@@ -620,7 +703,9 @@ async def process_gesture_group(ws, gesture_name, hands, now, frame):
     if now - state["last_trigger_time"] < COOLDOWN:
         return
 
-    if passes_threshold(avg_confidence, duration):
+    sensitivity = get_gesture_sensitivity(config)
+
+    if passes_threshold(avg_confidence, duration, sensitivity):
         did_trigger = await handle_trigger(
             ws,
             gesture_name,
@@ -919,7 +1004,7 @@ async def handle_message(ws, msg):
             )
         )
 
-        custom_trigger_plugin_preferences = general_preferences.get("pluginTriggerPreferences", {}).get("preferences", {})
+        custom_trigger_plugin_preferences = general_preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
         apply_plugin_preferences(custom_trigger_plugin_preferences)
 
         current_is_commercial = data.get("isCommercialState")
@@ -1043,14 +1128,14 @@ async def send_manifest(ws):
                     "Use configurable MediaPipe hand gestures to switch "
                     "between commercial and content states."
                 ),
-                "primaryColor": "#12384d",
-                "secondaryColor": "#dadcdc",
+                "primaryColor": "#2a5ac0",
+                "secondaryColor": "#FFDE34", ##FFDE34 ##FFCC22
                 "capabilities": ["detection"],
                 "preferences": [
                     {
                         "key": "cameraIndex",
                         "label": "Camera",
-                        "description": "Camera used for gesture recognition.",
+                        "tooltip": "Camera used for gesture recognition.",
                         "type": "select",
                         "options": camera_options,
                         "default": default_camera,
@@ -1058,58 +1143,92 @@ async def send_manifest(ws):
                     {
                         "key": "commercialGesture",
                         "label": "Commercial Gesture",
-                        "description": (
+                        "tooltip": (
                             "Gesture that changes the stream state to commercial."
                         ),
                         "type": "select",
                         "options": gesture_options,
-                        "default": "Thumb_Down",
+                        "default": COMMERCIAL_GESTURE,
+                    },
+                    {
+                        "key": "commercialSensitivity",
+                        "label": "Commercial Gesture Sensitivity",
+                        "tooltip": (
+                            "How sensitive commercial gesture detection should be. "
+                            "1 is least sensitive, 5 is most sensitive."
+                        ),
+                        "type": "select",
+                        "options": [
+                            {"label": "1 - Least Sensitive", "value": "1"},
+                            {"label": "2", "value": "2"},
+                            {"label": "3 - Default", "value": "3"},
+                            {"label": "4", "value": "4"},
+                            {"label": "5 - Most Sensitive", "value": "5"},
+                        ],
+                        "default": "3",
                     },
                     {
                         "key": "commercialGestureCount",
                         "label": "Commercial Gesture Count",
-                        "description": (
+                        "tooltip": (
                             "Number of matching hands required to trigger commercial (1-5)."
                         ),
                         "type": "number",
-                        "default": 2,
+                        "default": COMMERCIAL_GESTURE_COUNT,
                         "min": 1,
                         "max": 4,
                     },
                     {
                         "key": "contentGesture",
                         "label": "Content Gesture",
-                        "description": (
+                        "tooltip": (
                             "Gesture that changes the stream state back to content."
                         ),
                         "type": "select",
                         "options": gesture_options,
-                        "default": "Thumb_Up",
+                        "default": CONTENT_GESTURE,
+                    },
+                    {
+                        "key": "contentSensitivity",
+                        "label": "Content Gesture Sensitivity",
+                        "tooltip": (
+                            "How sensitive content gesture detection should be. "
+                            "1 is least sensitive, 5 is most sensitive."
+                        ),
+                        "type": "select",
+                        "options": [
+                            {"label": "1 - Least Sensitive", "value": "1"},
+                            {"label": "2", "value": "2"},
+                            {"label": "3 - Default", "value": "3"},
+                            {"label": "4", "value": "4"},
+                            {"label": "5 - Most Sensitive", "value": "5"},
+                        ],
+                        "default": "3",
                     },
                     {
                         "key": "contentGestureCount",
                         "label": "Content Gesture Count",
-                        "description": (
+                        "tooltip": (
                             "Number of matching hands required to trigger content (1-5)."
                         ),
                         "type": "number",
-                        "default": 2,
+                        "default": CONTENT_GESTURE_COUNT,
                         "min": 1,
                         "max": 4,
                     },
                     {
                         "key": "totalHandsProcessed",
                         "label": "Total Hands Processed",
-                        "description": (
+                        "tooltip": (
                             "Total number of hands the model will recognize at a time (Recommended use less if can. Use more for crowded room.)."
                         ),
                         "type": "number",
-                        "default": 4,
+                        "default": TOTAL_HANDS_PROCESSED,
                     },
                     {
                         "key": "cameraResolution",
                         "label": "Camera Resolution",
-                        "description": "Resolution used when capturing frames for gesture recognition.",
+                        "tooltip": "Resolution used when capturing frames for gesture recognition.",
                         "type": "select",
                         "options": [
                             {
@@ -1125,39 +1244,26 @@ async def send_manifest(ws):
                                 "value": "1280x720"
                             }
                         ],
-                        "default": "native"
+                        "default": CAMERA_RESOLUTION
                     },
                     {
                         "key": "mirrorCamera",
                         "label": "Mirror Camera",
-                        "description": (
+                        "tooltip": (
                             "Flip the camera horizontally like a selfie preview."
                         ),
                         "type": "checkbox",
-                        "default": True,
-                    },
-                    {
-                        "key": "minimumGestureConfidence",
-                        "label": "Minimum Gesture Confidence",
-                        "description": (
-                            "Ignore recognized gestures below this confidence, "
-                            "from 0.0 to 1.0."
-                        ),
-                        "type": "number",
-                        "default": 0.5,
-                        "min": 0.0,
-                        "max": 1.0,
-                        "step": 0.05,
+                        "default": MIRROR_CAMERA,
                     },
                     {
                         "key": "cooldownSeconds",
                         "label": "Trigger Cooldown (Seconds)",
-                        "description": (
+                        "tooltip": (
                             "Minimum delay before the same gesture group can "
                             "trigger again."
                         ),
                         "type": "number",
-                        "default": 1.0,
+                        "default": COOLDOWN,
                         "min": 0.0,
                         "max": 10.0,
                         "step": 0.1,

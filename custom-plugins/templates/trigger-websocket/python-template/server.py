@@ -20,8 +20,12 @@ async def handle_client(websocket):
 
     try:
         async for message in websocket:
-            msg = json.loads(message)
-            await handle_message(websocket, msg)
+            if isinstance(message, bytes):
+                await handle_screenshot(websocket, message)
+            
+            else:
+                msg = json.loads(message)
+                await handle_message(websocket, msg)
 
     except websockets.exceptions.ConnectionClosed:
         pass
@@ -32,7 +36,7 @@ async def handle_client(websocket):
 async def handle_message(ws, msg):
     message_type = msg["type"]
     preferences = msg["data"]["preferences"]
-    custom_trigger_plugin_preferences = preferences.get("pluginTriggerPreferences", {}).get("preferences", {}) # First time plugin users might not have this when they call for manifest
+    custom_trigger_plugin_preferences = preferences.get("pluginPreferencesById", {}).get(PLUGIN_ID, {}).get("preferences", {})
 
     if message_type == "plugin_manifest":
         print("Plugin Manifest Requested. Sending Manifest.")
@@ -50,7 +54,10 @@ async def handle_message(ws, msg):
         # Send initial message
         print("Returning connected status")
         await send_status(ws, PLUGIN_NAME + " connected!", PLUGIN_NAME + " ready")
-
+        
+        #print("Requesting extension starts sending screenshots")
+        #await request_screenshots(ws) # Call if plugin relies on analyzing screenshots of user's browser
+        
         # Start detection loop
         asyncio.create_task(demo_loop(ws))
 
@@ -67,7 +74,10 @@ async def handle_message(ws, msg):
         is_fullscreen = msg["data"]["isFullscreen"]
 
         print("Fullscreen state changed on browser. is_fullscreen = ", is_fullscreen)
-
+        
+async def handle_screenshot(ws, screenshot_bytes):
+    print(f"Received screenshot as JPEG: {len(screenshot_bytes)} bytes")
+    
 async def demo_loop(ws):
     is_commercial = False
 
@@ -133,6 +143,31 @@ async def send_status(ws, display, debug):
         }))
     except websockets.exceptions.ConnectionClosed:
         print("send_status send stopped: client disconnected")
+        
+async def request_screenshots(ws):
+    try:
+        await ws.send(json.dumps({
+            "type": "request_screenshots",
+            "timestamp": time.time(),
+            "pluginProtocolVersion": PLUGIN_PROTOCOL_VERSION,
+            "data": {
+                "shouldSendScreenshots": True, # Set to false if need to stop for whatever reason later
+                "frequencyMilliseconds": 1000, # Ask extension to take and send screenshot every X seconds
+                "maxDimensionsPixels": {
+                    "height": 480, 
+                    "width": 854,
+                }, # Will shrink screenshot size while keeping aspect ratio. Do not send to get native size.
+                "trimOptionsPercentages": {
+                    "top": 0, 
+                    "right": 0,
+                    "bottom": 0,
+                    "left": 0,
+                }, # Will keep portion of screen out of screenshot. Do not send or leave at zeros to not trim.
+            },
+            "meta": {},
+        }))
+    except websockets.exceptions.ConnectionClosed:
+        print("send_status send stopped: client disconnected")
 
 async def send_manifest(ws):
     try:
@@ -145,13 +180,15 @@ async def send_manifest(ws):
                 "id": PLUGIN_ID,
                 "version": PLUGIN_VERSION,
                 "description": "My trigger plugin description.", # Optional
+                "informationalURL": "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins", # Optional
                 "primaryColor": "#12384d", # Optional
                 "secondaryColor": "#dadcdc", # Optional
-                "capabilities": ["trigger"],
-                "preferences": [
+                "capabilities": ["trigger"], # Add "screenshots" for permission to receive screenshots #TODO get this permission security working on extension side
+                "preferences": [ # Optional
                     {
                         "key": "text-field-example",
                         "label": "Text",
+                        "tooltip": "Example of a text field.", # Optional
                         "description": "Example of a text field.", # Optional
                         "type": "text",
                         "default": "Default Text", # Optional
@@ -159,6 +196,7 @@ async def send_manifest(ws):
                     {
                         "key": "number-field-example",
                         "label": "Number",
+                        "tooltip": "Example of a number field.", # Optional
                         "description": "Example of a number field.", # Optional
                         "type": "number",
                         "default": 50, # Optional
@@ -166,6 +204,7 @@ async def send_manifest(ws):
                     {
                         "key": "checkbox-field-example",
                         "label": "Checkbox",
+                        "tooltip": "Example of a checkbox field.", # Optional
                         "description": "Example of a checkbox field.", # Optional
                         "type": "checkbox",
                         "default": False, # Optional
@@ -173,6 +212,7 @@ async def send_manifest(ws):
                     {
                         "key": "dropdown-field-example",
                         "label": "Dropdown",
+                        "tooltip": "Example of a dropdown field.", # Optional
                         "description": "Example of a dropdown field.", # Optional
                         "type": "select",
                         "options": [
@@ -184,22 +224,32 @@ async def send_manifest(ws):
                     {
                         "key": "radio-field-example",
                         "label": "Radio",
+                        "tooltip": "Example of a radio field.", # Optional
                         "description": "Example of a radio field.", # Optional
                         "type": "radio",
                         "options": [
-                            { "label": "Value 1", "value": "value-1" },
-                            { "label": "Value 2", "value": "value-2" },
+                            {
+                                "label": "Value 1",
+                                "tooltip": "Example of a radio button option - value 1", # Optional
+                                "value": "value-1"
+                            },
+                            {
+                                "label": "Value 2",
+                                "tooltip": "Example of a radio button option - value 2", # Optional
+                                "value": "value-2"
+                            },
                         ],
                         "default": "value-2",
                     },
                     {
                         "key": "textarea-field-example",
                         "label": "Text Area",
+                        "tooltip": "Example of a text area field.", # Optional
                         "description": "Example of a text area field.", # Optional
                         "type": "textarea",
                         "default": "Default Text", # Optional
                     },
-                ], # Optional
+                ],
             },
             "meta": {
                 "display": "Sending Manifest",

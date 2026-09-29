@@ -32,11 +32,13 @@ Overlay Plugins:
 
 - [VLC Over Commercials](examples/vlc-over-commercials) - Automatically play anything you would like from your PC's VLC player over top of commercials
 - [Overlay Any Window](examples/overlay-any-window) - Have literally any open window on your PC be shown over top of commercials
+- [Commercial Push Notifications](examples/commercial-push-notifications) - Send notifications to your phone when commercials start and end
 
-Trigger Plugins:
+Detection/Trigger Plugins:
 
-- [Say NO to Commercials](examples/say-no-to-commercials) - Set your own keywords or phrases to trigger blocking commercials or removing the blocker
-- [Thumbs Down Commercials](examples/thumbs-down-commercials) - Connect to your webcam and give a thumbs down to block commercials and a thumbs up to remove the blocker
+- [Voice Commercial Trigger](examples/say-no-to-commercials) - Set your own keywords or phrases to trigger blocking commercials or removing the blocker
+- [Hand Gesture Commercial Trigger](examples/thumbs-down-commercials) - Connect to your webcam and give a thumbs down to block commercials and a thumbs up to remove the blocker
+- [AI Commercial Detector](examples/local-ai-commercial-detector) - Use local AI to determine if a TV broadcast is currently in commercial or not
 
 ## Community Built Plugins
 
