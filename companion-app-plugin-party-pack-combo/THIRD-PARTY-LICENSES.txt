@@ -1,0 +1,121 @@
+THIRD-PARTY SOFTWARE NOTICES
+
+Live Commercial Blocker - Official Plugin Party Pack includes
+third-party open-source software.
+
+The following identifies third-party software used by the application
+and the licenses under which it is distributed. Where a packaged
+dependency supplies additional copyright, LICENSE, COPYING, NOTICE, or
+third-party notice files, those original notices should accompany the
+released application.
+
+------------------------------------------------------------------------
+
+websockets
+
+License: BSD 3-Clause
+
+Flask
+
+License: BSD 3-Clause
+
+NumPy
+
+License: BSD 3-Clause and additional permissively licensed components
+
+NumPy contains components under additional permissive licenses. The
+license notices supplied with the NumPy distribution apply to those
+components.
+
+opencv-python / OpenCV
+
+opencv-python packaging: MIT License OpenCV: Apache License 2.0
+
+The opencv-python binary distribution contains additional third-party
+software. The LICENSE-3RD-PARTY.txt supplied with the exact
+opencv-python distribution is part of the applicable third-party
+notices.
+
+Pillow
+
+License: MIT-CMU (current releases; the license supplied with the
+packaged version controls)
+
+pystray
+
+License: GNU Lesser General Public License v3.0 (LGPL-3.0)
+
+ollama (Python client)
+
+License: MIT License
+
+aiohttp
+
+License: Apache License 2.0
+
+MediaPipe
+
+License: Apache License 2.0
+
+pygrabber
+
+License: MIT License
+
+sounddevice
+
+License: MIT License
+
+The Windows distribution may include PortAudio, which is distributed
+under the MIT License. The notices supplied with the packaged PortAudio
+component apply.
+
+Vosk
+
+License: Apache License 2.0
+
+pycaw
+
+License: MIT License
+
+comtypes
+
+License: MIT License
+
+pywin32
+
+License: Python Software Foundation License and other licenses
+applicable to individual components
+
+The copyright and license notices supplied with the packaged pywin32
+distribution apply.
+
+requests
+
+License: Apache License 2.0
+
+Python Runtime
+
+License: Python Software Foundation License
+
+The application executable contains a Python runtime. The copyright and
+license terms supplied with the exact Python runtime included in the
+application apply.
+
+------------------------------------------------------------------------
+
+Transitive Dependencies
+
+The application may also include dependencies installed by the packages
+above, including packages used by Flask, Requests, aiohttp, MediaPipe,
+and other libraries. Their respective copyright and license notices
+apply.
+
+The release distribution should include the original license/notice
+materials collected from the exact dependency versions included in that
+build.
+
+------------------------------------------------------------------------
+
+Live Commercial Blocker’s own license is provided separately and does
+not replace or modify the licenses of the third-party software
+identified above.

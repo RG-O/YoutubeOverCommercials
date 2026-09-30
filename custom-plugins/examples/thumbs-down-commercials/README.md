@@ -1,4 +1,4 @@
-# Thumbs Down Commercials Plugin
+# Hand Gesture Commercial Trigger
 
 This plugin can be use to give a thumbs up or thumbs down or other various 
 gestures that you set into your webcam to block or unblock live TV commercials. 

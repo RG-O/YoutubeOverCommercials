@@ -16,7 +16,7 @@ import mediapipe as mp
 
 PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-PLUGIN_NAME = "Peace Out Commercials"
+PLUGIN_NAME = "Hand Gesture Commercial Trigger"
 PLUGIN_ID = "gesture-trigger-plugin"
 PLUGIN_VERSION = "1.1.0"
 

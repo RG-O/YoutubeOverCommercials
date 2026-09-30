@@ -13,7 +13,7 @@ import zipfile
 
 PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
-PLUGIN_NAME = "Say NO to Commercials"
+PLUGIN_NAME = "Voice Commercial Trigger"
 PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
 PLUGIN_VERSION = "1.0.1"
 
