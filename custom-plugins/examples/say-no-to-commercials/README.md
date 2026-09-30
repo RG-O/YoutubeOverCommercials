@@ -1,4 +1,4 @@
-# Say NO to Commercials Plugin
+# Voice Commercial Trigger
 
 This plugin can be used to speak set words or phrases to block or unblock live TV commercials. 
 Upon first use, it downloads the Vosk speech recognition AI model to locally 

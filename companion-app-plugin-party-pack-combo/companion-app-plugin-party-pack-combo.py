@@ -1072,6 +1072,7 @@ ntfy_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 ntfy_PLUGIN_NAME = "Commercial Push Notifications"
 ntfy_PLUGIN_ID = "ntfy-commercial-notifications"  # Must be unique
 ntfy_PLUGIN_VERSION = "1.0.0"
+ntfy_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/commercial-push-notifications"
 
 ntfy_PORT = 64146
 
@@ -1535,6 +1536,7 @@ async def ntfy_send_manifest(ws):
                             "start and end. Download the ntfy app on your phone "
                             "and subscribe to your topic."
                         ),
+                        "informationalURL": ntfy_PLUGIN_URL,
                         "primaryColor": "#317f6f",
                         "secondaryColor": "#ffffff",
                         "capabilities": ["overlay"],
@@ -1681,6 +1683,7 @@ ai_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 ai_PLUGIN_NAME = "AI Commercial Detector"
 ai_PLUGIN_ID = "ai-commercial-detector-ws"  # Must be unique
 ai_PLUGIN_VERSION = "1.8.2"
+ai_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/local-ai-commercial-detector"
 
 ai_PORT = 64145
 
@@ -3247,6 +3250,7 @@ async def ai_send_manifest():
                             "Then initiate the extension from where ever you stream from. Pro tip: "
                             "Turn on Debug Mode in additional setting of extension to help with tinkering."
                         ),
+                        "informationalURL": ai_PLUGIN_URL,
                         "primaryColor": "#000000",
                         "secondaryColor": "#FFFFFF",
                         "capabilities": [
@@ -3553,6 +3557,7 @@ window_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 window_PLUGIN_NAME = "Overlay Any Window"
 window_PLUGIN_ID = "overlay-any-window" # Must be unique
 window_PLUGIN_VERSION = "1.1.0"
+window_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/overlay-any-window"
 
 window_PORT = 64146
 window_SPACEBAR_KEY = 0x20
@@ -4022,6 +4027,7 @@ async def window_send_manifest(websocket):
                 "overlay and picture-in-picture size and location settings "
                 "from the extension's additional settings."
             ),
+            "informationalURL": window_PLUGIN_URL,
             "primaryColor": "#ffffff",
             "secondaryColor": "#3b93d9",
             "capabilities": ["overlay"],
@@ -4102,6 +4108,7 @@ voice_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 voice_PLUGIN_NAME = "Voice Commercial Trigger"
 voice_PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
 voice_PLUGIN_VERSION = "1.0.1"
+voice_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/say-no-to-commercials"
 
 voice_PORT = 64145
 
@@ -4586,6 +4593,7 @@ async def voice_send_manifest(ws):
                     "commonly used in the broadcast and to shout the word three times "
                     "to guarantee trigger. Otherwise, set mic away from TV speakers for better results."
                 ),
+                "informationalURL": voice_PLUGIN_URL,
                 "primaryColor": "#8B0000",
                 "secondaryColor": "#FFFFE0",
                 "capabilities": ["detection"],
@@ -4679,6 +4687,7 @@ gesture_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 gesture_PLUGIN_NAME = "Hand Gesture Commercial Trigger"
 gesture_PLUGIN_ID = "gesture-trigger-plugin"
 gesture_PLUGIN_VERSION = "1.1.0"
+gesture_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/thumbs-down-commercials"
 
 # --------------------------------------------------
 # Configuration
@@ -5788,6 +5797,7 @@ async def gesture_send_manifest(ws):
                     "Use configurable MediaPipe hand gestures to switch "
                     "between commercial and content states."
                 ),
+                "informationalURL": gesture_PLUGIN_URL,
                 "primaryColor": "#2a5ac0",
                 "secondaryColor": "#FFDE34",
                 "capabilities": ["detection"],
@@ -5983,6 +5993,7 @@ vlc_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 vlc_PLUGIN_NAME = "VLC Over Commercials"
 vlc_PLUGIN_ID = "vlc-over-commercials"
 vlc_PLUGIN_VERSION = "1.1.0"
+vlc_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/vlc-over-commercials"
 
 
 # -----------------------------------------------------------------------------
@@ -7249,6 +7260,7 @@ async def vlc_send_manifest(websocket):
                 "VLC is a trademark of the VideoLAN organization. "
                 "This plugin is not affiliated with VLC or VideoLAN."
             ),
+            "informationalURL": vlc_PLUGIN_URL,
             "primaryColor": "#E85E00",
             "secondaryColor": "#f0ccb4",
             "capabilities": ["overlay"],
@@ -7439,3 +7451,9 @@ if __name__ == "__main__":
         request_combined_shutdown()
     except Exception:
         print("Tray icon error:\n" + traceback.format_exc())
+
+
+# for exe creation:
+# py -m PyInstaller --noconsole --icon=icon.ico --collect-binaries vosk --hidden-import=mediapipe.tasks.c --collect-binaries mediapipe companion-app-plugin-party-pack-combo.py
+# and then copy/paste icon.png and THIRD-PARTY-LICENSES.txt into generated _internal folder
+# lastly, compile into setup exe with Inno

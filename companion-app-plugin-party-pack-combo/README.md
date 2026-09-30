@@ -1,6 +1,8 @@
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RG-O/YoutubeOverCommercials/advanced-logo-analyzer-and-plugin-party-pack-release-v1.0.0/AdvancedLogoAnalyzerAndPluginPartyPack_1.0_setup.exe?label=Total%20Downloads)
+
 ## Advanced Logo Analyzer and Plugin Party Pack Desktop Tray Application
 
-This is the [Advanced Logo Analyzer](/companion-app/README.md) and a collection of various plugins bundled into a single application that runs in the system tray.
+This is the [Advanced Logo Analyzer](/companion-app/README.md) AND a collection of various plugins bundled into a single application that runs in the system tray.
 
 ## Plugins Included
 
@@ -18,9 +20,20 @@ Detection/Trigger Plugins:
 
 ## Setup
 
+### Prerequisite:
+
+If you previously installed the Advanced Logo Analyzer on its own, uninstall it first.
+
+<p>
+	<img src="windows_uninstall_search_screenshot.png" style="max-height: 200px;">
+</p>
+<p>
+	<img src="windows_uninstall_advanced_logo_analyzer_screenshot.png" style="max-height: 300px;">
+</p>
+
 ### Option 1: Install from exe (Windows)
 
-1. Download the exe from the [GitHub release](https://github.com/RG-O/YoutubeOverCommercials/releases/tag/advanced-logo-analyzer-release-v1.0) TODO: This is just the Advanced Logo Analyzer link! I need to update this link!
+1. Download the exe from the [GitHub release](https://github.com/RG-O/YoutubeOverCommercials/releases/tag/advanced-logo-analyzer-and-plugin-party-pack-release-v1.0.0)
 2. Run the downloaded exe (note: you may need to click "More info" in the Windows popup to see the run option)
 3. Follow the installation wizard
 4. Run the application and it will appear in your system tray
@@ -46,3 +59,9 @@ Detection/Trigger Plugins:
 1. Check which specific plugins you would like to enable
 1. Scroll down to the very bottom to adjust plugin specific settings
 1. Click Save & Apply button
+
+## Screenshots
+
+Displays in system tray (idle while not in use):
+
+![Tray Screenshot](TrayScreenshot.png)
