@@ -3,6 +3,12 @@
 This is a plugin for the Live Commercial Blocker browser extension. This plugin calls a local AI 
 vision model on your computer via Ollama to determine if a TV broadcast is currently in a commercial or not.
 
+Screenshot of plugin in use:
+
+<img src="ai_plugin_commercial_example_screenshot.png" width="700">
+
+(Note: This is currently showing debug text which you can toggle off in the extension settings)
+
 ## Instructions
 
 ### System Requirements
@@ -74,4 +80,4 @@ or report any issues or enhancement requests on the [issues tab](https://github.
 ## Donate
 
 If you appreciate this plugin or the Live Commercial Blocker browser extension and you would like to show your 
-support, please consider donating https://www.buymeacoffee.com/ryango :)
+support while helping out a good cause, please donate to my [St. Jude fundraiser](https://www.every.org/st-jude-childrens-research-hospital/f/live-commercial-blocker).

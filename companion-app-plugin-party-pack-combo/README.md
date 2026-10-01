@@ -25,10 +25,13 @@ Detection/Trigger Plugins:
 If you previously installed the Advanced Logo Analyzer on its own, uninstall it first.
 
 <p>
-	<img src="windows_uninstall_search_screenshot.png" style="max-height: 200px;">
+	<img src="exit_old_companion_app.png" width="250">
 </p>
 <p>
-	<img src="windows_uninstall_advanced_logo_analyzer_screenshot.png" style="max-height: 300px;">
+	<img src="windows_uninstall_search_screenshot.png" width="330">
+</p>
+<p>
+	<img src="windows_uninstall_advanced_logo_analyzer_screenshot.png" width="500">
 </p>
 
 ### Option 1: Install from exe (Windows)
