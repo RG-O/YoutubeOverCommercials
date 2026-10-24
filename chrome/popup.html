@@ -71,6 +71,26 @@
         </div>
 
         <div>
+            <input type="radio" id="commercialDetectionMode-auto-ai" name="commercialDetectionMode" value="auto-ai">
+            <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-ai">AI Commercial Detection &#129302;</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Uses a small AI vision model (Minus-v0.1), running entirely inside your browser on your graphics card, to look at your game/program stream about once a second and decide if a commercial is on. No logo or pixel selection needed. No images or data ever leave your computer.</span></span><span class="badge badge-experimental">Experimental</span>
+        </div>
+        <div id="auto-ai" class="commercial-detection-mode-instructions-wrapper">
+            <div id="ai-webgpu-error" class="error-box settings-box" style="display: none;">
+                Your browser does not currently support WebGPU, which this mode requires. Make sure "Use graphics acceleration when available" is turned on in Chrome's System settings and your graphics drivers are up to date.
+            </div>
+            <div class="mode-how-to settings-box">
+                <b>HOW TO USE:</b><br />
+                Go to stream, make full screen, and hit <span class="keyboard-shortcut"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></span>. The first time, the extension will download the AI model (about 450 MB) from <a href="https://huggingface.co/TheGarageDev/Minus-v0.1" target="_blank">Hugging Face</a>, which can take a few minutes. After that it loads from your browser's cache.<br />
+                <br />
+                <i>Note:</i> Dimming is turned off in this mode so the AI sees the stream as it really looks. The overlay video is blacked out of what the AI sees during commercials, so the AI decides based on the parts of the stream left visible around it.<br />
+                <br />
+                <i>Privacy Note:</i> All AI processing is done entirely on your own computer. No images or data are sent elsewhere.<br />
+                <br />
+                <i>Model:</i> <a href="https://huggingface.co/TheGarageDev/Minus-v0.1" target="_blank">Minus-v0.1</a> by TheGarageDev, licensed under the LFM Open License v1.0.
+            </div>
+        </div>
+
+        <div>
             <input type="radio" id="commercialDetectionMode-auto-audio" name="commercialDetectionMode" value="auto-audio">
             <label class="commercial-detection-mode-label" for="commercialDetectionMode-auto-audio">Audio Level Low</label><span class="tooltip"><sup>&#x1F6C8;</sup><span class="tooltiptext">Detects when commercial breaks occur by detecting a set duration of volume lower than a set threshold on your game/program stream and then automatically plays YouTube or your media of choice over top of the commercials.</span></span><span class="badge badge-experimental firefox-experimental">Experimental</span>
         </div>

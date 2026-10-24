@@ -88,6 +88,15 @@ var audioSource;
 var audioAnalyzer;
 var audioDataArray;
 var isAudioConnected = false;
+//ai detection
+var aiAdProbabilityThreshold = 0.6; //note: probability (0-1) the model needs to give a frame before it counts as a commercial frame, 0.6 is what the Minus extension uses for ad content
+var isAIModelReady = false;
+var isAIMonitorPaused = false;
+var aiMonitorRunID = 0;
+var aiMonitorTimeoutID;
+var aiModelStatusIntervalID;
+var consecutiveAIClassifyFailures = 0;
+var hasAIClassifyFailureMessageBeenShown = false;
 //Double clap variables:
 var clapDebugOverlay;
 var waveCtx;
@@ -1135,6 +1144,10 @@ chrome.runtime.onMessage.addListener(function (message) {
                                 mainVideoVolumeDuringNonCommercials = mainVideoVolumeDuringNonCommercials / 100;
                             }
                             commercialDetectionMode = result.commercialDetectionMode ?? 'auto-pixel-normal';
+                            if (commercialDetectionMode === 'auto-ai') {
+                                //dimming would show up in the tab capture and throw off the AI model
+                                mainVideoFade = 0;
+                            }
                             isPluginCommercialTriggerMode = result.isPluginCommercialTriggerMode ?? false;
                             if (commercialDetectionMode === 'custom-plugin-trigger') {
                                 isPluginCommercialTriggerMode = true;
@@ -1240,6 +1253,23 @@ chrome.runtime.onMessage.addListener(function (message) {
 
                                 }
 
+                            } else if (commercialDetectionMode == 'auto-ai') {
+
+                                if (!isAutoModeInitiated) {
+
+                                    isAutoModeInitiated = true;
+
+                                    windowWidth = window.innerWidth;
+                                    windowHeight = window.innerHeight;
+                                    windowDimensions = { x: windowWidth, y: windowHeight };
+                                    startViewingTab(windowDimensions);
+
+                                    setTimeout(() => {
+                                        prepForAIMonitor();
+                                    }, 500);
+
+                                }
+
                             } else if (commercialDetectionMode == 'manual-clap' || commercialDetectionMode == 'custom-plugin-trigger') {
 
                                 potentiallyIntrusiveSetup();
@@ -1294,7 +1324,7 @@ function manualCommercialModeToggle() {
                 } else {
                     advancedLogoInfoContainer.style.display = 'none';
                 }
-            } else if (commercialDetectionMode === 'auto-audio') {
+            } else if (commercialDetectionMode === 'auto-audio' || commercialDetectionMode === 'auto-ai') {
                 audioLevelIndicatorContainer.style.display = 'none';
             } //else don't need to hide for manual mode
         }
@@ -1312,7 +1342,7 @@ function manualCommercialModeToggle() {
                 } else {
                     advancedLogoInfoContainer.style.display = 'flex';
                 }
-            } else if (commercialDetectionMode === 'auto-audio') {
+            } else if (commercialDetectionMode === 'auto-audio' || commercialDetectionMode === 'auto-ai') {
                 audioLevelIndicatorContainer.style.display = 'flex';
             }
         } else if (!isDebugMode) {
@@ -1322,7 +1352,7 @@ function manualCommercialModeToggle() {
                 } else {
                     advancedLogoInfoContainer.style.display = 'none';
                 }
-            } else if (commercialDetectionMode === 'auto-audio') {
+            } else if (commercialDetectionMode === 'auto-audio' || commercialDetectionMode === 'auto-ai') {
                 audioLevelIndicatorContainer.style.display = 'none';
             }
         }
@@ -2636,6 +2666,323 @@ function setAudioLevelBar(level) {
 }
 
 
+function prepForAIMonitor() {
+
+    //note: reusing the audio level indicator UI where the bar shows how sure the AI is that a commercial is on
+    setAudioLevelIndicator();
+    audioLevelThresholdLine.style.bottom = (aiAdProbabilityThreshold * 100) + '%';
+    logoBoxText = 'LOADING AI MODEL...';
+    logoBox.textContent = logoBoxText;
+
+    document.addEventListener('fullscreenchange', fullscreenChanged);
+
+    if (overlayVideoType == 'other-tabs') {
+        //if user has extension set to other-tabs, mute the other tabs now
+        chrome.runtime.sendMessage({ action: "execute_music_non_commercial_state" });
+    }
+
+    //wait a sec for potentially intrusive setup
+    setTimeout(() => {
+        potentiallyIntrusiveSetup();
+    }, 1000);
+
+    waitForAIModelThenMonitor();
+
+}
+
+
+//the model is downloaded (only the first time) and loaded onto the gpu in offscreen, keep checking on it until it is ready
+function waitForAIModelThenMonitor() {
+
+    let shouldRetryOnError = true;
+
+    clearInterval(aiModelStatusIntervalID);
+    aiModelStatusIntervalID = setInterval(() => {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "ai-model-status",
+            shouldRetryOnError: shouldRetryOnError
+        }, function (response) {
+
+            //offscreen doc might not be ready yet, just try again next time
+            if (chrome.runtime.lastError || !response) {
+                return;
+            }
+
+            shouldRetryOnError = false;
+
+            if (response.state === 'ready') {
+
+                clearInterval(aiModelStatusIntervalID);
+                isAIModelReady = true;
+
+                initialLogoBoxTextUpdate();
+                //wait a sec to remove initiated message to let the user read message before hiding
+                setTimeout(() => {
+                    if (!isDebugMode && !isCommercialState) { audioLevelIndicatorContainer.style.display = 'none'; }
+                }, 2000);
+
+                if (!isAIMonitorPaused) {
+                    cooldownCountRemaining = utilityCooldownTime; //give a chance for video UI to go away
+                    aiCommercialMonitor();
+                }
+
+            } else if (response.state === 'error') {
+
+                clearInterval(aiModelStatusIntervalID);
+
+                logoBoxText = 'AI MODEL FAILED TO LOAD';
+                logoBox.textContent = logoBoxText;
+                addMessageAlertToMainVideo(`Live Commercial Blocker AI Detection error: ${response.error}`, 'error', 0);
+
+            } else if (response.progress > 0 && response.progress < 100) {
+
+                //note: model only downloads the first time, after that it is loaded from the browser cache
+                logoBox.textContent = `DOWNLOADING AI MODEL ${response.progress}%`;
+
+            } else {
+
+                logoBox.textContent = 'LOADING AI MODEL...';
+
+            }
+
+        });
+
+    }, 1000);
+
+}
+
+
+function aiCommercialMonitor() {
+
+    isAIMonitorPaused = false;
+    clearTimeout(aiMonitorTimeoutID);
+
+    //run id makes sure only one monitor loop is ever running even if paused and resumed while a frame is still being analyzed
+    aiMonitorRunID++;
+    aiMonitorTick(aiMonitorRunID);
+
+}
+
+
+function pauseAIMonitor() {
+
+    isAIMonitorPaused = true;
+    aiMonitorRunID++;
+    clearTimeout(aiMonitorTimeoutID);
+
+}
+
+
+//asks the AI if the current frame is a commercial about once a second and initiates commercial or non-commercial mode accordingly
+function aiMonitorTick(runID) {
+
+    const tickStartTime = Date.now();
+    let analysisTime = 0;
+
+    getAIAdProbability().then(function (pAd) {
+
+        analysisTime = Date.now() - tickStartTime;
+
+        if (runID !== aiMonitorRunID) {
+            return;
+        }
+
+        if (pAd === null) {
+
+            consecutiveAIClassifyFailures++;
+            if (consecutiveAIClassifyFailures >= 10 && !hasAIClassifyFailureMessageBeenShown) {
+                hasAIClassifyFailureMessageBeenShown = true;
+                addMessageAlertToMainVideo('Live Commercial Blocker AI Detection is having trouble analyzing the video. Check the console for errors.', 'error');
+            }
+            return;
+
+        }
+
+        consecutiveAIClassifyFailures = 0;
+
+        if (isDebugMode) { console.log(`AI commercial probability: ${Math.round(pAd * 100)}% (analysis took ${analysisTime}ms)`); }
+
+        setAIAdProbabilityBar(pAd);
+
+        if (pAd >= aiAdProbabilityThreshold) {
+            //AI thinks this is a commercial
+
+            mismatchCount++;
+            matchCount = 0;
+            logoCountdownMismatchesRemaining = (mismatchCountThreshold - mismatchCount);
+
+            //show countdown if 3 seconds until commercial mode or it would be 3 seconds until commercial mode and cooldown is blocking
+            if (logoCountdownMismatchesRemaining <= 3 && !isCommercialState) {
+
+                if ((cooldownCountRemaining >= 1) && (cooldownCountRemaining > logoCountdownMismatchesRemaining)) {
+
+                    logoBox.textContent = cooldownCountRemaining;
+                    audioLevelIndicatorContainer.style.display = 'flex';
+                    countdownOngoing = true;
+
+                } else if (logoCountdownMismatchesRemaining >= 1) {
+
+                    logoBox.textContent = logoCountdownMismatchesRemaining;
+                    audioLevelIndicatorContainer.style.display = 'flex';
+                    countdownOngoing = true;
+
+                } else {
+                    countdownOngoing = false;
+                }
+
+            } else {
+                countdownOngoing = false;
+            }
+
+            if (mismatchCount >= mismatchCountThreshold && cooldownCountRemaining <= 0) {
+
+                if (!isCommercialState) {
+
+                    if (isDebugMode) { console.log('commercial detected'); }
+
+                    triggerOfLastCommercialStateChange = String(commercialDetectionMode);
+                    startCommercialMode();
+
+                    logoBox.textContent = logoBoxText;
+                    audioLevelIndicatorContainer.style.display = 'flex';
+
+                }
+
+                mismatchCount = 0;
+
+            }
+
+        } else {
+            //AI thinks this is the program/game
+
+            matchCount++;
+            mismatchCount = 0;
+
+            if (!isDebugMode && !isCommercialState) {
+                audioLevelIndicatorContainer.style.display = 'none';
+            }
+
+            countdownOngoing = false;
+            logoBox.textContent = logoBoxText;
+
+            if (matchCount >= matchCountThreshold && cooldownCountRemaining <= 0) {
+
+                if (isCommercialState) {
+
+                    if (isDebugMode) { console.log('commercial undetected'); }
+
+                    if (isAudioOnlyOverlay) {
+                        if (isDebugMode) {
+                            logoBoxText = 'LIVE COMMERCIAL BLOCKER';
+                            logoBox.textContent = logoBoxText;
+                        } else {
+                            audioLevelIndicatorContainer.style.display = 'none';
+                            if (overlayVideoType == 'spotify') {
+                                logoBoxText = 'Playing Spotify'; //not actually playing, this is just getting ready for the next commercial break
+                                logoBox.textContent = logoBoxText;
+                            }
+                        }
+                    } else if (!isDebugMode) {
+                        audioLevelIndicatorContainer.style.display = 'none';
+                    }
+
+                    triggerOfLastCommercialStateChange = String(commercialDetectionMode);
+                    endCommercialMode();
+
+                }
+
+                matchCount = 0;
+
+            }
+
+        }
+
+        cooldownCountRemaining--;
+
+    })
+        .finally(function () {
+
+            //waiting the rest of the second before checking the next frame, or going right away if analyzing took longer than that
+            if (runID === aiMonitorRunID && !isAIMonitorPaused) {
+                aiMonitorTimeoutID = setTimeout(() => {
+                    aiMonitorTick(runID);
+                }, Math.max(0, 1000 - (Date.now() - tickStartTime)));
+            }
+
+        });
+
+}
+
+
+//asks offscreen for the probability (0-1) that the current frame is a commercial, resolves null if it couldn't be analyzed
+function getAIAdProbability() {
+
+    return new Promise(function (resolve) {
+
+        chrome.runtime.sendMessage({
+            target: "offscreen",
+            action: "ai-classify-frame",
+            maskRects: getAIFrameMaskRects()
+        }, function (response) {
+
+            if (chrome.runtime.lastError || !response || !response.wasSuccessfulCall) {
+                if (isDebugMode) { console.log('AI frame analysis failed:', chrome.runtime.lastError?.message ?? response?.error); }
+                resolve(null);
+            } else {
+                resolve(response.pAd);
+            }
+
+        });
+
+    });
+
+}
+
+
+//gets the areas of the screen covered by the extension's own elements (overlay video, indicators) as percentages of the window so they can be blacked out before the AI sees the frame
+function getAIFrameMaskRects() {
+
+    const maskRects = [];
+    const elementsOnTopOfMainVideo = [
+        overlayVideo,
+        audioLevelIndicatorContainer,
+        pluginCommercialTriggerIndicatorContainer,
+        typeof doubleClapIndicatorContainer !== 'undefined' ? doubleClapIndicatorContainer : null, //note: only exists once clap detector is set up
+    ];
+
+    for (const element of elementsOnTopOfMainVideo) {
+
+        if (!element || !element.isConnected) {
+            continue;
+        }
+
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+            continue;
+        }
+
+        maskRects.push({
+            left: rect.left / window.innerWidth,
+            top: rect.top / window.innerHeight,
+            width: rect.width / window.innerWidth,
+            height: rect.height / window.innerHeight,
+        });
+
+    }
+
+    return maskRects;
+
+}
+
+
+function setAIAdProbabilityBar(pAd) {
+    audioLevelBar.style.height = Math.round(pAd * 100) + '%';
+    audioLevelBar.style.backgroundColor = pAd >= aiAdProbabilityThreshold ? 'red' : 'rgb(140, 179, 210, 0.9)';
+}
+
+
 //sets element to show user color differences next to selected pixel when commercial is detected
 function setCommercialDetectedIndicator(selectedPixel, selectedPixelGridLocation) {
 
@@ -2748,7 +3095,7 @@ function startViewingTab(windowDimensions) {
 
     if (!isFirefox) {
 
-        chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions });
+        chrome.runtime.sendMessage({ action: "chrome-view-tab-video", windowDimensions: windowDimensions, isAIMode: commercialDetectionMode === 'auto-ai' });
         window.addEventListener('beforeunload', closeChromeOffscreenDoc);
 
     }
@@ -2883,7 +3230,7 @@ function fullscreenChanged() {
                 advancedLogoInfoContainer.style.display = 'none';
             }
             pauseAutoMode(true);
-        } else if (commercialDetectionMode == 'auto-audio') {
+        } else if (commercialDetectionMode == 'auto-audio' || commercialDetectionMode == 'auto-ai') {
             audioLevelIndicatorContainer.style.display = 'none';
             pauseAutoMode(true);
         } else if (shouldSendScreenshotsToTriggerPlugin) {
@@ -2924,7 +3271,7 @@ function fullscreenChanged() {
                     advancedLogoInfoContainer.style.display = 'flex';
                 }
             }
-        } else if (commercialDetectionMode == 'auto-audio') {
+        } else if (commercialDetectionMode == 'auto-audio' || commercialDetectionMode == 'auto-ai') {
             resumeAutoMode();
             if (isDebugMode) { audioLevelIndicatorContainer.style.display = 'flex'; }
         } else if (shouldSendScreenshotsToTriggerPlugin) {
@@ -2960,6 +3307,8 @@ function fullscreenChanged() {
 function pauseAutoMode(shouldDisplayMessage) {
     if (commercialDetectionMode === 'auto-pixel-advanced-logo') {
         isAdvancedLogoMonitorPaused = true;
+    } else if (commercialDetectionMode === 'auto-ai') {
+        pauseAIMonitor();
     } else {
         clearInterval(monitorIntervalID); //TODO: is it fine to run this even if not set?
     }
@@ -3001,6 +3350,18 @@ function resumeAutoMode() {
     } else if (commercialDetectionMode === 'auto-audio') {
         startListeningToTab();
         audioThresholdMonitor();
+    } else if (commercialDetectionMode === 'auto-ai') {
+        startViewingTab(windowDimensions);
+        //give a sec for tab viewing to start
+        setTimeout(() => {
+            cooldownCountRemaining = utilityCooldownTime; //give a chance for video UI to go away
+            //note: if the model is still loading, waitForAIModelThenMonitor will start the monitor once it is ready
+            if (isAIModelReady) {
+                aiCommercialMonitor();
+            } else {
+                isAIMonitorPaused = false;
+            }
+        }, 1000);
     }
 
 }
@@ -3143,6 +3504,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
             //set them to default if not set by user yet
             mainVideoFade = result.mainVideoFade ?? 65;
+            if (commercialDetectionMode === 'auto-ai') {
+                mainVideoFade = 0;
+            }
             mainVideoVolumeDuringCommercials = result.mainVideoVolumeDuringCommercials ?? 0; //TODO: get this to work for .01-.99 values for yttv
             mainVideoVolumeDuringNonCommercials = result.mainVideoVolumeDuringNonCommercials ?? 100; //TODO: get this to work for .01-.99 values for yttv
             if (mainVideoVolumeDuringCommercials > 0) {
@@ -3167,7 +3531,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
             }
             clapSensitivity = result.clapSensitivity ?? 40;
 
-            if (audioLevelThresholdLine) {
+            if (audioLevelThresholdLine && commercialDetectionMode !== 'auto-ai') {
                 audioLevelThresholdLine.style.bottom = audioLevelThreshold + '%';
             }
 
@@ -3916,7 +4280,7 @@ function initiateClapIndicator() {
     if (isPiPMode && isLiveOverlayVideo) {
         otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
     }
-    if (commercialDetectionMode === 'auto-audio') {
+    if (commercialDetectionMode === 'auto-audio' || commercialDetectionMode === 'auto-ai') {
         //TODO: figure out timing on this so I can use real values here
         //otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
         otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
@@ -3995,7 +4359,7 @@ function initiatePluginCommercialTriggerIndicator() {
     if (isPiPMode && isLiveOverlayVideo) {
         otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
     }
-    if (commercialDetectionMode === 'auto-audio') {
+    if (commercialDetectionMode === 'auto-audio' || commercialDetectionMode === 'auto-ai') {
         //TODO: figure out timing on this so I can use real values here
         //otherOverlayLocations.push({ horizontal: audioLevelIndicatorContainerLocationHorizontal, vertical: audioLevelIndicatorContainerLocationVertical });
         otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
@@ -4084,7 +4448,7 @@ function getPartyPackTriggerOccupiedLocations() {
         otherOverlayLocations.push({ horizontal: pipLocationHorizontal, vertical: pipLocationVertical });
     }
 
-    if (commercialDetectionMode === 'auto-audio' || isDoubleClapMode) {
+    if (commercialDetectionMode === 'auto-audio' || commercialDetectionMode === 'auto-ai' || isDoubleClapMode) {
         otherOverlayLocations.push({ horizontal: 'left', vertical: 'top' });
     }
 

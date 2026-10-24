@@ -329,17 +329,28 @@ async function chromeViewTab(message, sender) {
             targetTabId: sender.tab.id
         });
 
+        //pixel modes need the capture to line up exactly with the window, but AI mode shrinks frames down to 512px anyway so a smaller and slower capture saves a lot of work
+        let frameRate = 4;
+        let captureWidth = message.windowDimensions.x;
+        let captureHeight = message.windowDimensions.y;
+        if (message.isAIMode) {
+            frameRate = 2;
+            const scale = Math.min(1280 / captureWidth, 720 / captureHeight, 1);
+            captureWidth = Math.round(captureWidth * scale);
+            captureHeight = Math.round(captureHeight * scale);
+        }
+
         const constraints = {
             video: {
                 mandatory: {
                     chromeMediaSource: 'tab',
                     chromeMediaSourceId: streamId,
-                    maxFrameRate: 4,
-                    minFrameRate: 4,
-                    maxWidth: message.windowDimensions.x,
-                    maxHeight: message.windowDimensions.y,
-                    minWidth: message.windowDimensions.x,
-                    minHeight: message.windowDimensions.y
+                    maxFrameRate: frameRate,
+                    minFrameRate: frameRate,
+                    maxWidth: captureWidth,
+                    maxHeight: captureHeight,
+                    minWidth: captureWidth,
+                    minHeight: captureHeight
                 }
             }
         }

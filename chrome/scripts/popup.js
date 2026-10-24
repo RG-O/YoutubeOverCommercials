@@ -203,6 +203,7 @@ chrome.storage.sync.get([
         modeRadios[i].addEventListener('change', toggleAutoDimensionsFieldVisability);
         modeRadios[i].addEventListener('change', toggleDimensionsFieldsVisability);
         modeRadios[i].addEventListener('change', pingCompanionApp);
+        modeRadios[i].addEventListener('change', checkAIModeWebGPUSupport);
         modeRadios[i].addEventListener('change', getPluginTriggerManifest);
         modeRadios[i].addEventListener('change', enableSaveButton);
         modeRadios[i].addEventListener('change', toggleDoubleClapUI);
@@ -901,6 +902,7 @@ function runAllToggles() {
     setOverlayDisplayPositionGrid();
     setPiPDisplayPositionGrid();
     pingCompanionApp();
+    checkAIModeWebGPUSupport();
     enableSaveButton();
     setClapSensitivityRangeField();
     toggleDoubleClapUI();
@@ -1179,6 +1181,20 @@ function grabCommercialTimeBlockedStats(today, totalCommercialsBlockedSeconds, t
         const dailyMinutes = todayCommercialsBlockedSeconds / 60;
         const roundedDaily = Math.ceil(dailyMinutes * 10) / 10;
         statsElm.textContent += `\n${roundedDaily} minutes of commercials blocked today.`;
+    }
+}
+
+
+//AI detection mode needs WebGPU to run the model, letting the user know ahead of time if their browser can't
+async function checkAIModeWebGPUSupport() {
+    if (optionsForm.commercialDetectionMode.value === 'auto-ai') {
+        let gpuAdapter = null;
+        try {
+            gpuAdapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
+        } catch {
+            gpuAdapter = null;
+        }
+        document.getElementById('ai-webgpu-error').style.display = gpuAdapter ? 'none' : 'block';
     }
 }
 

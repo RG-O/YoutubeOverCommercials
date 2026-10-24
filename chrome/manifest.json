@@ -5,14 +5,18 @@
   "icons": {
     "128": "icon128.png"
   },
-  "version": "5.1",
+  "version": "5.2",
   "permissions": [
     "activeTab",
     "scripting",
     "storage",
     "tabCapture",
-    "offscreen"
+    "offscreen",
+    "unlimitedStorage"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "host_permissions": [
     "<all_urls>",
     "http://*/*",
