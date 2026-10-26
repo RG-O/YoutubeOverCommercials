@@ -105,7 +105,7 @@ PLUGIN_DEFINITIONS = {
     "vlc-over-commercials": {
         "source_key": "vlc",
         "name": "VLC Over Commercials",
-        "version": "1.1.0",
+        "version": "1.1.1",
         "description": "Automatically plays VLC media over commercial breaks.",
         "primaryColor": "#E85E00",
         "secondaryColor": "#f0ccb4",
@@ -5972,7 +5972,9 @@ async def gesture_main():
 import json
 import os
 import re
+import struct
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -5992,7 +5994,7 @@ vlc_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 vlc_PLUGIN_NAME = "VLC Over Commercials"
 vlc_PLUGIN_ID = "vlc-over-commercials"
-vlc_PLUGIN_VERSION = "1.1.0"
+vlc_PLUGIN_VERSION = "1.1.1"
 vlc_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/vlc-over-commercials"
 
 
@@ -6013,6 +6015,11 @@ vlc_HEALTH_CHECK_INTERVAL_SECONDS = 1
 vlc_WINDOW_SIZE_TOLERANCE_PIXELS = 2
 vlc_HISTORY_SAVE_INTERVAL_SECONDS = 5
 vlc_HISTORY_FILE = APP_DIR / "vlc_media_history.json"
+vlc_SNAPSHOT_DIR = Path(tempfile.gettempdir()) / "vlc-over-commercials-snapshots"
+vlc_SNAPSHOT_TIMEOUT_SECONDS = 3
+vlc_SNAPSHOT_RETRY_SECONDS = 30
+# VLC shows the snapshot file name on top of the video for about a second.
+vlc_SNAPSHOT_OSD_SECONDS = 1.2
 
 
 # -----------------------------------------------------------------------------
@@ -6023,8 +6030,11 @@ vlc_SCRIPT_DIR = APP_DIR
 
 vlc_optimized_width_percentage = 90
 vlc_optimized_height_percentage = 85
-vlc_previous_overlay_width_percentage = 0
-vlc_previous_overlay_height_percentage = 0
+# Display size of the current video, found from a VLC snapshot. The key is the
+# media URL and the shape VLC reports, so it is only refreshed when one changes.
+vlc_display_dimensions_cache_key = None
+vlc_display_dimensions = None
+vlc_last_snapshot_time = 0
 
 vlc_vlc_process = None
 vlc_vlc_window_handle = None
@@ -6042,6 +6052,7 @@ vlc_last_history_save_time = 0
 vlc_health_monitor_thread = None
 vlc_health_monitor_stop_event = threading.Event()
 vlc_vlc_command_lock = threading.Lock()
+vlc_snapshot_lock = threading.Lock()
 # Prevent media URL changes and health-triggered reloads from overlapping.
 # RLock lets reset_unhealthy_media() safely call switch_vlc_media(), which also
 # uses this same lock.
@@ -6358,8 +6369,6 @@ def vlc_update_current_media_audio_status(timeout=5):
 def vlc_switch_vlc_media(media_url, preserve_state=True, resume_time=None):
     """Replace VLC media while retaining reload locking and VOD resume."""
     global vlc_current_media_url
-    global vlc_previous_overlay_width_percentage
-    global vlc_previous_overlay_height_percentage
 
     if not media_url:
         return False
@@ -6390,10 +6399,9 @@ def vlc_switch_vlc_media(media_url, preserve_state=True, resume_time=None):
         vlc_send_vlc_command("in_play", {"input": media_url})
 
         vlc_current_media_url = media_url
-        vlc_previous_overlay_width_percentage = 0
-        vlc_previous_overlay_height_percentage = 0
 
         vlc_wait_for_vlc_playing(timeout=30)
+        vlc_prepare_display_dimensions()
         vlc_update_current_media_audio_status()
 
         try:
@@ -6535,6 +6543,15 @@ def vlc_monitor_vlc_health():
             vlc_remember_media(vlc_current_media_url, status)
             vlc_last_history_save_time = time.monotonic()
 
+        # Re-measure the video if its shape changed or an earlier measurement
+        # failed. Only done while the overlay is not showing, since VLC briefly
+        # shows the snapshot's file name.
+        if (
+            not vlc_is_commercial_state
+            and time.time() - vlc_last_snapshot_time >= vlc_SNAPSHOT_RETRY_SECONDS
+        ):
+            vlc_get_vlc_video_dimensions(allow_snapshot=True, status=status)
+
         stats = status.get("stats", {})
 
         # Video freeze detection
@@ -6616,6 +6633,8 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "Could not find vlc.exe in Program Files or Program Files (x86)."
         )
 
+    vlc_clear_snapshots()
+
     vlc_vlc_process = subprocess.Popen(
         [
             vlc_path,
@@ -6634,6 +6653,12 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "--no-one-instance",
             "--no-one-instance-when-started-from-file",
             "--loop",
+            # Snapshots are only used to measure the video's real shape.
+            "--snapshot-path",
+            str(vlc_SNAPSHOT_DIR),
+            "--snapshot-format",
+            "png",
+            "--no-snapshot-preview",
         ]
     )
 
@@ -6678,9 +6703,15 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
         pass
 
 
-def vlc_get_vlc_video_dimensions():
-    """Return the current video's width and height."""
-    status = vlc_get_vlc_status()
+def vlc_get_vlc_stored_video_dimensions(status=None):
+    """Return the current video's stored width and height from VLC's status.
+
+    This is the size of the pixels in the file, which is not always the shape
+    VLC displays. Videos with non-square pixels, like DVDs and many TV
+    recordings, display wider than this.
+    """
+    if status is None:
+        status = vlc_get_vlc_status()
     categories = status.get("information", {}).get("category", {})
 
     for stream_info in categories.values():
@@ -6709,6 +6740,128 @@ def vlc_get_vlc_video_dimensions():
             return int(width), int(height)
 
     return None
+
+
+def vlc_read_png_dimensions(path):
+    """Return a PNG file's width and height from its header."""
+    try:
+        with open(path, "rb") as file:
+            header = file.read(24)
+    except OSError:
+        return None
+
+    if (
+        len(header) < 24
+        or header[:8] != b"\x89PNG\r\n\x1a\n"
+        or header[12:16] != b"IHDR"
+    ):
+        return None
+
+    width, height = struct.unpack(">II", header[16:24])
+    if width <= 0 or height <= 0:
+        return None
+
+    return width, height
+
+
+def vlc_clear_snapshots():
+    """Delete snapshots left over from measuring videos."""
+    if not vlc_SNAPSHOT_DIR.exists():
+        return
+
+    for snapshot in vlc_SNAPSHOT_DIR.glob("*.png"):
+        try:
+            snapshot.unlink()
+        except OSError:
+            pass
+
+
+def vlc_get_vlc_snapshot_dimensions():
+    """Take a VLC snapshot and return the size it was saved at.
+
+    VLC saves snapshots at the size it actually displays the video, so this
+    gives the real shape of the picture even for videos with non-square pixels.
+    """
+    global vlc_last_snapshot_time
+
+    with vlc_snapshot_lock:
+        try:
+            vlc_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+            existing_snapshots = set(vlc_SNAPSHOT_DIR.glob("*.png"))
+            vlc_last_snapshot_time = time.time()
+            vlc_send_vlc_command("snapshot")
+        except (OSError, requests.RequestException) as error:
+            print(f"Could not take VLC snapshot: {error}")
+            return None
+
+        start_time = time.time()
+        while time.time() - start_time < vlc_SNAPSHOT_TIMEOUT_SECONDS:
+            for snapshot in set(vlc_SNAPSHOT_DIR.glob("*.png")) - existing_snapshots:
+                dimensions = vlc_read_png_dimensions(snapshot)
+                if dimensions:
+                    vlc_clear_snapshots()
+                    return dimensions
+
+            time.sleep(0.1)
+
+        return None
+
+
+def vlc_get_vlc_video_dimensions(allow_snapshot=False, status=None):
+    """Return the width and height the current video is displayed at.
+
+    Snapshots are only taken when allow_snapshot is True, because VLC briefly
+    shows the snapshot's file name on the video. Without a measured snapshot,
+    the stored resolution is used.
+    """
+    global vlc_display_dimensions_cache_key
+    global vlc_display_dimensions
+
+    stored_dimensions = vlc_get_vlc_stored_video_dimensions(status)
+    if not stored_dimensions:
+        return None
+
+    stored_width, stored_height = stored_dimensions
+    cache_key = (vlc_current_media_url, round(stored_width / stored_height, 3))
+
+    if cache_key == vlc_display_dimensions_cache_key and vlc_display_dimensions:
+        return vlc_display_dimensions
+
+    if not allow_snapshot:
+        return stored_dimensions
+
+    snapshot_dimensions = vlc_get_vlc_snapshot_dimensions()
+    if not snapshot_dimensions:
+        # Not cached, so the snapshot is tried again next time.
+        print("Could not measure the video with a VLC snapshot. Using its stored resolution.")
+        return stored_dimensions
+
+    if snapshot_dimensions != stored_dimensions:
+        print(
+            f"Video is stored at {stored_width}x{stored_height} but displays at "
+            f"{snapshot_dimensions[0]}x{snapshot_dimensions[1]}."
+        )
+
+    vlc_display_dimensions_cache_key = cache_key
+    vlc_display_dimensions = snapshot_dimensions
+    return vlc_display_dimensions
+
+
+def vlc_prepare_display_dimensions():
+    """Measure the video's display size while VLC is not being watched.
+
+    Called right after new media starts playing, before VLC is shown, so the
+    snapshot's file name is gone by the time the overlay appears.
+    """
+    try:
+        vlc_get_vlc_video_dimensions(allow_snapshot=True)
+    except requests.RequestException:
+        return
+
+    # Only wait when a snapshot was just taken (not when the size was cached).
+    remaining_osd_time = vlc_SNAPSHOT_OSD_SECONDS - (time.time() - vlc_last_snapshot_time)
+    if remaining_osd_time > 0:
+        time.sleep(remaining_osd_time)
 
 
 def vlc_wait_for_vlc_playing(timeout=60):
@@ -7004,26 +7157,18 @@ def vlc_read_preferences(data):
 def vlc_show_commercial_overlay(hwnd, preferences):
     global vlc_optimized_width_percentage
     global vlc_optimized_height_percentage
-    global vlc_previous_overlay_width_percentage
-    global vlc_previous_overlay_height_percentage
     global vlc_expected_commercial_window_rect
 
-    dimensions_changed = (
-        preferences["overlay_width"] != vlc_previous_overlay_width_percentage
-        or preferences["overlay_height"] != vlc_previous_overlay_height_percentage
+    # Recalculated every commercial so a size measured after the last one (or a
+    # stream that changed shape) is always used. The video's display size is
+    # cached, so this is cheap.
+    (
+        vlc_optimized_width_percentage,
+        vlc_optimized_height_percentage,
+    ) = vlc_calculate_largest_aspect_fit(
+        max_width_percent=preferences["overlay_width"],
+        max_height_percent=preferences["overlay_height"],
     )
-
-    vlc_previous_overlay_width_percentage = preferences["overlay_width"]
-    vlc_previous_overlay_height_percentage = preferences["overlay_height"]
-
-    if dimensions_changed:
-        (
-            vlc_optimized_width_percentage,
-            vlc_optimized_height_percentage,
-        ) = vlc_calculate_largest_aspect_fit(
-            max_width_percent=preferences["overlay_width"],
-            max_height_percent=preferences["overlay_height"],
-        )
 
     vlc_position_and_resize_window(
         hwnd,
@@ -7125,6 +7270,7 @@ def vlc_initialize_plugin(preferences):
     if not vlc_wait_for_vlc_playing():
         raise RuntimeError("VLC did not begin displaying video before timeout.")
 
+    vlc_prepare_display_dimensions()
     vlc_update_current_media_audio_status()
     time.sleep(0.5)
 
@@ -7181,6 +7327,8 @@ def vlc_end_plugin():
     global vlc_is_commercial_state
     global vlc_history_saving_disabled
     global vlc_expected_commercial_window_rect
+    global vlc_display_dimensions_cache_key
+    global vlc_display_dimensions
 
     vlc_stop_health_monitor()
     vlc_save_current_media_progress()
@@ -7217,7 +7365,10 @@ def vlc_end_plugin():
     vlc_current_media_has_audio = False
     vlc_is_commercial_state = False
     vlc_expected_commercial_window_rect = None
+    vlc_display_dimensions_cache_key = None
+    vlc_display_dimensions = None
     vlc_is_setup_complete = False
+    vlc_clear_snapshots()
     print("Extension stopped.")
 
 # -----------------------------------------------------------------------------
