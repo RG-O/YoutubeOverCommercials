@@ -15,7 +15,7 @@ PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 PLUGIN_NAME = "Overlay Any Window"
 PLUGIN_ID = "overlay-any-window" # Must be unique
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.1.1"
 
 PORT = 64146
 SPACEBAR_KEY = 0x20

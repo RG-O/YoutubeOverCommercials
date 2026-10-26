@@ -75,7 +75,7 @@ PLUGIN_DEFINITIONS = {
     "overlay-any-window": {
         "source_key": "window",
         "name": "Overlay Any Window",
-        "version": "1.1.0",
+        "version": "1.1.1",
         "description": "Uses any visible window as the commercial overlay.",
         "primaryColor": "#ffffff",
         "secondaryColor": "#3b93d9",
@@ -3557,7 +3557,7 @@ window_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 window_PLUGIN_NAME = "Overlay Any Window"
 window_PLUGIN_ID = "overlay-any-window" # Must be unique
-window_PLUGIN_VERSION = "1.1.0"
+window_PLUGIN_VERSION = "1.1.1"
 window_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/overlay-any-window"
 
 window_PORT = 64146
