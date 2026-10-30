@@ -42,6 +42,7 @@ FALLBACK_VOLUME = 205
 FREEZE_TIMEOUT_SECONDS = 20
 AUDIO_TIMEOUT_SECONDS = 20
 HEALTH_CHECK_INTERVAL_SECONDS = 1
+FOCUS_RETURN_DELAY_SECONDS = 0.3
 WINDOW_SIZE_TOLERANCE_PIXELS = 2
 HISTORY_SAVE_INTERVAL_SECONDS = 5
 HISTORY_FILE = Path(__file__).resolve().parent / "vlc_media_history.json"
@@ -69,7 +70,6 @@ last_snapshot_time = 0
 vlc_process = None
 vlc_window_handle = None
 original_foreground_window = None
-is_original_foreground_window_topmost = False
 is_setup_complete = False
 saved_volume = DEFAULT_VOLUME
 current_media_url = None
@@ -1115,46 +1115,75 @@ def close_window_by_hwnd(hwnd):
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
 
 
-def set_original_window_topmost(make_topmost):
-    """Temporarily change the original foreground window's topmost state."""
-    global is_original_foreground_window_topmost
+def activate_window(hwnd):
+    """Make a window the active window.
 
-    if not original_foreground_window:
-        return
-
-    insert_after = (
-        win32con.HWND_TOPMOST if make_topmost else win32con.HWND_NOTOPMOST
+    Windows only lets the app currently in use change the active window, so
+    this briefly shares input with that app (AttachThreadInput) to be allowed.
+    """
+    foreground_window = win32gui.GetForegroundWindow()
+    current_thread = win32api.GetCurrentThreadId()
+    foreground_thread = (
+        win32process.GetWindowThreadProcessId(foreground_window)[0]
+        if foreground_window
+        else 0
     )
 
-    win32gui.SetWindowPos(
-        original_foreground_window,
-        insert_after,
-        0,
-        0,
-        0,
-        0,
-        win32con.SWP_NOMOVE
-        | win32con.SWP_NOSIZE
-        | win32con.SWP_NOACTIVATE,
-    )
+    is_attached = False
+    try:
+        if foreground_thread and foreground_thread != current_thread:
+            win32process.AttachThreadInput(current_thread, foreground_thread, True)
+            is_attached = True
 
-    is_original_foreground_window_topmost = make_topmost
-    #TODO: add thread to monitor when original_foreground_window is back to foreground window
+        win32gui.BringWindowToTop(hwnd)
+        win32gui.SetForegroundWindow(hwnd)
+    except win32gui.error as error:
+        print(f"Could not activate window: {error}")
+    finally:
+        if is_attached:
+            win32process.AttachThreadInput(current_thread, foreground_thread, False)
 
 
-def hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar=True):
-    """Use the original two-step minimize behavior for Windows 10 and 11."""
-    safely_minimize_window(hwnd)
-    if should_clear_taskbar:
-        time.sleep(0.2)
-        position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-        time.sleep(0.2)
-        safely_minimize_window(hwnd)
-        time.sleep(0.2)
+def is_vlc_window(hwnd):
+    """Return True when a window belongs to the VLC process this plugin opened."""
+    if not hwnd or not vlc_process:
+        return False
 
-        if original_foreground_window:
-            time.sleep(0.4)
-            set_original_window_topmost(True)
+    try:
+        _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+    except win32gui.error:
+        return False
+
+    return process_id == vlc_process.pid
+
+
+def return_focus_to_browser(delay_seconds=FOCUS_RETURN_DELAY_SECONDS):
+    """Give keyboard focus back to the browser if VLC took it.
+
+    Windows only hides the taskbar while the fullscreen browser is the active
+    window, so VLC taking focus is what makes the taskbar show over the
+    stream. Focus is only taken back from VLC, so a window the user switched
+    to on purpose is left alone.
+
+    Returns True when the browser is the active window afterwards.
+    """
+    browser_window = original_foreground_window
+    if not browser_window or not win32gui.IsWindow(browser_window):
+        return False
+
+    # VLC can take focus a moment after it is shown.
+    time.sleep(delay_seconds)
+
+    foreground_window = win32gui.GetForegroundWindow()
+    if foreground_window == browser_window:
+        return True
+
+    if foreground_window and not is_vlc_window(foreground_window):
+        return False
+
+    print("VLC took focus from the browser. Giving it back.")
+    activate_window(browser_window)
+    return win32gui.GetForegroundWindow() == browser_window
 
 
 # -----------------------------------------------------------------------------
@@ -1218,6 +1247,8 @@ def show_commercial_overlay(hwnd, preferences):
     #if is_live_media(status):
     set_vlc_volume(saved_volume)
 
+    return_focus_to_browser()
+
 
 def hide_commercial_overlay(hwnd, preferences):
     global saved_volume
@@ -1229,6 +1260,7 @@ def hide_commercial_overlay(hwnd, preferences):
     if not is_live_media(status):
         send_vlc_command("pl_forcepause")
         safely_minimize_window(hwnd)
+        return_focus_to_browser()
         return
 
     set_vlc_volume(0)
@@ -1247,6 +1279,8 @@ def hide_commercial_overlay(hwnd, preferences):
         )
     else:
         safely_minimize_window(hwnd)
+
+    return_focus_to_browser()
 
 
 def resume_fullscreen(hwnd, preferences):
@@ -1270,8 +1304,14 @@ def resume_fullscreen(hwnd, preferences):
                 horizontal=preferences["pip_horizontal"],
             )
 
+    return_focus_to_browser()
+
 
 def initialize_plugin(preferences):
+    """Open VLC and get it ready.
+
+    Returns True when the browser has keyboard focus afterwards.
+    """
     global original_foreground_window
     global is_setup_complete
     global saved_volume
@@ -1289,8 +1329,6 @@ def initialize_plugin(preferences):
     if original_foreground_window:
         title = win32gui.GetWindowText(original_foreground_window)
         print(f"Original foreground window: {title}")
-
-    should_clear_taskbar = plugin_preferences.get("shouldClearTaskbar", False)
 
     media_url = get_media_url_from_preferences(preferences, use_default=True)
     custom_vlc_path = plugin_preferences.get("vlcPath", "")
@@ -1310,12 +1348,6 @@ def initialize_plugin(preferences):
 
     make_borderless(hwnd)
 
-    # Bring VLC forward briefly so the Windows taskbar appears now instead of
-    # unexpectedly appearing later when the first commercial begins.
-    time.sleep(0.2)
-    position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-    time.sleep(0.2)
-
     status = get_vlc_status()
     current_volume = int(status.get("volume", FALLBACK_VOLUME))
     saved_volume = current_volume or FALLBACK_VOLUME
@@ -1324,7 +1356,7 @@ def initialize_plugin(preferences):
         send_vlc_command("pl_forcepause")
         time.sleep(0.2)
         set_vlc_volume(saved_volume) # in case VLC opened with volume as 0, this should set it to the fallback
-        hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
+        safely_minimize_window(hwnd)
     else:
         set_vlc_volume(0)
 
@@ -1340,12 +1372,15 @@ def initialize_plugin(preferences):
                 vertical=preferences["pip_vertical"],
                 horizontal=preferences["pip_horizontal"],
             )
-            #TODO: add ability to clear taskbar while in pip mode
         else:
-            hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
+            safely_minimize_window(hwnd)
 
     is_setup_complete = True
     start_health_monitor()
+
+    # Opening VLC takes focus away from the browser, which is what makes the
+    # Windows taskbar show over the stream.
+    return return_focus_to_browser()
 
 
 def end_plugin():
@@ -1362,9 +1397,6 @@ def end_plugin():
 
     stop_health_monitor()
     save_current_media_progress()
-
-    if is_original_foreground_window_topmost:
-        set_original_window_topmost(False)
 
     hwnd = get_vlc_window()
     remove_topmost(
@@ -1468,9 +1500,6 @@ def custom_plugin_overlay():
             else:
                 print("User exited browser fullscreen.")
 
-                if is_original_foreground_window_topmost:
-                    set_original_window_topmost(False)
-
                 safely_minimize_window(hwnd)
                 time.sleep(0.1)
                 remove_topmost(
@@ -1481,14 +1510,20 @@ def custom_plugin_overlay():
                 restore_borders(hwnd)
 
         elif request_type == "init":
-            initialize_plugin(preferences)
+            is_browser_focused = initialize_plugin(preferences)
+
+            if is_browser_focused:
+                message = "Message from VLC Over Commercials plugin: Success! You are good to go!"
+            else:
+                message = (
+                    "Message from VLC Over Commercials plugin: Success! "
+                    "Click in this window to return focus and you are good to go!"
+                )
+
             return jsonify(
                 {
                     "status": "info",
-                    "message": (
-                        "Message from VLC Over Commercials plugin: Success! "
-                        "Click in this window to return focus and you are good to go!"
-                    ),
+                    "message": message,
                     "messageDisplayTime": 7000,
                 }
             )
@@ -1569,17 +1604,6 @@ def plugin_manifest():
                         "type": "select",
                         "default": "",
                         "options": get_history_dropdown_options(),
-                    },
-                    {
-                        "key": "shouldClearTaskbar",
-                        "label": "Should Attempt to Hide Taskbar",
-                        "tooltip": (
-                            "When VLC opens, it sometimes has the Windows taskbar display. "
-                            "This can quickly be fixed by clicking on the browser stream, "
-                            "but this setting attempts to dismiss it for you to save a click. "
-                        ),
-                        "type": "checkbox",
-                        "default": False,
                     },
                     {
                         "key": "clearAndDisableHistory",
