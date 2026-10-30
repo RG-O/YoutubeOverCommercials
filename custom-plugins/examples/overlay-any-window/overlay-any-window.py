@@ -630,6 +630,37 @@ async def handle_message(websocket, message):
         await send_manifest(websocket)
         return
 
+    # Moving, showing, and muting windows includes short waits for windows to
+    # settle, so it runs on a worker thread. This keeps the WebSocket (and, in
+    # the Party Pack, every other plugin) responsive in the meantime.
+    statuses = await asyncio.to_thread(process_message_with_com, message)
+
+    for status in statuses:
+        await send_status(websocket, **status)
+
+
+def process_message_with_com(message):
+    """Run process_message with Windows COM set up on this worker thread.
+
+    pycaw (used for muting) uses Windows COM, which has to be set up on each
+    thread that uses it.
+    """
+    import comtypes
+
+    comtypes.CoInitialize()
+    try:
+        return process_message(message)
+    finally:
+        comtypes.CoUninitialize()
+
+
+def process_message(message):
+    """Handle a message from the extension.
+
+    Returns a list of status messages (send_status arguments) to send back.
+    """
+    statuses = []
+    message_type = message.get("type")
     settings = get_overlay_settings(message)
     window_title = settings["window_title"]
     set_up_hwnd = get_set_up_window()
@@ -646,25 +677,23 @@ async def handle_message(websocket, message):
             release_window(set_up_hwnd)
 
         return_focus_to_browser()
-        return
+        return statuses
 
     if not window_title:
-        await send_status(
-            websocket,
-            "No window selected",
-            "The window-title preference is empty.",
-        )
-        return
+        statuses.append({
+            "display": "No window selected",
+            "debug": "The window-title preference is empty.",
+        })
+        return statuses
 
     hwnd = find_selected_window(window_title)
 
     if hwnd is None:
-        await send_status(
-            websocket,
-            f'Could not find "{window_title}"',
-            f'Could not find a visible window titled "{window_title}".',
-        )
-        return
+        statuses.append({
+            "display": f'Could not find "{window_title}"',
+            "debug": f'Could not find a visible window titled "{window_title}".',
+        })
+        return statuses
 
     # A different window was chosen in the extension after the plugin was set
     # up, so put the old window back and set up the new one in its place.
@@ -685,7 +714,7 @@ async def handle_message(websocket, message):
 
         if settings["is_pip_mode"]:
             result = show_pip_window(hwnd, settings)
-            await report_window_front_result(websocket, result, window_title)
+            add_window_front_status(statuses, result, window_title)
         else:
             minimize_window(hwnd)
 
@@ -693,7 +722,7 @@ async def handle_message(websocket, message):
             mute_application_of_window(hwnd, mute=True)
 
         print("Extension initiated.")
-        return
+        return statuses
 
     if message_type == "commercial_state_change":
         is_commercial = bool(
@@ -703,7 +732,7 @@ async def handle_message(websocket, message):
         if is_commercial:
             print("Starting overlay.")
             result = show_overlay_window(hwnd, settings)
-            await report_window_front_result(websocket, result, window_title)
+            add_window_front_status(statuses, result, window_title)
 
             if settings["should_mute"]:
                 mute_application_of_window(hwnd, mute=False)
@@ -724,12 +753,12 @@ async def handle_message(websocket, message):
 
             if settings["is_pip_mode"]:
                 result = show_pip_window(hwnd, settings)
-                await report_window_front_result(websocket, result, window_title)
+                add_window_front_status(statuses, result, window_title)
             else:
                 minimize_window(hwnd)
                 return_focus_to_browser()
 
-        return
+        return statuses
 
     if message_type == "browser_fullscreen_state_change":
         is_fullscreen = bool(
@@ -749,7 +778,7 @@ async def handle_message(websocket, message):
 
             if settings["is_pip_mode"]:
                 result = show_pip_window(hwnd, settings)
-                await report_window_front_result(websocket, result, window_title)
+                add_window_front_status(statuses, result, window_title)
             else:
                 # Keep it out of the way until the next commercial (a window
                 # that is always on top would otherwise sit over the stream).
@@ -764,13 +793,13 @@ async def handle_message(websocket, message):
             remove_topmost(hwnd, width_percent=90, height_percent=85)
             restore_borders(hwnd)
 
-        return
+        return statuses
 
-    await send_status(
-        websocket,
-        "Unknown message",
-        f'Unsupported message type: "{message_type}".',
-    )
+    statuses.append({
+        "display": "Unknown message",
+        "debug": f'Unsupported message type: "{message_type}".',
+    })
+    return statuses
 
 
 def reset_focus_message():
@@ -779,36 +808,34 @@ def reset_focus_message():
     has_sent_focus_message = False
 
 
-async def report_window_front_result(websocket, result, window_title):
+def add_window_front_status(statuses, result, window_title):
     """Let the user know when the overlay window took focus or couldn't be shown on top."""
     global has_sent_focus_message
 
     if result == WINDOW_IN_FRONT_BY_ACTIVATING and not has_sent_focus_message:
         has_sent_focus_message = True
-        await send_status(
-            websocket,
-            (
+        statuses.append({
+            "display": (
                 f'To show "{window_title}" on top, Overlay Any Window had to make it '
                 "the active window, so your browser lost keyboard focus. Click your "
                 "browser to give it focus again (for example to use the keyboard "
                 "shortcut). This may hide the overlay window."
             ),
-            "The window would not stay always on top, so it was activated instead.",
-            display_type="info",
-            display_time=FOCUS_MESSAGE_DISPLAY_MILLISECONDS,
-        )
+            "debug": "The window would not stay always on top, so it was activated instead.",
+            "display_type": "info",
+            "display_time": FOCUS_MESSAGE_DISPLAY_MILLISECONDS,
+        })
 
     elif result == WINDOW_NOT_IN_FRONT:
-        await send_status(
-            websocket,
-            (
+        statuses.append({
+            "display": (
                 f'Overlay Any Window could not show "{window_title}" on top of your '
                 "browser. Try closing and reopening that window, or choose a "
                 "different one."
             ),
-            "The window would not stay always on top and could not be activated.",
-            display_type="error",
-        )
+            "debug": "The window would not stay always on top and could not be activated.",
+            "display_type": "error",
+        })
 
 
 async def send_status(websocket, display, debug, display_type=None, display_time=None):

@@ -1,5 +1,6 @@
 
 import asyncio
+import concurrent.futures
 import websockets
 import json
 import time
@@ -18,7 +19,7 @@ PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 PLUGIN_NAME = "Hand Gesture Commercial Trigger"
 PLUGIN_ID = "gesture-trigger-plugin"
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.1.1"
 
 # --------------------------------------------------
 # Configuration
@@ -100,6 +101,35 @@ last_status_display = None
 gesture_group_states = {}
 
 any_trigger_display_until = time.time()
+
+
+def initialize_camera_thread():
+    """Set up Windows COM on the camera thread (used to list camera names)."""
+    if platform.system() == "Windows":
+        try:
+            import comtypes
+
+            comtypes.CoInitialize()
+        except Exception as error:
+            print(f"Could not set up COM on the camera thread: {error}")
+
+
+# All camera and gesture-recognizer work runs on this one thread. It blocks
+# (waiting for frames, recognizing gestures, listing cameras), so keeping it
+# off the event loop keeps the WebSocket (and, in the Party Pack, every other
+# plugin) responsive. A single thread is used because camera objects should
+# stay on the thread that opened them.
+camera_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="gesture-camera",
+    initializer=initialize_camera_thread,
+)
+
+
+async def run_on_camera_thread(function, *args):
+    """Run blocking camera or gesture-recognizer work on the camera thread."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(camera_executor, function, *args)
 
 # --------------------------------------------------
 # Model management
@@ -724,6 +754,89 @@ async def process_gesture_group(ws, gesture_name, hands, now, frame):
 # Camera loop
 # --------------------------------------------------
 
+def open_camera():
+    """Open and set up the selected camera. Runs on the camera thread."""
+    cap = cv2.VideoCapture(CAMERA_INDEX, get_video_capture_backend())
+
+    #TODO: add advanced/troubleshooting option for this
+    # cap.set(
+    #     cv2.CAP_PROP_FOURCC,
+    #     cv2.VideoWriter_fourcc(*"MJPG")
+    # )
+
+    if CAMERA_RESOLUTION != "native":
+        width, height = map(int, CAMERA_RESOLUTION.split("x"))
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    #TODO: add advanced/troubleshooting option for this
+    # cap.set(cv2.CAP_PROP_FPS, 30)
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print(f"Camera resolution: {width}x{height}")
+
+    return cap
+
+
+def read_and_recognize_frame(cap, recognizer):
+    """Read the next camera frame and recognize hand gestures in it.
+
+    Runs on the camera thread. Returns (frame, result), or (None, None) when
+    no frame could be read.
+    """
+    success, frame = cap.read()
+
+    if not success:
+        return None, None
+
+    if MIRROR_CAMERA:
+        frame = cv2.flip(frame, 1)
+
+    #TODO: add option for this
+    # display_frame = frame
+
+    # processing_frame = cv2.resize(
+    #     frame,
+    #     None,
+    #     fx=0.5,
+    #     fy=0.5,
+    #     interpolation=cv2.INTER_AREA
+    # )
+
+    # rgb_frame = cv2.cvtColor(
+    #     processing_frame,
+    #     cv2.COLOR_BGR2RGB
+    # )
+
+    rgb_frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2RGB
+    )
+
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb_frame
+    )
+
+    return frame, recognizer.recognize(mp_image)
+
+
+def release_camera_resources(cap, recognizer):
+    """Close the camera and gesture recognizer. Runs on the camera thread."""
+    if cap is not None:
+        cap.release()
+
+    if recognizer is not None:
+        try:
+            recognizer.close()
+            print("Recognizer closed")
+        except Exception:
+            pass
+
+
 async def camera_loop(ws):
     cap = None
     recognizer = None
@@ -758,29 +871,12 @@ async def camera_loop(ws):
             )
         )
 
-        recognizer = vision.GestureRecognizer.create_from_options(options)
+        recognizer = await run_on_camera_thread(
+            vision.GestureRecognizer.create_from_options,
+            options,
+        )
 
-        cap = cv2.VideoCapture(CAMERA_INDEX, get_video_capture_backend())
-
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(
-        #     cv2.CAP_PROP_FOURCC,
-        #     cv2.VideoWriter_fourcc(*"MJPG")
-        # )
-
-        if CAMERA_RESOLUTION != "native":
-            width, height = map(int, CAMERA_RESOLUTION.split("x"))
-
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(cv2.CAP_PROP_FPS, 30)
-
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        print(f"Camera resolution: {width}x{height}")
+        cap = await run_on_camera_thread(open_camera)
 
         if not cap.isOpened():
             print("Failed to open webcam")
@@ -800,42 +896,15 @@ async def camera_loop(ws):
         while True:
             await camera_active.wait()
 
-            success, frame = cap.read()
+            frame, result = await run_on_camera_thread(
+                read_and_recognize_frame,
+                cap,
+                recognizer,
+            )
 
-            if not success:
+            if frame is None:
                 await asyncio.sleep(0.01)
                 continue
-
-            if MIRROR_CAMERA:
-                frame = cv2.flip(frame, 1)
-
-            #TODO: add option for this
-            # display_frame = frame
-
-            # processing_frame = cv2.resize(
-            #     frame,
-            #     None,
-            #     fx=0.5,
-            #     fy=0.5,
-            #     interpolation=cv2.INTER_AREA
-            # )
-
-            # rgb_frame = cv2.cvtColor(
-            #     processing_frame,
-            #     cv2.COLOR_BGR2RGB
-            # )
-
-            rgb_frame = cv2.cvtColor(
-                frame,
-                cv2.COLOR_BGR2RGB
-            )
-
-            mp_image = mp.Image(
-                image_format=mp.ImageFormat.SRGB,
-                data=rgb_frame
-            )
-
-            result = recognizer.recognize(mp_image)
 
             now = time.time()
             detected_hands = []
@@ -906,8 +975,6 @@ async def camera_loop(ws):
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
 
-            await asyncio.sleep(0)
-
     except asyncio.CancelledError:
         print("camera_loop shutting down")
         raise
@@ -918,9 +985,8 @@ async def camera_loop(ws):
     finally:
         print("Cleaning up camera resources")
 
-        if cap is not None:
-            cap.release()
-
+        # Note: the debug window belongs to this (event loop) thread, while
+        # the camera and recognizer belong to the camera thread.
         if debug_window_created:
             try:
                 cv2.destroyAllWindows()
@@ -931,12 +997,11 @@ async def camera_loop(ws):
             except cv2.error:
                 pass
 
-        if recognizer is not None:
+        if cap is not None or recognizer is not None:
             try:
-                recognizer.close()
-                print("Recognizer closed")
-            except Exception:
-                pass
+                await run_on_camera_thread(release_camera_resources, cap, recognizer)
+            except Exception as error:
+                print(f"Could not release camera resources: {error}")
 
         print("Camera resources released")
 
@@ -1103,7 +1168,7 @@ async def send_manifest(ws):
 
     # only get list of cameras if not already running and if it is, only set it if it isn't already cached
     if not camera_task:
-        camera_options = get_available_cameras()
+        camera_options = await run_on_camera_thread(get_available_cameras)
     elif not camera_options:
         camera_options = [{"label": "Camera 0", "value": "0"}]
 

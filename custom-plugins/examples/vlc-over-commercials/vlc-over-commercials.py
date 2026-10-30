@@ -2,6 +2,8 @@
 import json
 import os
 import re
+import secrets
+import socket
 import struct
 import subprocess
 import tempfile
@@ -32,9 +34,9 @@ PLUGIN_VERSION = "1.1.1"
 # VLC settings
 # -----------------------------------------------------------------------------
 
-VLC_HTTP_URL = "http://localhost:8080/requests/status.json"
-VLC_HTTP_PASSWORD = "1234"
-VLC_HTTP_AUTH = ("", VLC_HTTP_PASSWORD)
+# VLC's web interface only listens on this computer (not the local network),
+# on a free port with a new random password each time VLC is opened.
+VLC_HTTP_HOST = "127.0.0.1"
 
 DEFAULT_MEDIA_URL = "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm"
 DEFAULT_VOLUME = 256
@@ -69,6 +71,8 @@ last_snapshot_time = 0
 
 vlc_process = None
 vlc_window_handle = None
+vlc_http_url = None
+vlc_http_auth = None
 original_foreground_window = None
 is_setup_complete = False
 saved_volume = DEFAULT_VOLUME
@@ -278,11 +282,14 @@ def get_vlc_status(command=None, params=None, timeout=3):
     if command:
         request_params["command"] = command
 
+    if not vlc_http_url:
+        raise requests.ConnectionError("VLC has not been opened by this plugin.")
+
     with vlc_command_lock:
         response = requests.get(
-            VLC_HTTP_URL,
+            vlc_http_url,
             params=request_params,
-            auth=VLC_HTTP_AUTH,
+            auth=vlc_http_auth,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -651,10 +658,33 @@ def stop_health_monitor():
     health_monitor_stop_event.set()
 
 
+def find_free_port():
+    """Return a port on this computer that nothing is currently using."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_socket:
+        test_socket.bind((VLC_HTTP_HOST, 0))
+        return test_socket.getsockname()[1]
+
+
+def get_english_environment():
+    """Return environment variables that make VLC use English.
+
+    The labels in VLC's status (like "Video_resolution") are translated into
+    VLC's language, and this plugin reads them to find the video's size.
+    Note: VLC's own --language option did not change them in testing, but
+    the LANG environment variable did.
+    """
+    environment = dict(os.environ)
+    environment["LANG"] = "en"
+    environment["LANGUAGE"] = "en"
+    return environment
+
+
 def open_vlc_with_media(media_url, custom_vlc_path=None):
     """Start VLC and remember the main window owned by that process."""
     global vlc_process
     global vlc_window_handle
+    global vlc_http_url
+    global vlc_http_auth
     global current_media_url
 
     vlc_path = find_vlc_exe(custom_vlc_path)
@@ -665,6 +695,11 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
 
     clear_snapshots()
 
+    http_port = find_free_port()
+    http_password = secrets.token_urlsafe(16)
+    vlc_http_url = f"http://{VLC_HTTP_HOST}:{http_port}/requests/status.json"
+    vlc_http_auth = ("", http_password)
+
     vlc_process = subprocess.Popen(
         [
             vlc_path,
@@ -672,8 +707,12 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
             "--qt-minimal-view",
             "--extraintf",
             "http",
+            "--http-host",
+            VLC_HTTP_HOST,
+            "--http-port",
+            str(http_port),
             "--http-password",
-            VLC_HTTP_PASSWORD,
+            http_password,
             "--qt-continue=2",
             "--qt-notification=0",
             "--no-video-title-show",
@@ -689,7 +728,8 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
             "--snapshot-format",
             "png",
             "--no-snapshot-preview",
-        ]
+        ],
+        env=get_english_environment(),
     )
 
     print(f"Started VLC process with PID {vlc_process.pid}.")
@@ -1386,6 +1426,8 @@ def initialize_plugin(preferences):
 def end_plugin():
     global vlc_process
     global vlc_window_handle
+    global vlc_http_url
+    global vlc_http_auth
     global is_setup_complete
     global current_media_url
     global current_media_has_audio
@@ -1423,6 +1465,8 @@ def end_plugin():
 
     vlc_process = None
     vlc_window_handle = None
+    vlc_http_url = None
+    vlc_http_auth = None
     current_media_url = None
     current_media_has_audio = False
     is_commercial_state = False

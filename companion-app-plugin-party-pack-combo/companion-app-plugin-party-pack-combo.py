@@ -4166,30 +4166,6 @@ async def window_handle_client(websocket):
 
 
 async def window_handle_message(websocket, message):
-    """Handle an Overlay Any Window message with COM scoped to this plugin.
-
-    pycaw uses Windows COM internally. The Party Pack WebSocket loop runs on
-    a worker thread, and COM initialization is per-thread. Keep that Windows
-    requirement local to this plugin instead of initializing COM for every
-    plugin in the Party Pack.
-    """
-    # Reading the manifest only enumerates windows and does not use pycaw, so
-    # there is no reason to initialize COM for a manifest request.
-    if message.get("type") == "plugin_manifest":
-        await window_handle_message_with_com(websocket, message)
-        return
-
-    import comtypes
-
-    comtypes.CoInitialize()
-    try:
-        await window_handle_message_with_com(websocket, message)
-    finally:
-        comtypes.CoUninitialize()
-
-
-async def window_handle_message_with_com(websocket, message):
-    """Original Overlay Any Window message handling logic."""
     message_type = message.get("type")
     print(f"Received message: {message_type}")
 
@@ -4197,6 +4173,37 @@ async def window_handle_message_with_com(websocket, message):
         await window_send_manifest(websocket)
         return
 
+    # Moving, showing, and muting windows includes short waits for windows to
+    # settle, so it runs on a worker thread. This keeps the WebSocket (and, in
+    # the Party Pack, every other plugin) responsive in the meantime.
+    statuses = await asyncio.to_thread(window_process_message_with_com, message)
+
+    for status in statuses:
+        await window_send_status(websocket, **status)
+
+
+def window_process_message_with_com(message):
+    """Run process_message with Windows COM set up on this worker thread.
+
+    pycaw (used for muting) uses Windows COM, which has to be set up on each
+    thread that uses it.
+    """
+    import comtypes
+
+    comtypes.CoInitialize()
+    try:
+        return window_process_message(message)
+    finally:
+        comtypes.CoUninitialize()
+
+
+def window_process_message(message):
+    """Handle a message from the extension.
+
+    Returns a list of status messages (send_status arguments) to send back.
+    """
+    statuses = []
+    message_type = message.get("type")
     settings = window_get_overlay_settings(message)
     window_title = settings["window_title"]
     set_up_hwnd = window_get_set_up_window()
@@ -4213,25 +4220,23 @@ async def window_handle_message_with_com(websocket, message):
             window_release_window(set_up_hwnd)
 
         window_return_focus_to_browser()
-        return
+        return statuses
 
     if not window_title:
-        await window_send_status(
-            websocket,
-            "No window selected",
-            "The window-title preference is empty.",
-        )
-        return
+        statuses.append({
+            "display": "No window selected",
+            "debug": "The window-title preference is empty.",
+        })
+        return statuses
 
     hwnd = window_find_selected_window(window_title)
 
     if hwnd is None:
-        await window_send_status(
-            websocket,
-            f'Could not find "{window_title}"',
-            f'Could not find a visible window titled "{window_title}".',
-        )
-        return
+        statuses.append({
+            "display": f'Could not find "{window_title}"',
+            "debug": f'Could not find a visible window titled "{window_title}".',
+        })
+        return statuses
 
     # A different window was chosen in the extension after the plugin was set
     # up, so put the old window back and set up the new one in its place.
@@ -4252,7 +4257,7 @@ async def window_handle_message_with_com(websocket, message):
 
         if settings["is_pip_mode"]:
             result = window_show_pip_window(hwnd, settings)
-            await window_report_window_front_result(websocket, result, window_title)
+            window_add_window_front_status(statuses, result, window_title)
         else:
             window_minimize_window(hwnd)
 
@@ -4260,7 +4265,7 @@ async def window_handle_message_with_com(websocket, message):
             window_mute_application_of_window(hwnd, mute=True)
 
         print("Extension initiated.")
-        return
+        return statuses
 
     if message_type == "commercial_state_change":
         is_commercial = bool(
@@ -4270,7 +4275,7 @@ async def window_handle_message_with_com(websocket, message):
         if is_commercial:
             print("Starting overlay.")
             result = window_show_overlay_window(hwnd, settings)
-            await window_report_window_front_result(websocket, result, window_title)
+            window_add_window_front_status(statuses, result, window_title)
 
             if settings["should_mute"]:
                 window_mute_application_of_window(hwnd, mute=False)
@@ -4291,12 +4296,12 @@ async def window_handle_message_with_com(websocket, message):
 
             if settings["is_pip_mode"]:
                 result = window_show_pip_window(hwnd, settings)
-                await window_report_window_front_result(websocket, result, window_title)
+                window_add_window_front_status(statuses, result, window_title)
             else:
                 window_minimize_window(hwnd)
                 window_return_focus_to_browser()
 
-        return
+        return statuses
 
     if message_type == "browser_fullscreen_state_change":
         is_fullscreen = bool(
@@ -4316,7 +4321,7 @@ async def window_handle_message_with_com(websocket, message):
 
             if settings["is_pip_mode"]:
                 result = window_show_pip_window(hwnd, settings)
-                await window_report_window_front_result(websocket, result, window_title)
+                window_add_window_front_status(statuses, result, window_title)
             else:
                 # Keep it out of the way until the next commercial (a window
                 # that is always on top would otherwise sit over the stream).
@@ -4331,13 +4336,13 @@ async def window_handle_message_with_com(websocket, message):
             window_remove_topmost(hwnd, width_percent=90, height_percent=85)
             window_restore_borders(hwnd)
 
-        return
+        return statuses
 
-    await window_send_status(
-        websocket,
-        "Unknown message",
-        f'Unsupported message type: "{message_type}".',
-    )
+    statuses.append({
+        "display": "Unknown message",
+        "debug": f'Unsupported message type: "{message_type}".',
+    })
+    return statuses
 
 
 def window_reset_focus_message():
@@ -4346,36 +4351,34 @@ def window_reset_focus_message():
     window_has_sent_focus_message = False
 
 
-async def window_report_window_front_result(websocket, result, window_title):
+def window_add_window_front_status(statuses, result, window_title):
     """Let the user know when the overlay window took focus or couldn't be shown on top."""
     global window_has_sent_focus_message
 
     if result == window_WINDOW_IN_FRONT_BY_ACTIVATING and not window_has_sent_focus_message:
         window_has_sent_focus_message = True
-        await window_send_status(
-            websocket,
-            (
+        statuses.append({
+            "display": (
                 f'To show "{window_title}" on top, Overlay Any Window had to make it '
                 "the active window, so your browser lost keyboard focus. Click your "
                 "browser to give it focus again (for example to use the keyboard "
                 "shortcut). This may hide the overlay window."
             ),
-            "The window would not stay always on top, so it was activated instead.",
-            display_type="info",
-            display_time=window_FOCUS_MESSAGE_DISPLAY_MILLISECONDS,
-        )
+            "debug": "The window would not stay always on top, so it was activated instead.",
+            "display_type": "info",
+            "display_time": window_FOCUS_MESSAGE_DISPLAY_MILLISECONDS,
+        })
 
     elif result == window_WINDOW_NOT_IN_FRONT:
-        await window_send_status(
-            websocket,
-            (
+        statuses.append({
+            "display": (
                 f'Overlay Any Window could not show "{window_title}" on top of your '
                 "browser. Try closing and reopening that window, or choose a "
                 "different one."
             ),
-            "The window would not stay always on top and could not be activated.",
-            display_type="error",
-        )
+            "debug": "The window would not stay always on top and could not be activated.",
+            "display_type": "error",
+        })
 
 
 async def window_send_status(websocket, display, debug, display_type=None, display_time=None):
@@ -4515,7 +4518,7 @@ voice_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 voice_PLUGIN_NAME = "Voice Commercial Trigger"
 voice_PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
-voice_PLUGIN_VERSION = "1.0.1"
+voice_PLUGIN_VERSION = "1.0.2"
 voice_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/say-no-to-commercials"
 
 voice_PORT = 64145
@@ -4541,6 +4544,10 @@ voice_DEFAULT_CONTENT_EMOJI = "\U0001F34C"
 voice_TARGET_PHRASES = {}
 
 voice_COOLDOWN = 3.0
+
+# How long to wait for the next block of microphone audio before checking
+# again whether listening should stop.
+voice_AUDIO_WAIT_SECONDS = 0.5
 
 # --------------------------------------------------
 # Global state
@@ -4733,6 +4740,39 @@ def voice_audio_callback(indata, frames, time_info, status):
         print("Audio status:", status)
     voice_audio_queue.put(bytes(indata))
 
+
+def voice_get_next_audio_block():
+    """Wait briefly for the next block of microphone audio.
+
+    Returns None if none arrives in time, so the listen loop can check whether
+    it should stop, and a microphone that stops sending audio can't hang the
+    plugin.
+    """
+    try:
+        return voice_audio_queue.get(timeout=voice_AUDIO_WAIT_SECONDS)
+    except queue.Empty:
+        return None
+
+
+def voice_clear_audio_queue():
+    """Throw away audio left over from the last time listening was stopped."""
+    while True:
+        try:
+            voice_audio_queue.get_nowait()
+        except queue.Empty:
+            return
+
+
+def voice_recognize_audio_block(recognizer, data):
+    """Run speech recognition on one block of audio.
+
+    Returns ("final" or "partial", recognized text).
+    """
+    if recognizer.AcceptWaveform(data):
+        return "final", json.loads(recognizer.Result()).get("text", "")
+
+    return "partial", json.loads(recognizer.PartialResult()).get("partial", "")
+
 def voice_find_trigger_config(text):
     """Find a configured word or multi-word phrase in recognized speech."""
     normalized_text = " ".join(text.lower().split())
@@ -4823,7 +4863,10 @@ async def voice_listen_loop(ws):
             "Loading Voice model...",
             "Loading Vosk model...",
         )
-        model = Model(voice_MODEL_PATH)
+        # Loading the model takes a few seconds, so it runs on a worker thread
+        # to keep the WebSocket (and, in the Party Pack, every other plugin)
+        # responsive in the meantime.
+        model = await asyncio.to_thread(Model, voice_MODEL_PATH)
 
         recognizer = KaldiRecognizer(model, 16000)
 
@@ -4839,6 +4882,9 @@ async def voice_listen_loop(ws):
                 "Ready"
             )
 
+            # Don't react to things said before listening started.
+            voice_clear_audio_queue()
+
             with sd.RawInputStream(
                 samplerate=16000,
                 blocksize=4000,
@@ -4847,26 +4893,20 @@ async def voice_listen_loop(ws):
                 callback=voice_audio_callback
             ):
                 while voice_listening_active.is_set():
-                    data = voice_audio_queue.get()
+                    # Waiting for audio and recognizing speech both block, so
+                    # they run on a worker thread for the same reason.
+                    data = await asyncio.to_thread(voice_get_next_audio_block)
+                    if data is None:
+                        continue
+
                     now = time.time()
+                    source, text = await asyncio.to_thread(
+                        voice_recognize_audio_block, recognizer, data
+                    )
 
-                    if recognizer.AcceptWaveform(data):
-                        result = json.loads(recognizer.Result())
-                        text = result.get("text", "").lower().strip()
-
-                        last_trigger_time, last_partial_text = await voice_process_text(
-                            ws, text, now, last_trigger_time, "final", last_partial_text
-                        )
-
-                    else:
-                        partial = json.loads(recognizer.PartialResult())
-                        text = partial.get("partial", "").lower().strip()
-
-                        last_trigger_time, last_partial_text = await voice_process_text(
-                            ws, text, now, last_trigger_time, "partial", last_partial_text
-                        )
-
-                    await asyncio.sleep(0)
+                    last_trigger_time, last_partial_text = await voice_process_text(
+                        ws, text.lower().strip(), now, last_trigger_time, source, last_partial_text
+                    )
 
             print("Listening stopped")
 
@@ -4886,7 +4926,13 @@ async def voice_handle_client(websocket):
 
     try:
         async for message in websocket:
-            msg = json.loads(message)
+            try:
+                msg = json.loads(message)
+            except json.JSONDecodeError as error:
+                # A bad message shouldn't drop the connection to the extension.
+                print("Received invalid JSON:", error)
+                continue
+
             await voice_handle_message(websocket, msg)
 
     except websockets.exceptions.ConnectionClosed:
@@ -5076,6 +5122,7 @@ async def voice_main():
 # =============================================================================
 
 import asyncio
+import concurrent.futures
 import websockets
 import json
 import time
@@ -5094,7 +5141,7 @@ gesture_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 gesture_PLUGIN_NAME = "Hand Gesture Commercial Trigger"
 gesture_PLUGIN_ID = "gesture-trigger-plugin"
-gesture_PLUGIN_VERSION = "1.1.0"
+gesture_PLUGIN_VERSION = "1.1.1"
 gesture_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/thumbs-down-commercials"
 
 # --------------------------------------------------
@@ -5177,6 +5224,35 @@ gesture_last_status_display = None
 gesture_gesture_group_states = {}
 
 gesture_any_trigger_display_until = time.time()
+
+
+def gesture_initialize_camera_thread():
+    """Set up Windows COM on the camera thread (used to list camera names)."""
+    if platform.system() == "Windows":
+        try:
+            import comtypes
+
+            comtypes.CoInitialize()
+        except Exception as error:
+            print(f"Could not set up COM on the camera thread: {error}")
+
+
+# All camera and gesture-recognizer work runs on this one thread. It blocks
+# (waiting for frames, recognizing gestures, listing cameras), so keeping it
+# off the event loop keeps the WebSocket (and, in the Party Pack, every other
+# plugin) responsive. A single thread is used because camera objects should
+# stay on the thread that opened them.
+gesture_camera_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="gesture-camera",
+    initializer=gesture_initialize_camera_thread,
+)
+
+
+async def gesture_run_on_camera_thread(function, *args):
+    """Run blocking camera or gesture-recognizer work on the camera thread."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(gesture_camera_executor, function, *args)
 
 # --------------------------------------------------
 # Model management
@@ -5801,6 +5877,89 @@ async def gesture_process_gesture_group(ws, gesture_name, hands, now, frame):
 # Camera loop
 # --------------------------------------------------
 
+def gesture_open_camera():
+    """Open and set up the selected camera. Runs on the camera thread."""
+    cap = cv2.VideoCapture(gesture_CAMERA_INDEX, gesture_get_video_capture_backend())
+
+    #TODO: add advanced/troubleshooting option for this
+    # cap.set(
+    #     cv2.CAP_PROP_FOURCC,
+    #     cv2.VideoWriter_fourcc(*"MJPG")
+    # )
+
+    if gesture_CAMERA_RESOLUTION != "native":
+        width, height = map(int, gesture_CAMERA_RESOLUTION.split("x"))
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    #TODO: add advanced/troubleshooting option for this
+    # cap.set(cv2.CAP_PROP_FPS, 30)
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print(f"Camera resolution: {width}x{height}")
+
+    return cap
+
+
+def gesture_read_and_recognize_frame(cap, recognizer):
+    """Read the next camera frame and recognize hand gestures in it.
+
+    Runs on the camera thread. Returns (frame, result), or (None, None) when
+    no frame could be read.
+    """
+    success, frame = cap.read()
+
+    if not success:
+        return None, None
+
+    if gesture_MIRROR_CAMERA:
+        frame = cv2.flip(frame, 1)
+
+    #TODO: add option for this
+    # display_frame = frame
+
+    # processing_frame = cv2.resize(
+    #     frame,
+    #     None,
+    #     fx=0.5,
+    #     fy=0.5,
+    #     interpolation=cv2.INTER_AREA
+    # )
+
+    # rgb_frame = cv2.cvtColor(
+    #     processing_frame,
+    #     cv2.COLOR_BGR2RGB
+    # )
+
+    rgb_frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2RGB
+    )
+
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb_frame
+    )
+
+    return frame, recognizer.recognize(mp_image)
+
+
+def gesture_release_camera_resources(cap, recognizer):
+    """Close the camera and gesture recognizer. Runs on the camera thread."""
+    if cap is not None:
+        cap.release()
+
+    if recognizer is not None:
+        try:
+            recognizer.close()
+            print("Recognizer closed")
+        except Exception:
+            pass
+
+
 async def gesture_camera_loop(ws):
     cap = None
     recognizer = None
@@ -5835,29 +5994,12 @@ async def gesture_camera_loop(ws):
             )
         )
 
-        recognizer = vision.GestureRecognizer.create_from_options(options)
+        recognizer = await gesture_run_on_camera_thread(
+            vision.GestureRecognizer.create_from_options,
+            options,
+        )
 
-        cap = cv2.VideoCapture(gesture_CAMERA_INDEX, gesture_get_video_capture_backend())
-
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(
-        #     cv2.CAP_PROP_FOURCC,
-        #     cv2.VideoWriter_fourcc(*"MJPG")
-        # )
-
-        if gesture_CAMERA_RESOLUTION != "native":
-            width, height = map(int, gesture_CAMERA_RESOLUTION.split("x"))
-
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(cv2.CAP_PROP_FPS, 30)
-
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        print(f"Camera resolution: {width}x{height}")
+        cap = await gesture_run_on_camera_thread(gesture_open_camera)
 
         if not cap.isOpened():
             print("Failed to open webcam")
@@ -5877,42 +6019,15 @@ async def gesture_camera_loop(ws):
         while True:
             await gesture_camera_active.wait()
 
-            success, frame = cap.read()
+            frame, result = await gesture_run_on_camera_thread(
+                gesture_read_and_recognize_frame,
+                cap,
+                recognizer,
+            )
 
-            if not success:
+            if frame is None:
                 await asyncio.sleep(0.01)
                 continue
-
-            if gesture_MIRROR_CAMERA:
-                frame = cv2.flip(frame, 1)
-
-            #TODO: add option for this
-            # display_frame = frame
-
-            # processing_frame = cv2.resize(
-            #     frame,
-            #     None,
-            #     fx=0.5,
-            #     fy=0.5,
-            #     interpolation=cv2.INTER_AREA
-            # )
-
-            # rgb_frame = cv2.cvtColor(
-            #     processing_frame,
-            #     cv2.COLOR_BGR2RGB
-            # )
-
-            rgb_frame = cv2.cvtColor(
-                frame,
-                cv2.COLOR_BGR2RGB
-            )
-
-            mp_image = mp.Image(
-                image_format=mp.ImageFormat.SRGB,
-                data=rgb_frame
-            )
-
-            result = recognizer.recognize(mp_image)
 
             now = time.time()
             detected_hands = []
@@ -5983,8 +6098,6 @@ async def gesture_camera_loop(ws):
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
 
-            await asyncio.sleep(0)
-
     except asyncio.CancelledError:
         print("camera_loop shutting down")
         raise
@@ -5995,9 +6108,8 @@ async def gesture_camera_loop(ws):
     finally:
         print("Cleaning up camera resources")
 
-        if cap is not None:
-            cap.release()
-
+        # Note: the debug window belongs to this (event loop) thread, while
+        # the camera and recognizer belong to the camera thread.
         if debug_window_created:
             try:
                 cv2.destroyAllWindows()
@@ -6008,12 +6120,11 @@ async def gesture_camera_loop(ws):
             except cv2.error:
                 pass
 
-        if recognizer is not None:
+        if cap is not None or recognizer is not None:
             try:
-                recognizer.close()
-                print("Recognizer closed")
-            except Exception:
-                pass
+                await gesture_run_on_camera_thread(gesture_release_camera_resources, cap, recognizer)
+            except Exception as error:
+                print(f"Could not release camera resources: {error}")
 
         print("Camera resources released")
 
@@ -6180,7 +6291,7 @@ async def gesture_send_manifest(ws):
 
     # only get list of cameras if not already running and if it is, only set it if it isn't already cached
     if not gesture_camera_task:
-        gesture_camera_options = gesture_get_available_cameras()
+        gesture_camera_options = await gesture_run_on_camera_thread(gesture_get_available_cameras)
     elif not gesture_camera_options:
         gesture_camera_options = [{"label": "Camera 0", "value": "0"}]
 
@@ -6380,6 +6491,8 @@ async def gesture_main():
 import json
 import os
 import re
+import secrets
+import socket
 import struct
 import subprocess
 import tempfile
@@ -6410,9 +6523,9 @@ vlc_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custo
 # VLC settings
 # -----------------------------------------------------------------------------
 
-vlc_VLC_HTTP_URL = "http://localhost:8080/requests/status.json"
-vlc_VLC_HTTP_PASSWORD = "1234"
-vlc_VLC_HTTP_AUTH = ("", vlc_VLC_HTTP_PASSWORD)
+# VLC's web interface only listens on this computer (not the local network),
+# on a free port with a new random password each time VLC is opened.
+vlc_VLC_HTTP_HOST = "127.0.0.1"
 
 vlc_DEFAULT_MEDIA_URL = "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm"
 vlc_DEFAULT_VOLUME = 256
@@ -6447,6 +6560,8 @@ vlc_last_snapshot_time = 0
 
 vlc_vlc_process = None
 vlc_vlc_window_handle = None
+vlc_vlc_http_url = None
+vlc_vlc_http_auth = None
 vlc_original_foreground_window = None
 vlc_is_setup_complete = False
 vlc_saved_volume = vlc_DEFAULT_VOLUME
@@ -6656,11 +6771,14 @@ def vlc_get_vlc_status(command=None, params=None, timeout=3):
     if command:
         request_params["command"] = command
 
+    if not vlc_vlc_http_url:
+        raise requests.ConnectionError("VLC has not been opened by this plugin.")
+
     with vlc_vlc_command_lock:
         response = requests.get(
-            vlc_VLC_HTTP_URL,
+            vlc_vlc_http_url,
             params=request_params,
-            auth=vlc_VLC_HTTP_AUTH,
+            auth=vlc_vlc_http_auth,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -7029,10 +7147,33 @@ def vlc_stop_health_monitor():
     vlc_health_monitor_stop_event.set()
 
 
+def vlc_find_free_port():
+    """Return a port on this computer that nothing is currently using."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_socket:
+        test_socket.bind((vlc_VLC_HTTP_HOST, 0))
+        return test_socket.getsockname()[1]
+
+
+def vlc_get_english_environment():
+    """Return environment variables that make VLC use English.
+
+    The labels in VLC's status (like "Video_resolution") are translated into
+    VLC's language, and this plugin reads them to find the video's size.
+    Note: VLC's own --language option did not change them in testing, but
+    the LANG environment variable did.
+    """
+    environment = dict(os.environ)
+    environment["LANG"] = "en"
+    environment["LANGUAGE"] = "en"
+    return environment
+
+
 def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
     """Start VLC and remember the main window owned by that process."""
     global vlc_vlc_process
     global vlc_vlc_window_handle
+    global vlc_vlc_http_url
+    global vlc_vlc_http_auth
     global vlc_current_media_url
 
     vlc_path = vlc_find_vlc_exe(custom_vlc_path)
@@ -7043,6 +7184,11 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
 
     vlc_clear_snapshots()
 
+    http_port = vlc_find_free_port()
+    http_password = secrets.token_urlsafe(16)
+    vlc_vlc_http_url = f"http://{vlc_VLC_HTTP_HOST}:{http_port}/requests/status.json"
+    vlc_vlc_http_auth = ("", http_password)
+
     vlc_vlc_process = subprocess.Popen(
         [
             vlc_path,
@@ -7050,8 +7196,12 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "--qt-minimal-view",
             "--extraintf",
             "http",
+            "--http-host",
+            vlc_VLC_HTTP_HOST,
+            "--http-port",
+            str(http_port),
             "--http-password",
-            vlc_VLC_HTTP_PASSWORD,
+            http_password,
             "--qt-continue=2",
             "--qt-notification=0",
             "--no-video-title-show",
@@ -7067,7 +7217,8 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "--snapshot-format",
             "png",
             "--no-snapshot-preview",
-        ]
+        ],
+        env=vlc_get_english_environment(),
     )
 
     print(f"Started VLC process with PID {vlc_vlc_process.pid}.")
@@ -7764,6 +7915,8 @@ def vlc_initialize_plugin(preferences):
 def vlc_end_plugin():
     global vlc_vlc_process
     global vlc_vlc_window_handle
+    global vlc_vlc_http_url
+    global vlc_vlc_http_auth
     global vlc_is_setup_complete
     global vlc_current_media_url
     global vlc_current_media_has_audio
@@ -7801,6 +7954,8 @@ def vlc_end_plugin():
 
     vlc_vlc_process = None
     vlc_vlc_window_handle = None
+    vlc_vlc_http_url = None
+    vlc_vlc_http_auth = None
     vlc_current_media_url = None
     vlc_current_media_has_audio = False
     vlc_is_commercial_state = False
