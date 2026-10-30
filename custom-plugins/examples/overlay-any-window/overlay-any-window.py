@@ -55,6 +55,10 @@ original_window_state = None
 # activate the overlay window, so focus can be given back once it is hidden.
 focus_taken_from_window = None
 
+# The browser window the extension is running in (the active window when the
+# extension starts), so the overlay can be shown on the same monitor.
+browser_window = None
+
 # The lost-focus message is only shown the first time it happens each time
 # the extension is started.
 has_sent_focus_message = False
@@ -241,32 +245,91 @@ def send_spacebar(hwnd):
     win32gui.PostMessage(hwnd, win32con.WM_KEYUP, SPACEBAR_KEY, 0)
 
 
+def make_process_dpi_aware():
+    """Work in real screen pixels instead of Windows' scaled ones.
+
+    With display scaling (like 125% or 150%), Windows otherwise hands this
+    program scaled sizes and positions, so windows end up the wrong size or
+    in the wrong place, especially on a second monitor with different
+    scaling. Note: this applies to the whole program and can only be set
+    once. In the Party Pack the first plugin to call it sets it for all of
+    them, and later calls are simply refused.
+    """
+    try:
+        # Per-monitor DPI awareness (version 2), Windows 10 1703 and newer.
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        # Per-monitor DPI awareness on older Windows versions.
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+
+
+make_process_dpi_aware()
+
+
+def remember_browser_window(overlay_hwnd):
+    """Remember the browser window (the active window when the extension starts)."""
+    global browser_window
+
+    foreground_window = win32gui.GetForegroundWindow()
+    if foreground_window and foreground_window != overlay_hwnd:
+        browser_window = foreground_window
+
+
+def get_browser_monitor_area():
+    """Return (left, top, width, height) of the monitor the browser is on.
+
+    Uses the main monitor if the browser window isn't known.
+    """
+    try:
+        if browser_window and win32gui.IsWindow(browser_window):
+            monitor = win32api.MonitorFromWindow(
+                browser_window,
+                win32con.MONITOR_DEFAULTTONEAREST,
+            )
+        else:
+            monitor = win32api.MonitorFromPoint(
+                (0, 0),
+                win32con.MONITOR_DEFAULTTOPRIMARY,
+            )
+
+        left, top, right, bottom = win32api.GetMonitorInfo(monitor)["Monitor"]
+        return left, top, right - left, bottom - top
+
+    except win32api.error:
+        return 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+
+
 def calculate_window_position(
     width_percent,
     height_percent,
     horizontal,
     vertical,
 ):
-    """Calculate a window's size and screen position."""
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    """Calculate a window's size and position on the browser's monitor."""
+    screen_left, screen_top, screen_width, screen_height = get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
     if horizontal == "left":
-        x = 0
+        x = screen_left
     elif horizontal == "right":
-        x = screen_width - target_width
+        x = screen_left + screen_width - target_width
     else:
-        x = (screen_width - target_width) // 2
+        x = screen_left + (screen_width - target_width) // 2
 
     if vertical == "top":
-        y = 0
+        y = screen_top
     elif vertical == "bottom":
-        y = screen_height - target_height
+        y = screen_top + screen_height - target_height
     else:
-        y = (screen_height - target_height) // 2
+        y = screen_top + (screen_height - target_height) // 2
 
     return x, y, target_width, target_height
 
@@ -710,6 +773,7 @@ def process_message(message):
 
     if message_type == "init":
         reset_focus_message()
+        remember_browser_window(hwnd)
         set_up_window(hwnd, settings)
 
         if settings["is_pip_mode"]:

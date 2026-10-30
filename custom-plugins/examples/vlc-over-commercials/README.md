@@ -47,6 +47,7 @@ or report any issues or enhancement requests on the [issues tab](https://github.
 - Improved security by only allowing VLC's web interface to be reached from your own PC, using a new random password each time
 - Fixed the plugin not working when another program is already using port 8080
 - Fixed video sizing not working when VLC is set to a language other than English
+- Fixed VLC showing on the wrong monitor or at the wrong size when using multiple monitors or display scaling
 
 ## Disclaimers and Licensing
 

@@ -50,3 +50,4 @@ or report any issues or enhancement requests on the [issues tab](https://github.
 - Added "Remove window title bar and borders" setting (off by default since it doesn't work well with many Windows 11 apps)
 - Windows are now put back how they were (position, always on top, and borders) when the extension stops
 - Fixed other Plugin Party Pack plugins being slowed down while the window is moved
+- Fixed the window showing on the wrong monitor or at the wrong size when using multiple monitors or display scaling
