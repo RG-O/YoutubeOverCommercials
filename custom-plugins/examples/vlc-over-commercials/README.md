@@ -36,6 +36,18 @@ from [vlc-over-commercials.py](vlc-over-commercials.py) into your own local pyth
 If you need any help feel free to reach out on the [extension discord](/README.md#discord) 
 or report any issues or enhancement requests on the [issues tab](https://github.com/RG-O/YoutubeOverCommercials/issues)
 
+## Changelog
+
+### Version 1.1.1
+
+- Fixed black bars showing around some videos (like DVD rips and TV recordings) by measuring the size VLC actually displays them at
+- Fixed the overlay size not updating when a stream changes shape or when VLC wasn't ready yet the first time
+- Fixed VLC taking keyboard focus away from the browser, which caused the Windows taskbar to show over the stream
+- Removed the "Should Attempt to Hide Taskbar" setting since it is no longer needed
+- Improved security by only allowing VLC's web interface to be reached from your own PC, using a new random password each time
+- Fixed the plugin not working when another program is already using port 8080
+- Fixed video sizing not working when VLC is set to a language other than English
+
 ## Disclaimers and Licensing
 
 VLC is a trademark of the VideoLAN organization. 
