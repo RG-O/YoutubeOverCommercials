@@ -3725,10 +3725,13 @@ def window_get_set_up_window():
     return None
 
 
-def window_set_up_window(hwnd):
+def window_set_up_window(hwnd, settings):
     """Get a window ready to be used as the overlay."""
     window_remember_original_window_state(hwnd)
-    window_make_borderless(hwnd)
+    window_restore_if_maximized(hwnd)
+
+    if settings["should_remove_borders"]:
+        window_make_borderless(hwnd)
 
     # For some reason running this at the begining helps the window come
     # forward later. Skipped for windows that are already always on top,
@@ -4013,13 +4016,22 @@ def window_minimize_window(hwnd):
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
 
-def window_make_borderless(hwnd):
-    """Remove the window title bar and resize borders."""
-    # A maximized window can't be freely sized, so restore it to normal first.
+def window_restore_if_maximized(hwnd):
+    """A maximized window can't be freely sized, so restore it to normal size."""
     # Note: win32gui has no IsZoomed, so it is called from user32 directly.
     if win32gui.IsWindow(hwnd) and ctypes.windll.user32.IsZoomed(hwnd):
         win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
+
+def window_make_borderless(hwnd):
+    """Remove the window title bar and resize borders.
+
+    Note: many Windows 11 apps (like Notepad, File Explorer, Terminal,
+    browsers, and Microsoft Store apps) draw their own title bar, tabs, and
+    minimize/maximize/close buttons inside the window. Those can't be removed
+    by another program, which is why this can be turned off in the plugin's
+    preferences.
+    """
     style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
     style &= ~window_BORDER_STYLES
 
@@ -4080,6 +4092,9 @@ def window_get_overlay_settings(message):
         ),
         "should_send_spacebar": bool(
             plugin_preferences.get("should-send-spacebar", False)
+        ),
+        "should_remove_borders": bool(
+            plugin_preferences.get("should-remove-borders", False)
         ),
         "overlay_width": float(preferences.get("videoOverlayWidth", 90)),
         "overlay_height": float(preferences.get("videoOverlayHeight", 75)),
@@ -4226,14 +4241,14 @@ async def window_handle_message_with_com(websocket, message):
 
         # Init sets up the window itself below.
         if message_type != "init":
-            window_set_up_window(hwnd)
+            window_set_up_window(hwnd, settings)
 
             if settings["should_mute"]:
                 window_mute_application_of_window(hwnd, mute=True)
 
     if message_type == "init":
         window_reset_focus_message()
-        window_set_up_window(hwnd)
+        window_set_up_window(hwnd, settings)
 
         if settings["is_pip_mode"]:
             result = window_show_pip_window(hwnd, settings)
@@ -4294,7 +4309,10 @@ async def window_handle_message_with_com(websocket, message):
             if settings["should_mute"]:
                 window_mute_application_of_window(hwnd, mute=True)
 
-            window_make_borderless(hwnd)
+            window_restore_if_maximized(hwnd)
+
+            if settings["should_remove_borders"]:
+                window_make_borderless(hwnd)
 
             if settings["is_pip_mode"]:
                 result = window_show_pip_window(hwnd, settings)
@@ -4437,6 +4455,21 @@ async def window_send_manifest(websocket):
                         "Send a spacebar command to try to play the selected "
                         "window's media when commercials begin and pause it "
                         "when commercials end. Start with the media paused."
+                    ),
+                    "type": "checkbox",
+                    "default": False,
+                },
+                {
+                    "key": "should-remove-borders",
+                    "label": "Remove window title bar and borders",
+                    "tooltip": (
+                        "Hides the selected window's title bar and borders while "
+                        "it is used as the overlay. Works best with classic apps. "
+                        "Many Windows 11 apps (like Notepad, File Explorer, "
+                        "Terminal, browsers, and Microsoft Store apps) draw their "
+                        "own title bar, tabs, and buttons, which can't be removed "
+                        "and may be left with an odd-looking border, so turn this "
+                        "off for those."
                     ),
                     "type": "checkbox",
                     "default": False,
