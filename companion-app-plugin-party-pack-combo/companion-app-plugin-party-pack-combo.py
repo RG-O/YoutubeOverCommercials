@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw
 PLUGIN_PROTOCOL_VERSION = 1
 BUNDLE_NAME = "Official Plugin Party Pack"
 BUNDLE_ID = "official-plugin-party-pack"
-BUNDLE_VERSION = "1.0.0"
+BUNDLE_VERSION = "1.1.0"
 PARTY_PACK_PORT = 64147
 LOGO_ANALYZER_PORT = 64143
 
