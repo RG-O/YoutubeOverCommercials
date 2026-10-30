@@ -174,6 +174,41 @@ def forget_original_window_state():
     original_window_state = None
 
 
+def get_set_up_window():
+    """Return the window the plugin has currently set up as the overlay, if any."""
+    if original_window_state:
+        return original_window_state["hwnd"]
+
+    return None
+
+
+def set_up_window(hwnd):
+    """Get a window ready to be used as the overlay."""
+    remember_original_window_state(hwnd)
+    make_borderless(hwnd)
+
+    # For some reason running this at the begining helps the window come
+    # forward later. Skipped for windows that are already always on top,
+    # since removing it can't be undone for some (like Firefox's
+    # Picture-in-Picture window) and they are already in front.
+    if not was_window_originally_topmost(hwnd):
+        remove_topmost(hwnd, width_percent=90, height_percent=85)
+
+    time.sleep(0.5)
+
+
+def release_window(hwnd):
+    """Put a window back the way it was before the plugin set it up."""
+    if win32gui.IsWindow(hwnd):
+        # Always unmute in case the preference changed while the extension
+        # was running.
+        mute_application_of_window(hwnd, mute=False)
+        remove_topmost(hwnd, width_percent=90, height_percent=75)
+        restore_borders(hwnd)
+
+    forget_original_window_state()
+
+
 def mute_application_of_window(hwnd, mute=True):
     """Mute or unmute every audio session owned by the window's process."""
     _, process_id = win32process.GetWindowThreadProcessId(hwnd)
@@ -582,6 +617,21 @@ async def handle_message(websocket, message):
 
     settings = get_overlay_settings(message)
     window_title = settings["window_title"]
+    set_up_hwnd = get_set_up_window()
+
+    if message_type == "end":
+        print("Extension stopped.")
+
+        # Put back the window that was actually set up, even if a different
+        # window has been chosen in the extension since then. If nothing is
+        # set up it was already put back (the Party Pack sends a second "end"
+        # during its cleanup), and doing it again would strip always-on-top
+        # and add a title bar to windows that never had them.
+        if set_up_hwnd:
+            release_window(set_up_hwnd)
+
+        return_focus_to_browser()
+        return
 
     if not window_title:
         await send_status(
@@ -601,19 +651,22 @@ async def handle_message(websocket, message):
         )
         return
 
+    # A different window was chosen in the extension after the plugin was set
+    # up, so put the old window back and set up the new one in its place.
+    if set_up_hwnd and set_up_hwnd != hwnd:
+        print(f'Switching overlay window to "{window_title}".')
+        release_window(set_up_hwnd)
+
+        # Init sets up the window itself below.
+        if message_type != "init":
+            set_up_window(hwnd)
+
+            if settings["should_mute"]:
+                mute_application_of_window(hwnd, mute=True)
+
     if message_type == "init":
         reset_focus_message()
-        remember_original_window_state(hwnd)
-        make_borderless(hwnd)
-
-        # For some reason running this at the begining helps the window come
-        # forward later. Skipped for windows that are already always on top,
-        # since removing it can't be undone for some (like Firefox's
-        # Picture-in-Picture window) and they are already in front.
-        if not was_window_originally_topmost(hwnd):
-            remove_topmost(hwnd, width_percent=90, height_percent=85)
-
-        time.sleep(0.5)
+        set_up_window(hwnd)
 
         if settings["is_pip_mode"]:
             result = show_pip_window(hwnd, settings)
@@ -679,6 +732,10 @@ async def handle_message(websocket, message):
             if settings["is_pip_mode"]:
                 result = show_pip_window(hwnd, settings)
                 await report_window_front_result(websocket, result, window_title)
+            else:
+                # Keep it out of the way until the next commercial (a window
+                # that is always on top would otherwise sit over the stream).
+                minimize_window(hwnd)
 
         else:
             print("Browser exited fullscreen.")
@@ -689,18 +746,6 @@ async def handle_message(websocket, message):
             remove_topmost(hwnd, width_percent=90, height_percent=85)
             restore_borders(hwnd)
 
-        return
-
-    if message_type == "end":
-        print("Extension stopped.")
-
-        # Always unmute during cleanup in case the preference changed while
-        # the extension was running.
-        mute_application_of_window(hwnd, mute=False)
-        remove_topmost(hwnd, width_percent=90, height_percent=75)
-        restore_borders(hwnd)
-        return_focus_to_browser()
-        forget_original_window_state()
         return
 
     await send_status(
