@@ -1,4 +1,4 @@
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/RG-O/YoutubeOverCommercials/advanced-logo-analyzer-and-plugin-party-pack-release-v1.0.0/AdvancedLogoAnalyzerAndPluginPartyPack_1.0_setup.exe?label=Total%20Downloads)
+![GitHub Downloads (specific asset, all releases)](https://img.shields.io/github/downloads/RG-O/YoutubeOverCommercials/AdvancedLogoAnalyzerAndPluginPartyPack_setup.exe?label=Total%20Downloads)
 
 ## Advanced Logo Analyzer and Plugin Party Pack Desktop Tray Application
 
