@@ -15,7 +15,7 @@ PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 PLUGIN_NAME = "Voice Commercial Trigger"
 PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
-PLUGIN_VERSION = "1.0.1"
+PLUGIN_VERSION = "1.0.2"
 
 PORT = 64145
 
@@ -40,6 +40,10 @@ DEFAULT_CONTENT_EMOJI = "\U0001F34C"
 TARGET_PHRASES = {}
 
 COOLDOWN = 3.0
+
+# How long to wait for the next block of microphone audio before checking
+# again whether listening should stop.
+AUDIO_WAIT_SECONDS = 0.5
 
 # --------------------------------------------------
 # Global state
@@ -232,6 +236,39 @@ def audio_callback(indata, frames, time_info, status):
         print("Audio status:", status)
     audio_queue.put(bytes(indata))
 
+
+def get_next_audio_block():
+    """Wait briefly for the next block of microphone audio.
+
+    Returns None if none arrives in time, so the listen loop can check whether
+    it should stop, and a microphone that stops sending audio can't hang the
+    plugin.
+    """
+    try:
+        return audio_queue.get(timeout=AUDIO_WAIT_SECONDS)
+    except queue.Empty:
+        return None
+
+
+def clear_audio_queue():
+    """Throw away audio left over from the last time listening was stopped."""
+    while True:
+        try:
+            audio_queue.get_nowait()
+        except queue.Empty:
+            return
+
+
+def recognize_audio_block(recognizer, data):
+    """Run speech recognition on one block of audio.
+
+    Returns ("final" or "partial", recognized text).
+    """
+    if recognizer.AcceptWaveform(data):
+        return "final", json.loads(recognizer.Result()).get("text", "")
+
+    return "partial", json.loads(recognizer.PartialResult()).get("partial", "")
+
 def find_trigger_config(text):
     """Find a configured word or multi-word phrase in recognized speech."""
     normalized_text = " ".join(text.lower().split())
@@ -322,7 +359,10 @@ async def listen_loop(ws):
             "Loading Voice model...",
             "Loading Vosk model...",
         )
-        model = Model(MODEL_PATH)
+        # Loading the model takes a few seconds, so it runs on a worker thread
+        # to keep the WebSocket (and, in the Party Pack, every other plugin)
+        # responsive in the meantime.
+        model = await asyncio.to_thread(Model, MODEL_PATH)
 
         recognizer = KaldiRecognizer(model, 16000)
 
@@ -338,6 +378,9 @@ async def listen_loop(ws):
                 "Ready"
             )
 
+            # Don't react to things said before listening started.
+            clear_audio_queue()
+
             with sd.RawInputStream(
                 samplerate=16000,
                 blocksize=4000,
@@ -346,26 +389,20 @@ async def listen_loop(ws):
                 callback=audio_callback
             ):
                 while listening_active.is_set():
-                    data = audio_queue.get()
+                    # Waiting for audio and recognizing speech both block, so
+                    # they run on a worker thread for the same reason.
+                    data = await asyncio.to_thread(get_next_audio_block)
+                    if data is None:
+                        continue
+
                     now = time.time()
+                    source, text = await asyncio.to_thread(
+                        recognize_audio_block, recognizer, data
+                    )
 
-                    if recognizer.AcceptWaveform(data):
-                        result = json.loads(recognizer.Result())
-                        text = result.get("text", "").lower().strip()
-
-                        last_trigger_time, last_partial_text = await process_text(
-                            ws, text, now, last_trigger_time, "final", last_partial_text
-                        )
-
-                    else:
-                        partial = json.loads(recognizer.PartialResult())
-                        text = partial.get("partial", "").lower().strip()
-
-                        last_trigger_time, last_partial_text = await process_text(
-                            ws, text, now, last_trigger_time, "partial", last_partial_text
-                        )
-
-                    await asyncio.sleep(0)
+                    last_trigger_time, last_partial_text = await process_text(
+                        ws, text.lower().strip(), now, last_trigger_time, source, last_partial_text
+                    )
 
             print("Listening stopped")
 
@@ -385,7 +422,13 @@ async def handle_client(websocket):
 
     try:
         async for message in websocket:
-            msg = json.loads(message)
+            try:
+                msg = json.loads(message)
+            except json.JSONDecodeError as error:
+                # A bad message shouldn't drop the connection to the extension.
+                print("Received invalid JSON:", error)
+                continue
+
             await handle_message(websocket, msg)
 
     except websockets.exceptions.ConnectionClosed:

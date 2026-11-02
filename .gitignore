@@ -4,6 +4,7 @@
 /chrome/.vs
 *.task
 model/
+__pycache__/
 custom-plugins/examples/vlc-over-commercials/vlc_resume_times.json
 custom-plugins/examples/vlc-over-commercials/vlc_media_history.json
 companion-app-plugin-party-pack-combo/vlc_media_history.json

@@ -1,8 +1,13 @@
 
+import ctypes
 import json
 import os
 import re
+import secrets
+import socket
+import struct
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -23,16 +28,16 @@ PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 PLUGIN_NAME = "VLC Over Commercials"
 PLUGIN_ID = "vlc-over-commercials"
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.1.1"
 
 
 # -----------------------------------------------------------------------------
 # VLC settings
 # -----------------------------------------------------------------------------
 
-VLC_HTTP_URL = "http://localhost:8080/requests/status.json"
-VLC_HTTP_PASSWORD = "1234"
-VLC_HTTP_AUTH = ("", VLC_HTTP_PASSWORD)
+# VLC's web interface only listens on this computer (not the local network),
+# on a free port with a new random password each time VLC is opened.
+VLC_HTTP_HOST = "127.0.0.1"
 
 DEFAULT_MEDIA_URL = "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm"
 DEFAULT_VOLUME = 256
@@ -40,9 +45,15 @@ FALLBACK_VOLUME = 205
 FREEZE_TIMEOUT_SECONDS = 20
 AUDIO_TIMEOUT_SECONDS = 20
 HEALTH_CHECK_INTERVAL_SECONDS = 1
+FOCUS_RETURN_DELAY_SECONDS = 0.3
 WINDOW_SIZE_TOLERANCE_PIXELS = 2
 HISTORY_SAVE_INTERVAL_SECONDS = 5
 HISTORY_FILE = Path(__file__).resolve().parent / "vlc_media_history.json"
+SNAPSHOT_DIR = Path(tempfile.gettempdir()) / "vlc-over-commercials-snapshots"
+SNAPSHOT_TIMEOUT_SECONDS = 3
+SNAPSHOT_RETRY_SECONDS = 30
+# VLC shows the snapshot file name on top of the video for about a second.
+SNAPSHOT_OSD_SECONDS = 1.2
 
 
 # -----------------------------------------------------------------------------
@@ -53,13 +64,17 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 optimized_width_percentage = 90
 optimized_height_percentage = 85
-previous_overlay_width_percentage = 0
-previous_overlay_height_percentage = 0
+# Display size of the current video, found from a VLC snapshot. The key is the
+# media URL and the shape VLC reports, so it is only refreshed when one changes.
+display_dimensions_cache_key = None
+display_dimensions = None
+last_snapshot_time = 0
 
 vlc_process = None
 vlc_window_handle = None
+vlc_http_url = None
+vlc_http_auth = None
 original_foreground_window = None
-is_original_foreground_window_topmost = False
 is_setup_complete = False
 saved_volume = DEFAULT_VOLUME
 current_media_url = None
@@ -72,6 +87,7 @@ last_history_save_time = 0
 health_monitor_thread = None
 health_monitor_stop_event = threading.Event()
 vlc_command_lock = threading.Lock()
+snapshot_lock = threading.Lock()
 # Prevent media URL changes and health-triggered reloads from overlapping.
 # RLock lets reset_unhealthy_media() safely call switch_vlc_media(), which also
 # uses this same lock.
@@ -267,11 +283,14 @@ def get_vlc_status(command=None, params=None, timeout=3):
     if command:
         request_params["command"] = command
 
+    if not vlc_http_url:
+        raise requests.ConnectionError("VLC has not been opened by this plugin.")
+
     with vlc_command_lock:
         response = requests.get(
-            VLC_HTTP_URL,
+            vlc_http_url,
             params=request_params,
-            auth=VLC_HTTP_AUTH,
+            auth=vlc_http_auth,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -388,8 +407,6 @@ def update_current_media_audio_status(timeout=5):
 def switch_vlc_media(media_url, preserve_state=True, resume_time=None):
     """Replace VLC media while retaining reload locking and VOD resume."""
     global current_media_url
-    global previous_overlay_width_percentage
-    global previous_overlay_height_percentage
 
     if not media_url:
         return False
@@ -420,10 +437,9 @@ def switch_vlc_media(media_url, preserve_state=True, resume_time=None):
         send_vlc_command("in_play", {"input": media_url})
 
         current_media_url = media_url
-        previous_overlay_width_percentage = 0
-        previous_overlay_height_percentage = 0
 
         wait_for_vlc_playing(timeout=30)
+        prepare_display_dimensions()
         update_current_media_audio_status()
 
         try:
@@ -565,6 +581,15 @@ def monitor_vlc_health():
             remember_media(current_media_url, status)
             last_history_save_time = time.monotonic()
 
+        # Re-measure the video if its shape changed or an earlier measurement
+        # failed. Only done while the overlay is not showing, since VLC briefly
+        # shows the snapshot's file name.
+        if (
+            not is_commercial_state
+            and time.time() - last_snapshot_time >= SNAPSHOT_RETRY_SECONDS
+        ):
+            get_vlc_video_dimensions(allow_snapshot=True, status=status)
+
         stats = status.get("stats", {})
 
         # Video freeze detection
@@ -634,10 +659,33 @@ def stop_health_monitor():
     health_monitor_stop_event.set()
 
 
+def find_free_port():
+    """Return a port on this computer that nothing is currently using."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_socket:
+        test_socket.bind((VLC_HTTP_HOST, 0))
+        return test_socket.getsockname()[1]
+
+
+def get_english_environment():
+    """Return environment variables that make VLC use English.
+
+    The labels in VLC's status (like "Video_resolution") are translated into
+    VLC's language, and this plugin reads them to find the video's size.
+    Note: VLC's own --language option did not change them in testing, but
+    the LANG environment variable did.
+    """
+    environment = dict(os.environ)
+    environment["LANG"] = "en"
+    environment["LANGUAGE"] = "en"
+    return environment
+
+
 def open_vlc_with_media(media_url, custom_vlc_path=None):
     """Start VLC and remember the main window owned by that process."""
     global vlc_process
     global vlc_window_handle
+    global vlc_http_url
+    global vlc_http_auth
     global current_media_url
 
     vlc_path = find_vlc_exe(custom_vlc_path)
@@ -646,6 +694,13 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
             "Could not find vlc.exe in Program Files or Program Files (x86)."
         )
 
+    clear_snapshots()
+
+    http_port = find_free_port()
+    http_password = secrets.token_urlsafe(16)
+    vlc_http_url = f"http://{VLC_HTTP_HOST}:{http_port}/requests/status.json"
+    vlc_http_auth = ("", http_password)
+
     vlc_process = subprocess.Popen(
         [
             vlc_path,
@@ -653,8 +708,12 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
             "--qt-minimal-view",
             "--extraintf",
             "http",
+            "--http-host",
+            VLC_HTTP_HOST,
+            "--http-port",
+            str(http_port),
             "--http-password",
-            VLC_HTTP_PASSWORD,
+            http_password,
             "--qt-continue=2",
             "--qt-notification=0",
             "--no-video-title-show",
@@ -664,7 +723,14 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
             "--no-one-instance",
             "--no-one-instance-when-started-from-file",
             "--loop",
-        ]
+            # Snapshots are only used to measure the video's real shape.
+            "--snapshot-path",
+            str(SNAPSHOT_DIR),
+            "--snapshot-format",
+            "png",
+            "--no-snapshot-preview",
+        ],
+        env=get_english_environment(),
     )
 
     print(f"Started VLC process with PID {vlc_process.pid}.")
@@ -708,9 +774,15 @@ def open_vlc_with_media(media_url, custom_vlc_path=None):
         pass
 
 
-def get_vlc_video_dimensions():
-    """Return the current video's width and height."""
-    status = get_vlc_status()
+def get_vlc_stored_video_dimensions(status=None):
+    """Return the current video's stored width and height from VLC's status.
+
+    This is the size of the pixels in the file, which is not always the shape
+    VLC displays. Videos with non-square pixels, like DVDs and many TV
+    recordings, display wider than this.
+    """
+    if status is None:
+        status = get_vlc_status()
     categories = status.get("information", {}).get("category", {})
 
     for stream_info in categories.values():
@@ -739,6 +811,128 @@ def get_vlc_video_dimensions():
             return int(width), int(height)
 
     return None
+
+
+def read_png_dimensions(path):
+    """Return a PNG file's width and height from its header."""
+    try:
+        with open(path, "rb") as file:
+            header = file.read(24)
+    except OSError:
+        return None
+
+    if (
+        len(header) < 24
+        or header[:8] != b"\x89PNG\r\n\x1a\n"
+        or header[12:16] != b"IHDR"
+    ):
+        return None
+
+    width, height = struct.unpack(">II", header[16:24])
+    if width <= 0 or height <= 0:
+        return None
+
+    return width, height
+
+
+def clear_snapshots():
+    """Delete snapshots left over from measuring videos."""
+    if not SNAPSHOT_DIR.exists():
+        return
+
+    for snapshot in SNAPSHOT_DIR.glob("*.png"):
+        try:
+            snapshot.unlink()
+        except OSError:
+            pass
+
+
+def get_vlc_snapshot_dimensions():
+    """Take a VLC snapshot and return the size it was saved at.
+
+    VLC saves snapshots at the size it actually displays the video, so this
+    gives the real shape of the picture even for videos with non-square pixels.
+    """
+    global last_snapshot_time
+
+    with snapshot_lock:
+        try:
+            SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+            existing_snapshots = set(SNAPSHOT_DIR.glob("*.png"))
+            last_snapshot_time = time.time()
+            send_vlc_command("snapshot")
+        except (OSError, requests.RequestException) as error:
+            print(f"Could not take VLC snapshot: {error}")
+            return None
+
+        start_time = time.time()
+        while time.time() - start_time < SNAPSHOT_TIMEOUT_SECONDS:
+            for snapshot in set(SNAPSHOT_DIR.glob("*.png")) - existing_snapshots:
+                dimensions = read_png_dimensions(snapshot)
+                if dimensions:
+                    clear_snapshots()
+                    return dimensions
+
+            time.sleep(0.1)
+
+        return None
+
+
+def get_vlc_video_dimensions(allow_snapshot=False, status=None):
+    """Return the width and height the current video is displayed at.
+
+    Snapshots are only taken when allow_snapshot is True, because VLC briefly
+    shows the snapshot's file name on the video. Without a measured snapshot,
+    the stored resolution is used.
+    """
+    global display_dimensions_cache_key
+    global display_dimensions
+
+    stored_dimensions = get_vlc_stored_video_dimensions(status)
+    if not stored_dimensions:
+        return None
+
+    stored_width, stored_height = stored_dimensions
+    cache_key = (current_media_url, round(stored_width / stored_height, 3))
+
+    if cache_key == display_dimensions_cache_key and display_dimensions:
+        return display_dimensions
+
+    if not allow_snapshot:
+        return stored_dimensions
+
+    snapshot_dimensions = get_vlc_snapshot_dimensions()
+    if not snapshot_dimensions:
+        # Not cached, so the snapshot is tried again next time.
+        print("Could not measure the video with a VLC snapshot. Using its stored resolution.")
+        return stored_dimensions
+
+    if snapshot_dimensions != stored_dimensions:
+        print(
+            f"Video is stored at {stored_width}x{stored_height} but displays at "
+            f"{snapshot_dimensions[0]}x{snapshot_dimensions[1]}."
+        )
+
+    display_dimensions_cache_key = cache_key
+    display_dimensions = snapshot_dimensions
+    return display_dimensions
+
+
+def prepare_display_dimensions():
+    """Measure the video's display size while VLC is not being watched.
+
+    Called right after new media starts playing, before VLC is shown, so the
+    snapshot's file name is gone by the time the overlay appears.
+    """
+    try:
+        get_vlc_video_dimensions(allow_snapshot=True)
+    except requests.RequestException:
+        return
+
+    # Only wait when a snapshot was just taken (not when the size was cached).
+    remaining_osd_time = SNAPSHOT_OSD_SECONDS - (time.time() - last_snapshot_time)
+    if remaining_osd_time > 0:
+        time.sleep(remaining_osd_time)
 
 
 def wait_for_vlc_playing(timeout=60):
@@ -797,10 +991,60 @@ def is_live_media(status):
 # -----------------------------------------------------------------------------
 
 
+def make_process_dpi_aware():
+    """Work in real screen pixels instead of Windows' scaled ones.
+
+    With display scaling (like 125% or 150%), Windows otherwise hands this
+    program scaled sizes and positions, so windows end up the wrong size or
+    in the wrong place, especially on a second monitor with different
+    scaling. Note: this applies to the whole program and can only be set
+    once. In the Party Pack the first plugin to call it sets it for all of
+    them, and later calls are simply refused.
+    """
+    try:
+        # Per-monitor DPI awareness (version 2), Windows 10 1703 and newer.
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        # Per-monitor DPI awareness on older Windows versions.
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+
+
+make_process_dpi_aware()
+
+
+def get_browser_monitor_area():
+    """Return (left, top, width, height) of the monitor the browser is on.
+
+    Uses the main monitor if the browser window isn't known.
+    """
+    try:
+        if original_foreground_window and win32gui.IsWindow(original_foreground_window):
+            monitor = win32api.MonitorFromWindow(
+                original_foreground_window,
+                win32con.MONITOR_DEFAULTTONEAREST,
+            )
+        else:
+            monitor = win32api.MonitorFromPoint(
+                (0, 0),
+                win32con.MONITOR_DEFAULTTOPRIMARY,
+            )
+
+        left, top, right, bottom = win32api.GetMonitorInfo(monitor)["Monitor"]
+        return left, top, right - left, bottom - top
+
+    except win32api.error:
+        return 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+
+
 def calculate_largest_aspect_fit(max_width_percent=90, max_height_percent=75):
     """Fit the video inside a percentage-based box without stretching it."""
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    _, _, screen_width, screen_height = get_browser_monitor_area()
 
     max_width_pixels = int(screen_width * max_width_percent / 100)
     max_height_pixels = int(screen_height * max_height_percent / 100)
@@ -837,25 +1081,25 @@ def position_and_resize_window(
     if not hwnd or not win32gui.IsWindow(hwnd):
         return
 
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    # Positioned on the browser's monitor, which may not be the main one.
+    screen_left, screen_top, screen_width, screen_height = get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
     if horizontal == "left":
-        x = 0
+        x = screen_left
     elif horizontal == "right":
-        x = screen_width - target_width
+        x = screen_left + screen_width - target_width
     else:
-        x = (screen_width - target_width) // 2
+        x = screen_left + (screen_width - target_width) // 2
 
     if vertical == "top":
-        y = 0
+        y = screen_top
     elif vertical == "bottom":
-        y = screen_height - target_height
+        y = screen_top + screen_height - target_height
     else:
-        y = (screen_height - target_height) // 2
+        y = screen_top + (screen_height - target_height) // 2
 
     print(
         f"Positioning VLC: {target_width}x{target_height} at ({x}, {y})"
@@ -878,14 +1122,13 @@ def remove_topmost(hwnd, width_percent=90, height_percent=75):
     if not hwnd or not win32gui.IsWindow(hwnd):
         return
 
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    screen_left, screen_top, screen_width, screen_height = get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
-    x = (screen_width - target_width) // 2
-    y = (screen_height - target_height) // 2
+    x = screen_left + (screen_width - target_width) // 2
+    y = screen_top + (screen_height - target_height) // 2
 
     win32gui.SetWindowPos(
         hwnd,
@@ -962,46 +1205,75 @@ def close_window_by_hwnd(hwnd):
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
 
 
-def set_original_window_topmost(make_topmost):
-    """Temporarily change the original foreground window's topmost state."""
-    global is_original_foreground_window_topmost
+def activate_window(hwnd):
+    """Make a window the active window.
 
-    if not original_foreground_window:
-        return
-
-    insert_after = (
-        win32con.HWND_TOPMOST if make_topmost else win32con.HWND_NOTOPMOST
+    Windows only lets the app currently in use change the active window, so
+    this briefly shares input with that app (AttachThreadInput) to be allowed.
+    """
+    foreground_window = win32gui.GetForegroundWindow()
+    current_thread = win32api.GetCurrentThreadId()
+    foreground_thread = (
+        win32process.GetWindowThreadProcessId(foreground_window)[0]
+        if foreground_window
+        else 0
     )
 
-    win32gui.SetWindowPos(
-        original_foreground_window,
-        insert_after,
-        0,
-        0,
-        0,
-        0,
-        win32con.SWP_NOMOVE
-        | win32con.SWP_NOSIZE
-        | win32con.SWP_NOACTIVATE,
-    )
+    is_attached = False
+    try:
+        if foreground_thread and foreground_thread != current_thread:
+            win32process.AttachThreadInput(current_thread, foreground_thread, True)
+            is_attached = True
 
-    is_original_foreground_window_topmost = make_topmost
-    #TODO: add thread to monitor when original_foreground_window is back to foreground window
+        win32gui.BringWindowToTop(hwnd)
+        win32gui.SetForegroundWindow(hwnd)
+    except win32gui.error as error:
+        print(f"Could not activate window: {error}")
+    finally:
+        if is_attached:
+            win32process.AttachThreadInput(current_thread, foreground_thread, False)
 
 
-def hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar=True):
-    """Use the original two-step minimize behavior for Windows 10 and 11."""
-    safely_minimize_window(hwnd)
-    if should_clear_taskbar:
-        time.sleep(0.2)
-        position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-        time.sleep(0.2)
-        safely_minimize_window(hwnd)
-        time.sleep(0.2)
+def is_vlc_window(hwnd):
+    """Return True when a window belongs to the VLC process this plugin opened."""
+    if not hwnd or not vlc_process:
+        return False
 
-        if original_foreground_window:
-            time.sleep(0.4)
-            set_original_window_topmost(True)
+    try:
+        _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+    except win32gui.error:
+        return False
+
+    return process_id == vlc_process.pid
+
+
+def return_focus_to_browser(delay_seconds=FOCUS_RETURN_DELAY_SECONDS):
+    """Give keyboard focus back to the browser if VLC took it.
+
+    Windows only hides the taskbar while the fullscreen browser is the active
+    window, so VLC taking focus is what makes the taskbar show over the
+    stream. Focus is only taken back from VLC, so a window the user switched
+    to on purpose is left alone.
+
+    Returns True when the browser is the active window afterwards.
+    """
+    browser_window = original_foreground_window
+    if not browser_window or not win32gui.IsWindow(browser_window):
+        return False
+
+    # VLC can take focus a moment after it is shown.
+    time.sleep(delay_seconds)
+
+    foreground_window = win32gui.GetForegroundWindow()
+    if foreground_window == browser_window:
+        return True
+
+    if foreground_window and not is_vlc_window(foreground_window):
+        return False
+
+    print("VLC took focus from the browser. Giving it back.")
+    activate_window(browser_window)
+    return win32gui.GetForegroundWindow() == browser_window
 
 
 # -----------------------------------------------------------------------------
@@ -1034,26 +1306,18 @@ def read_preferences(data):
 def show_commercial_overlay(hwnd, preferences):
     global optimized_width_percentage
     global optimized_height_percentage
-    global previous_overlay_width_percentage
-    global previous_overlay_height_percentage
     global expected_commercial_window_rect
 
-    dimensions_changed = (
-        preferences["overlay_width"] != previous_overlay_width_percentage
-        or preferences["overlay_height"] != previous_overlay_height_percentage
+    # Recalculated every commercial so a size measured after the last one (or a
+    # stream that changed shape) is always used. The video's display size is
+    # cached, so this is cheap.
+    (
+        optimized_width_percentage,
+        optimized_height_percentage,
+    ) = calculate_largest_aspect_fit(
+        max_width_percent=preferences["overlay_width"],
+        max_height_percent=preferences["overlay_height"],
     )
-
-    previous_overlay_width_percentage = preferences["overlay_width"]
-    previous_overlay_height_percentage = preferences["overlay_height"]
-
-    if dimensions_changed:
-        (
-            optimized_width_percentage,
-            optimized_height_percentage,
-        ) = calculate_largest_aspect_fit(
-            max_width_percent=preferences["overlay_width"],
-            max_height_percent=preferences["overlay_height"],
-        )
 
     position_and_resize_window(
         hwnd,
@@ -1073,6 +1337,8 @@ def show_commercial_overlay(hwnd, preferences):
     #if is_live_media(status):
     set_vlc_volume(saved_volume)
 
+    return_focus_to_browser()
+
 
 def hide_commercial_overlay(hwnd, preferences):
     global saved_volume
@@ -1084,6 +1350,7 @@ def hide_commercial_overlay(hwnd, preferences):
     if not is_live_media(status):
         send_vlc_command("pl_forcepause")
         safely_minimize_window(hwnd)
+        return_focus_to_browser()
         return
 
     set_vlc_volume(0)
@@ -1102,6 +1369,8 @@ def hide_commercial_overlay(hwnd, preferences):
         )
     else:
         safely_minimize_window(hwnd)
+
+    return_focus_to_browser()
 
 
 def resume_fullscreen(hwnd, preferences):
@@ -1125,8 +1394,14 @@ def resume_fullscreen(hwnd, preferences):
                 horizontal=preferences["pip_horizontal"],
             )
 
+    return_focus_to_browser()
+
 
 def initialize_plugin(preferences):
+    """Open VLC and get it ready.
+
+    Returns True when the browser has keyboard focus afterwards.
+    """
     global original_foreground_window
     global is_setup_complete
     global saved_volume
@@ -1145,8 +1420,6 @@ def initialize_plugin(preferences):
         title = win32gui.GetWindowText(original_foreground_window)
         print(f"Original foreground window: {title}")
 
-    should_clear_taskbar = plugin_preferences.get("shouldClearTaskbar", False)
-
     media_url = get_media_url_from_preferences(preferences, use_default=True)
     custom_vlc_path = plugin_preferences.get("vlcPath", "")
     open_vlc_with_media(media_url, custom_vlc_path=custom_vlc_path)
@@ -1155,6 +1428,7 @@ def initialize_plugin(preferences):
     if not wait_for_vlc_playing():
         raise RuntimeError("VLC did not begin displaying video before timeout.")
 
+    prepare_display_dimensions()
     update_current_media_audio_status()
     time.sleep(0.5)
 
@@ -1164,12 +1438,6 @@ def initialize_plugin(preferences):
 
     make_borderless(hwnd)
 
-    # Bring VLC forward briefly so the Windows taskbar appears now instead of
-    # unexpectedly appearing later when the first commercial begins.
-    time.sleep(0.2)
-    position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-    time.sleep(0.2)
-
     status = get_vlc_status()
     current_volume = int(status.get("volume", FALLBACK_VOLUME))
     saved_volume = current_volume or FALLBACK_VOLUME
@@ -1178,7 +1446,7 @@ def initialize_plugin(preferences):
         send_vlc_command("pl_forcepause")
         time.sleep(0.2)
         set_vlc_volume(saved_volume) # in case VLC opened with volume as 0, this should set it to the fallback
-        hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
+        safely_minimize_window(hwnd)
     else:
         set_vlc_volume(0)
 
@@ -1194,29 +1462,33 @@ def initialize_plugin(preferences):
                 vertical=preferences["pip_vertical"],
                 horizontal=preferences["pip_horizontal"],
             )
-            #TODO: add ability to clear taskbar while in pip mode
         else:
-            hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
+            safely_minimize_window(hwnd)
 
     is_setup_complete = True
     start_health_monitor()
+
+    # Opening VLC takes focus away from the browser, which is what makes the
+    # Windows taskbar show over the stream.
+    return return_focus_to_browser()
 
 
 def end_plugin():
     global vlc_process
     global vlc_window_handle
+    global vlc_http_url
+    global vlc_http_auth
     global is_setup_complete
     global current_media_url
     global current_media_has_audio
     global is_commercial_state
     global history_saving_disabled
     global expected_commercial_window_rect
+    global display_dimensions_cache_key
+    global display_dimensions
 
     stop_health_monitor()
     save_current_media_progress()
-
-    if is_original_foreground_window_topmost:
-        set_original_window_topmost(False)
 
     hwnd = get_vlc_window()
     remove_topmost(
@@ -1243,11 +1515,16 @@ def end_plugin():
 
     vlc_process = None
     vlc_window_handle = None
+    vlc_http_url = None
+    vlc_http_auth = None
     current_media_url = None
     current_media_has_audio = False
     is_commercial_state = False
     expected_commercial_window_rect = None
+    display_dimensions_cache_key = None
+    display_dimensions = None
     is_setup_complete = False
+    clear_snapshots()
     print("Extension stopped.")
 
 
@@ -1317,9 +1594,6 @@ def custom_plugin_overlay():
             else:
                 print("User exited browser fullscreen.")
 
-                if is_original_foreground_window_topmost:
-                    set_original_window_topmost(False)
-
                 safely_minimize_window(hwnd)
                 time.sleep(0.1)
                 remove_topmost(
@@ -1330,14 +1604,20 @@ def custom_plugin_overlay():
                 restore_borders(hwnd)
 
         elif request_type == "init":
-            initialize_plugin(preferences)
+            is_browser_focused = initialize_plugin(preferences)
+
+            if is_browser_focused:
+                message = "Message from VLC Over Commercials plugin: Success! You are good to go!"
+            else:
+                message = (
+                    "Message from VLC Over Commercials plugin: Success! "
+                    "Click in this window to return focus and you are good to go!"
+                )
+
             return jsonify(
                 {
                     "status": "info",
-                    "message": (
-                        "Message from VLC Over Commercials plugin: Success! "
-                        "Click in this window to return focus and you are good to go!"
-                    ),
+                    "message": message,
                     "messageDisplayTime": 7000,
                 }
             )
@@ -1418,17 +1698,6 @@ def plugin_manifest():
                         "type": "select",
                         "default": "",
                         "options": get_history_dropdown_options(),
-                    },
-                    {
-                        "key": "shouldClearTaskbar",
-                        "label": "Should Attempt to Hide Taskbar",
-                        "tooltip": (
-                            "When VLC opens, it sometimes has the Windows taskbar display. "
-                            "This can quickly be fixed by clicking on the browser stream, "
-                            "but this setting attempts to dismiss it for you to save a click. "
-                        ),
-                        "type": "checkbox",
-                        "default": False,
                     },
                     {
                         "key": "clearAndDisableHistory",

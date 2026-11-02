@@ -37,3 +37,10 @@ model (should be fast, it isn't very big)
 
 If you need any help feel free to reach out on the [extension discord](/README.md#discord) 
 or report any issues or enhancement requests on the [issues tab](https://github.com/RG-O/YoutubeOverCommercials/issues)
+
+## Changelog
+
+### Version 1.1.1
+
+- Improved responsiveness by reading the camera and recognizing gestures in the background
+- Fixed other Plugin Party Pack plugins being slowed down while the camera is running

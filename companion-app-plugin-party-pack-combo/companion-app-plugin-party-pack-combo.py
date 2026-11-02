@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw
 PLUGIN_PROTOCOL_VERSION = 1
 BUNDLE_NAME = "Official Plugin Party Pack"
 BUNDLE_ID = "official-plugin-party-pack"
-BUNDLE_VERSION = "1.0.0"
+BUNDLE_VERSION = "1.1.0"
 PARTY_PACK_PORT = 64147
 LOGO_ANALYZER_PORT = 64143
 
@@ -75,7 +75,7 @@ PLUGIN_DEFINITIONS = {
     "overlay-any-window": {
         "source_key": "window",
         "name": "Overlay Any Window",
-        "version": "1.1.0",
+        "version": "1.1.1",
         "description": "Uses any visible window as the commercial overlay.",
         "primaryColor": "#ffffff",
         "secondaryColor": "#3b93d9",
@@ -105,7 +105,7 @@ PLUGIN_DEFINITIONS = {
     "vlc-over-commercials": {
         "source_key": "vlc",
         "name": "VLC Over Commercials",
-        "version": "1.1.0",
+        "version": "1.1.1",
         "description": "Automatically plays VLC media over commercial breaks.",
         "primaryColor": "#E85E00",
         "secondaryColor": "#f0ccb4",
@@ -3541,6 +3541,7 @@ async def ai_main():
 # Prefix: window_
 # =============================================================================
 import asyncio
+import ctypes
 import json
 import time
 
@@ -3556,11 +3557,70 @@ window_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 window_PLUGIN_NAME = "Overlay Any Window"
 window_PLUGIN_ID = "overlay-any-window" # Must be unique
-window_PLUGIN_VERSION = "1.1.0"
+window_PLUGIN_VERSION = "1.1.1"
 window_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/overlay-any-window"
 
 window_PORT = 64146
 window_SPACEBAR_KEY = 0x20
+window_DWMWA_CLOAKED = 14
+window_GA_ROOT = 2
+window_FRONT_CHECK_ATTEMPTS = 5
+window_FRONT_CHECK_DELAY_SECONDS = 0.1
+window_FOCUS_MESSAGE_DISPLAY_MILLISECONDS = 12000
+
+# Results of trying to show the overlay window in front of the browser.
+window_WINDOW_IN_FRONT = "in_front"
+window_WINDOW_IN_FRONT_BY_ACTIVATING = "in_front_by_activating"
+window_WINDOW_NOT_IN_FRONT = "not_in_front"
+# Note: WS_MINIMIZEBOX/WS_MAXIMIZEBOX are the title bar buttons.
+# WS_MINIMIZE/WS_MAXIMIZE are the window's actual minimized/maximized state
+# and must never be changed when adding or removing borders.
+window_BORDER_STYLES = (
+    win32con.WS_CAPTION
+    | win32con.WS_THICKFRAME
+    | win32con.WS_MINIMIZEBOX
+    | win32con.WS_MAXIMIZEBOX
+    | win32con.WS_SYSMENU
+)
+
+# The window found at init, so it can still be found if its title changes
+# later (for example a media player showing the name of what is playing).
+window_selected_window_title = None
+window_selected_window_hwnd = None
+
+# How the selected window looked before the plugin changed it, so it can be
+# put back the same way. Some windows (like Firefox's Picture-in-Picture
+# window) start always on top, and once that is removed their app won't let
+# another program make them always on top again.
+window_original_window_state = None
+
+# The browser window that had keyboard focus before this plugin had to
+# activate the overlay window, so focus can be given back once it is hidden.
+window_focus_taken_from_window = None
+
+# The browser window the extension is running in (the active window when the
+# extension starts), so the overlay can be shown on the same monitor.
+window_browser_window = None
+
+# The lost-focus message is only shown the first time it happens each time
+# the extension is started.
+window_has_sent_focus_message = False
+
+
+def window_is_window_cloaked(hwnd):
+    """Return True for windows Windows reports as visible but hides from view.
+
+    Windows 10 and 11 keep hidden "ghost" copies of many app windows, often
+    with the same title as the real window.
+    """
+    cloaked = ctypes.c_int(0)
+    result = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+        hwnd,
+        window_DWMWA_CLOAKED,
+        ctypes.byref(cloaked),
+        ctypes.sizeof(cloaked),
+    )
+    return result == 0 and cloaked.value != 0
 
 
 def window_get_window_dropdown_options():
@@ -3568,7 +3628,7 @@ def window_get_window_dropdown_options():
     window_titles = set()
 
     def enum_handler(hwnd, _):
-        if not win32gui.IsWindowVisible(hwnd):
+        if not win32gui.IsWindowVisible(hwnd) or window_is_window_cloaked(hwnd):
             return
 
         title = win32gui.GetWindowText(hwnd).strip()
@@ -3595,7 +3655,108 @@ def window_find_window_by_title(title):
             result.append(hwnd)
 
     win32gui.EnumWindows(enum_handler, matching_windows)
+
+    # Prefer a real window over a hidden ghost copy with the same title.
+    for hwnd in matching_windows:
+        if not window_is_window_cloaked(hwnd):
+            return hwnd
+
     return matching_windows[0] if matching_windows else None
+
+
+def window_find_selected_window(title):
+    """Find the selected window, reusing the one found before if it still exists."""
+    global window_selected_window_title
+    global window_selected_window_hwnd
+
+    if (
+        title == window_selected_window_title
+        and window_selected_window_hwnd
+        and win32gui.IsWindow(window_selected_window_hwnd)
+    ):
+        return window_selected_window_hwnd
+
+    hwnd = window_find_window_by_title(title)
+    if hwnd:
+        window_selected_window_title = title
+        window_selected_window_hwnd = hwnd
+
+    return hwnd
+
+
+def window_remember_original_window_state(hwnd):
+    """Save how the window looks before the plugin changes it."""
+    global window_original_window_state
+
+    # Keep the first state saved for this window until the extension stops,
+    # so a second init doesn't save the plugin's own changes as "original".
+    if window_original_window_state and window_original_window_state["hwnd"] == hwnd:
+        return
+
+    window_original_window_state = {
+        "hwnd": hwnd,
+        "is_topmost": window_is_window_topmost(hwnd),
+        "rect": win32gui.GetWindowRect(hwnd),
+        "style": win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE),
+    }
+
+
+def window_get_original_window_state(hwnd):
+    """Return the saved original state for this window, if there is one."""
+    if window_original_window_state and window_original_window_state["hwnd"] == hwnd:
+        return window_original_window_state
+
+    return None
+
+
+def window_was_window_originally_topmost(hwnd):
+    """Return True when the window was always on top before the plugin started."""
+    state = window_get_original_window_state(hwnd)
+    return bool(state and state["is_topmost"])
+
+
+def window_forget_original_window_state():
+    """Clear the saved state once the window has been put back."""
+    global window_original_window_state
+    window_original_window_state = None
+
+
+def window_get_set_up_window():
+    """Return the window the plugin has currently set up as the overlay, if any."""
+    if window_original_window_state:
+        return window_original_window_state["hwnd"]
+
+    return None
+
+
+def window_set_up_window(hwnd, settings):
+    """Get a window ready to be used as the overlay."""
+    window_remember_original_window_state(hwnd)
+    window_restore_if_maximized(hwnd)
+
+    if settings["should_remove_borders"]:
+        window_make_borderless(hwnd)
+
+    # For some reason running this at the begining helps the window come
+    # forward later. Skipped for windows that are already always on top,
+    # since removing it can't be undone for some (like Firefox's
+    # Picture-in-Picture window) and they are already in front.
+    if not window_was_window_originally_topmost(hwnd):
+        window_remove_topmost(hwnd, width_percent=90, height_percent=85)
+
+    time.sleep(0.5)
+
+
+def window_release_window(hwnd):
+    """Put a window back the way it was before the plugin set it up."""
+    if win32gui.IsWindow(hwnd):
+        # Always unmute in case the preference changed while the extension
+        # was running.
+        window_mute_application_of_window(hwnd, mute=False)
+        window_remove_topmost(hwnd, width_percent=90, height_percent=75)
+        window_restore_borders(hwnd)
+
+    window_forget_original_window_state()
 
 
 def window_mute_application_of_window(hwnd, mute=True):
@@ -3627,32 +3788,91 @@ def window_send_spacebar(hwnd):
     win32gui.PostMessage(hwnd, win32con.WM_KEYUP, window_SPACEBAR_KEY, 0)
 
 
+def window_make_process_dpi_aware():
+    """Work in real screen pixels instead of Windows' scaled ones.
+
+    With display scaling (like 125% or 150%), Windows otherwise hands this
+    program scaled sizes and positions, so windows end up the wrong size or
+    in the wrong place, especially on a second monitor with different
+    scaling. Note: this applies to the whole program and can only be set
+    once. In the Party Pack the first plugin to call it sets it for all of
+    them, and later calls are simply refused.
+    """
+    try:
+        # Per-monitor DPI awareness (version 2), Windows 10 1703 and newer.
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        # Per-monitor DPI awareness on older Windows versions.
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+
+
+window_make_process_dpi_aware()
+
+
+def window_remember_browser_window(overlay_hwnd):
+    """Remember the browser window (the active window when the extension starts)."""
+    global window_browser_window
+
+    foreground_window = win32gui.GetForegroundWindow()
+    if foreground_window and foreground_window != overlay_hwnd:
+        window_browser_window = foreground_window
+
+
+def window_get_browser_monitor_area():
+    """Return (left, top, width, height) of the monitor the browser is on.
+
+    Uses the main monitor if the browser window isn't known.
+    """
+    try:
+        if window_browser_window and win32gui.IsWindow(window_browser_window):
+            monitor = win32api.MonitorFromWindow(
+                window_browser_window,
+                win32con.MONITOR_DEFAULTTONEAREST,
+            )
+        else:
+            monitor = win32api.MonitorFromPoint(
+                (0, 0),
+                win32con.MONITOR_DEFAULTTOPRIMARY,
+            )
+
+        left, top, right, bottom = win32api.GetMonitorInfo(monitor)["Monitor"]
+        return left, top, right - left, bottom - top
+
+    except win32api.error:
+        return 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+
+
 def window_calculate_window_position(
     width_percent,
     height_percent,
     horizontal,
     vertical,
 ):
-    """Calculate a window's size and screen position."""
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    """Calculate a window's size and position on the browser's monitor."""
+    screen_left, screen_top, screen_width, screen_height = window_get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
     if horizontal == "left":
-        x = 0
+        x = screen_left
     elif horizontal == "right":
-        x = screen_width - target_width
+        x = screen_left + screen_width - target_width
     else:
-        x = (screen_width - target_width) // 2
+        x = screen_left + (screen_width - target_width) // 2
 
     if vertical == "top":
-        y = 0
+        y = screen_top
     elif vertical == "bottom":
-        y = screen_height - target_height
+        y = screen_top + screen_height - target_height
     else:
-        y = (screen_height - target_height) // 2
+        y = screen_top + (screen_height - target_height) // 2
 
     return x, y, target_width, target_height
 
@@ -3664,7 +3884,11 @@ def window_position_and_resize_window(
     vertical="middle",
     horizontal="middle",
 ):
-    """Show, resize, position, and temporarily keep a window on top."""
+    """Show, resize, position, and keep a window on top of the fullscreen browser.
+
+    Returns WINDOW_IN_FRONT, WINDOW_IN_FRONT_BY_ACTIVATING (the browser lost
+    keyboard focus), or WINDOW_NOT_IN_FRONT.
+    """
     x, y, width, height = window_calculate_window_position(
         width_percent,
         height_percent,
@@ -3672,8 +3896,46 @@ def window_position_and_resize_window(
         vertical,
     )
 
-    win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+    if win32gui.IsIconic(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+        # Some apps finish restoring a moment later and can undo a position
+        # that was set too early.
+        time.sleep(0.15)
 
+    # Check it actually ended up in front, since some apps move themselves
+    # again right after being restored.
+    for _ in range(window_FRONT_CHECK_ATTEMPTS):
+        window_set_window_topmost(hwnd, x, y, width, height)
+        time.sleep(window_FRONT_CHECK_DELAY_SECONDS)
+
+        if window_is_window_in_front(hwnd):
+            return window_WINDOW_IN_FRONT
+
+        # Some windows won't accept always-on-top from another program (for
+        # example a Firefox Picture-in-Picture window that already lost it),
+        # so trying again won't help.
+        if not window_is_window_topmost(hwnd):
+            break
+
+    # Last resort: make it the active window, which takes keyboard focus away
+    # from the browser.
+    window_activate_overlay_window(hwnd)
+    window_set_window_topmost(hwnd, x, y, width, height)
+    time.sleep(window_FRONT_CHECK_DELAY_SECONDS)
+
+    if window_is_window_in_front(hwnd) or win32gui.GetForegroundWindow() == hwnd:
+        print(
+            "Window did not come to the front on its own, so it was activated "
+            "instead (the browser gets keyboard focus back once the overlay is hidden)."
+        )
+        return window_WINDOW_IN_FRONT_BY_ACTIVATING
+
+    print("Window could not be brought to the front, even by activating it.")
+    return window_WINDOW_NOT_IN_FRONT
+
+
+def window_set_window_topmost(hwnd, x, y, width, height):
+    """Place a window above all normal windows without activating it."""
     win32gui.SetWindowPos(
         hwnd,
         win32con.HWND_TOPMOST,
@@ -3681,12 +3943,119 @@ def window_position_and_resize_window(
         y,
         width,
         height,
-        win32con.SWP_NOACTIVATE,
+        win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW,
     )
 
 
+def window_is_window_topmost(hwnd):
+    """Return True when a window is marked always on top."""
+    ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+    return bool(ex_style & win32con.WS_EX_TOPMOST)
+
+
+def window_is_window_in_front(hwnd):
+    """Return True when the window is restored, topmost, and the one seen at its center."""
+    if win32gui.IsIconic(hwnd):
+        return False
+
+    if not window_is_window_topmost(hwnd):
+        return False
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    center = ((left + right) // 2, (top + bottom) // 2)
+
+    try:
+        window_at_center = win32gui.WindowFromPoint(center)
+    except win32gui.error:
+        return False
+
+    if not window_at_center:
+        return False
+
+    # The point can land on one of the window's child controls.
+    return ctypes.windll.user32.GetAncestor(window_at_center, window_GA_ROOT) == hwnd
+
+
+def window_activate_window(hwnd):
+    """Make a window the active window.
+
+    Windows only lets the app currently in use change the active window, so
+    this briefly shares input with that app (AttachThreadInput) to be allowed.
+    """
+    foreground_window = win32gui.GetForegroundWindow()
+    current_thread = win32api.GetCurrentThreadId()
+    foreground_thread = (
+        win32process.GetWindowThreadProcessId(foreground_window)[0]
+        if foreground_window
+        else 0
+    )
+
+    is_attached = False
+    try:
+        if foreground_thread and foreground_thread != current_thread:
+            win32process.AttachThreadInput(current_thread, foreground_thread, True)
+            is_attached = True
+
+        win32gui.BringWindowToTop(hwnd)
+        win32gui.SetForegroundWindow(hwnd)
+    except win32gui.error as error:
+        print(f"Could not activate window: {error}")
+    finally:
+        if is_attached:
+            win32process.AttachThreadInput(current_thread, foreground_thread, False)
+
+
+def window_activate_overlay_window(hwnd):
+    """Last resort to bring a window in front: make it the active window.
+
+    Focus is not given straight back to the browser, because activating the
+    browser would put it back on top of a window that won't stay always on
+    top. Instead focus is returned once the overlay is hidden.
+    """
+    global window_focus_taken_from_window
+
+    previous_foreground_window = win32gui.GetForegroundWindow()
+    if (
+        window_focus_taken_from_window is None
+        and previous_foreground_window
+        and previous_foreground_window != hwnd
+    ):
+        window_focus_taken_from_window = previous_foreground_window
+
+    window_activate_window(hwnd)
+
+
+def window_return_focus_to_browser():
+    """Give keyboard focus back to the browser if this plugin took it."""
+    global window_focus_taken_from_window
+
+    window = window_focus_taken_from_window
+    window_focus_taken_from_window = None
+
+    if window and win32gui.IsWindow(window):
+        window_activate_window(window)
+
+
 def window_remove_topmost(hwnd, width_percent=90, height_percent=75):
-    """Remove topmost status and place the window near the bottom of the stack."""
+    """Remove topmost status and place the window near the bottom of the stack.
+
+    Windows that were always on top before the plugin started are put back
+    where they were instead, still always on top.
+    """
+    state = window_get_original_window_state(hwnd)
+    if state and state["is_topmost"]:
+        left, top, right, bottom = state["rect"]
+        win32gui.SetWindowPos(
+            hwnd,
+            win32con.HWND_TOPMOST,
+            left,
+            top,
+            right - left,
+            bottom - top,
+            win32con.SWP_NOACTIVATE,
+        )
+        return
+
     x, y, width, height = window_calculate_window_position(
         width_percent,
         height_percent,
@@ -3710,17 +4079,24 @@ def window_minimize_window(hwnd):
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
 
-def window_make_borderless(hwnd):
-    """Remove the window title bar and resize borders."""
-    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+def window_restore_if_maximized(hwnd):
+    """A maximized window can't be freely sized, so restore it to normal size."""
+    # Note: win32gui has no IsZoomed, so it is called from user32 directly.
+    if win32gui.IsWindow(hwnd) and ctypes.windll.user32.IsZoomed(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
-    style &= ~(
-        win32con.WS_CAPTION
-        | win32con.WS_THICKFRAME
-        | win32con.WS_MINIMIZE
-        | win32con.WS_MAXIMIZE
-        | win32con.WS_SYSMENU
-    )
+
+def window_make_borderless(hwnd):
+    """Remove the window title bar and resize borders.
+
+    Note: many Windows 11 apps (like Notepad, File Explorer, Terminal,
+    browsers, and Microsoft Store apps) draw their own title bar, tabs, and
+    minimize/maximize/close buttons inside the window. Those can't be removed
+    by another program, which is why this can be turned off in the plugin's
+    preferences.
+    """
+    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+    style &= ~window_BORDER_STYLES
 
     win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
 
@@ -3742,13 +4118,14 @@ def window_restore_borders(hwnd):
     """Restore the normal title bar and resize borders."""
     style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
 
-    style |= (
-        win32con.WS_CAPTION
-        | win32con.WS_THICKFRAME
-        | win32con.WS_MINIMIZE
-        | win32con.WS_MAXIMIZE
-        | win32con.WS_SYSMENU
-    )
+    # Only give back the border pieces the window had before, so windows
+    # that never had a title bar (like Firefox's Picture-in-Picture window)
+    # don't get one.
+    state = window_get_original_window_state(hwnd)
+    if state:
+        style |= state["style"] & window_BORDER_STYLES
+    else:
+        style |= window_BORDER_STYLES
 
     win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
 
@@ -3779,6 +4156,9 @@ def window_get_overlay_settings(message):
         "should_send_spacebar": bool(
             plugin_preferences.get("should-send-spacebar", False)
         ),
+        "should_remove_borders": bool(
+            plugin_preferences.get("should-remove-borders", False)
+        ),
         "overlay_width": float(preferences.get("videoOverlayWidth", 90)),
         "overlay_height": float(preferences.get("videoOverlayHeight", 75)),
         "overlay_horizontal": preferences.get(
@@ -3805,7 +4185,7 @@ def window_get_overlay_settings(message):
 
 def window_show_pip_window(hwnd, settings):
     """Show the selected window using the configured picture-in-picture size."""
-    window_position_and_resize_window(
+    return window_position_and_resize_window(
         hwnd,
         width_percent=settings["pip_width"],
         height_percent=settings["pip_height"],
@@ -3816,7 +4196,7 @@ def window_show_pip_window(hwnd, settings):
 
 def window_show_overlay_window(hwnd, settings):
     """Show the selected window using the configured overlay size."""
-    window_position_and_resize_window(
+    return window_position_and_resize_window(
         hwnd,
         width_percent=settings["overlay_width"],
         height_percent=settings["overlay_height"],
@@ -3849,30 +4229,6 @@ async def window_handle_client(websocket):
 
 
 async def window_handle_message(websocket, message):
-    """Handle an Overlay Any Window message with COM scoped to this plugin.
-
-    pycaw uses Windows COM internally. The Party Pack WebSocket loop runs on
-    a worker thread, and COM initialization is per-thread. Keep that Windows
-    requirement local to this plugin instead of initializing COM for every
-    plugin in the Party Pack.
-    """
-    # Reading the manifest only enumerates windows and does not use pycaw, so
-    # there is no reason to initialize COM for a manifest request.
-    if message.get("type") == "plugin_manifest":
-        await window_handle_message_with_com(websocket, message)
-        return
-
-    import comtypes
-
-    comtypes.CoInitialize()
-    try:
-        await window_handle_message_with_com(websocket, message)
-    finally:
-        comtypes.CoUninitialize()
-
-
-async def window_handle_message_with_com(websocket, message):
-    """Original Overlay Any Window message handling logic."""
     message_type = message.get("type")
     print(f"Received message: {message_type}")
 
@@ -3880,34 +4236,92 @@ async def window_handle_message_with_com(websocket, message):
         await window_send_manifest(websocket)
         return
 
+    # Moving, showing, and muting windows includes short waits for windows to
+    # settle, so it runs on a worker thread. This keeps the WebSocket (and, in
+    # the Party Pack, every other plugin) responsive in the meantime.
+    statuses = await asyncio.to_thread(window_process_message_with_com, message)
+
+    for status in statuses:
+        await window_send_status(websocket, **status)
+
+
+def window_process_message_with_com(message):
+    """Run process_message with Windows COM set up on this worker thread.
+
+    pycaw (used for muting) uses Windows COM, which has to be set up on each
+    thread that uses it.
+    """
+    import comtypes
+
+    comtypes.CoInitialize()
+    try:
+        return window_process_message(message)
+    finally:
+        comtypes.CoUninitialize()
+
+
+def window_process_message(message):
+    """Handle a message from the extension.
+
+    Returns a list of status messages (send_status arguments) to send back.
+    """
+    statuses = []
+    message_type = message.get("type")
     settings = window_get_overlay_settings(message)
     window_title = settings["window_title"]
+    set_up_hwnd = window_get_set_up_window()
+
+    if message_type == "end":
+        print("Extension stopped.")
+
+        # Put back the window that was actually set up, even if a different
+        # window has been chosen in the extension since then. If nothing is
+        # set up it was already put back (the Party Pack sends a second "end"
+        # during its cleanup), and doing it again would strip always-on-top
+        # and add a title bar to windows that never had them.
+        if set_up_hwnd:
+            window_release_window(set_up_hwnd)
+
+        window_return_focus_to_browser()
+        return statuses
 
     if not window_title:
-        await window_send_status(
-            websocket,
-            "No window selected",
-            "The window-title preference is empty.",
-        )
-        return
+        statuses.append({
+            "display": "No window selected",
+            "debug": "The window-title preference is empty.",
+        })
+        return statuses
 
-    hwnd = window_find_window_by_title(window_title)
+    hwnd = window_find_selected_window(window_title)
 
     if hwnd is None:
-        await window_send_status(
-            websocket,
-            f'Could not find "{window_title}"',
-            f'Could not find a visible window titled "{window_title}".',
-        )
-        return
+        statuses.append({
+            "display": f'Could not find "{window_title}"',
+            "debug": f'Could not find a visible window titled "{window_title}".',
+        })
+        return statuses
+
+    # A different window was chosen in the extension after the plugin was set
+    # up, so put the old window back and set up the new one in its place.
+    if set_up_hwnd and set_up_hwnd != hwnd:
+        print(f'Switching overlay window to "{window_title}".')
+        window_release_window(set_up_hwnd)
+
+        # Init sets up the window itself below.
+        if message_type != "init":
+            window_set_up_window(hwnd, settings)
+
+            if settings["should_mute"]:
+                window_mute_application_of_window(hwnd, mute=True)
 
     if message_type == "init":
-        window_make_borderless(hwnd)
-        window_remove_topmost(hwnd, width_percent=90, height_percent=85) # For some reason running this at the begining helps the window come forward later
-        time.sleep(0.5)
+        window_reset_focus_message()
+        window_remember_browser_window(hwnd)
+        window_set_up_window(hwnd, settings)
 
         if settings["is_pip_mode"]:
-            window_show_pip_window(hwnd, settings)
+            result = window_show_pip_window(hwnd, settings)
+            window_add_window_front_status(statuses, result, window_title)
         else:
             window_minimize_window(hwnd)
 
@@ -3915,7 +4329,7 @@ async def window_handle_message_with_com(websocket, message):
             window_mute_application_of_window(hwnd, mute=True)
 
         print("Extension initiated.")
-        return
+        return statuses
 
     if message_type == "commercial_state_change":
         is_commercial = bool(
@@ -3924,7 +4338,8 @@ async def window_handle_message_with_com(websocket, message):
 
         if is_commercial:
             print("Starting overlay.")
-            window_show_overlay_window(hwnd, settings)
+            result = window_show_overlay_window(hwnd, settings)
+            window_add_window_front_status(statuses, result, window_title)
 
             if settings["should_mute"]:
                 window_mute_application_of_window(hwnd, mute=False)
@@ -3944,11 +4359,13 @@ async def window_handle_message_with_com(websocket, message):
                 window_mute_application_of_window(hwnd, mute=True)
 
             if settings["is_pip_mode"]:
-                window_show_pip_window(hwnd, settings)
+                result = window_show_pip_window(hwnd, settings)
+                window_add_window_front_status(statuses, result, window_title)
             else:
                 window_minimize_window(hwnd)
+                window_return_focus_to_browser()
 
-        return
+        return statuses
 
     if message_type == "browser_fullscreen_state_change":
         is_fullscreen = bool(
@@ -3961,10 +4378,18 @@ async def window_handle_message_with_com(websocket, message):
             if settings["should_mute"]:
                 window_mute_application_of_window(hwnd, mute=True)
 
-            window_make_borderless(hwnd)
+            window_restore_if_maximized(hwnd)
+
+            if settings["should_remove_borders"]:
+                window_make_borderless(hwnd)
 
             if settings["is_pip_mode"]:
-                window_show_pip_window(hwnd, settings)
+                result = window_show_pip_window(hwnd, settings)
+                window_add_window_front_status(statuses, result, window_title)
+            else:
+                # Keep it out of the way until the next commercial (a window
+                # that is always on top would otherwise sit over the stream).
+                window_minimize_window(hwnd)
 
         else:
             print("Browser exited fullscreen.")
@@ -3975,34 +4400,69 @@ async def window_handle_message_with_com(websocket, message):
             window_remove_topmost(hwnd, width_percent=90, height_percent=85)
             window_restore_borders(hwnd)
 
-        return
+        return statuses
 
-    if message_type == "end":
-        print("Extension stopped.")
-
-        # Always unmute during cleanup in case the preference changed while
-        # the extension was running.
-        window_mute_application_of_window(hwnd, mute=False)
-        window_remove_topmost(hwnd, width_percent=90, height_percent=75)
-        window_restore_borders(hwnd)
-        return
-
-    await window_send_status(
-        websocket,
-        "Unknown message",
-        f'Unsupported message type: "{message_type}".',
-    )
+    statuses.append({
+        "display": "Unknown message",
+        "debug": f'Unsupported message type: "{message_type}".',
+    })
+    return statuses
 
 
-async def window_send_status(websocket, display, debug):
+def window_reset_focus_message():
+    """Allow the lost-focus message to be shown again (once per extension start)."""
+    global window_has_sent_focus_message
+    window_has_sent_focus_message = False
+
+
+def window_add_window_front_status(statuses, result, window_title):
+    """Let the user know when the overlay window took focus or couldn't be shown on top."""
+    global window_has_sent_focus_message
+
+    if result == window_WINDOW_IN_FRONT_BY_ACTIVATING and not window_has_sent_focus_message:
+        window_has_sent_focus_message = True
+        statuses.append({
+            "display": (
+                f'To show "{window_title}" on top, Overlay Any Window had to make it '
+                "the active window, so your browser lost keyboard focus. Click your "
+                "browser to give it focus again (for example to use the keyboard "
+                "shortcut). This may hide the overlay window."
+            ),
+            "debug": "The window would not stay always on top, so it was activated instead.",
+            "display_type": "info",
+            "display_time": window_FOCUS_MESSAGE_DISPLAY_MILLISECONDS,
+        })
+
+    elif result == window_WINDOW_NOT_IN_FRONT:
+        statuses.append({
+            "display": (
+                f'Overlay Any Window could not show "{window_title}" on top of your '
+                "browser. Try closing and reopening that window, or choose a "
+                "different one."
+            ),
+            "debug": "The window would not stay always on top and could not be activated.",
+            "display_type": "error",
+        })
+
+
+async def window_send_status(websocket, display, debug, display_type=None, display_time=None):
+    meta = {
+        "display": display,
+        "debug": debug,
+    }
+
+    # Optional: "info" shows blue and "error" shows red. The message
+    # disappears after displayTime milliseconds (7 seconds if not sent).
+    if display_type is not None:
+        meta["displayType"] = display_type
+    if display_time is not None:
+        meta["displayTime"] = display_time
+
     message = {
         "type": "status",
         "timestamp": time.time(),
         "data": {},
-        "meta": {
-            "display": display,
-            "debug": debug,
-        },
+        "meta": meta,
     }
 
     try:
@@ -4066,6 +4526,21 @@ async def window_send_manifest(websocket):
                     "type": "checkbox",
                     "default": False,
                 },
+                {
+                    "key": "should-remove-borders",
+                    "label": "Remove window title bar and borders",
+                    "tooltip": (
+                        "Hides the selected window's title bar and borders while "
+                        "it is used as the overlay. Works best with classic apps. "
+                        "Many Windows 11 apps (like Notepad, File Explorer, "
+                        "Terminal, browsers, and Microsoft Store apps) draw their "
+                        "own title bar, tabs, and buttons, which can't be removed "
+                        "and may be left with an odd-looking border, so turn this "
+                        "off for those."
+                    ),
+                    "type": "checkbox",
+                    "default": False,
+                },
             ],
         },
         "meta": {
@@ -4107,7 +4582,7 @@ voice_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 voice_PLUGIN_NAME = "Voice Commercial Trigger"
 voice_PLUGIN_ID = "speak-keyword-trigger-plugin" # Must be unique
-voice_PLUGIN_VERSION = "1.0.1"
+voice_PLUGIN_VERSION = "1.0.2"
 voice_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/say-no-to-commercials"
 
 voice_PORT = 64145
@@ -4133,6 +4608,10 @@ voice_DEFAULT_CONTENT_EMOJI = "\U0001F34C"
 voice_TARGET_PHRASES = {}
 
 voice_COOLDOWN = 3.0
+
+# How long to wait for the next block of microphone audio before checking
+# again whether listening should stop.
+voice_AUDIO_WAIT_SECONDS = 0.5
 
 # --------------------------------------------------
 # Global state
@@ -4325,6 +4804,39 @@ def voice_audio_callback(indata, frames, time_info, status):
         print("Audio status:", status)
     voice_audio_queue.put(bytes(indata))
 
+
+def voice_get_next_audio_block():
+    """Wait briefly for the next block of microphone audio.
+
+    Returns None if none arrives in time, so the listen loop can check whether
+    it should stop, and a microphone that stops sending audio can't hang the
+    plugin.
+    """
+    try:
+        return voice_audio_queue.get(timeout=voice_AUDIO_WAIT_SECONDS)
+    except queue.Empty:
+        return None
+
+
+def voice_clear_audio_queue():
+    """Throw away audio left over from the last time listening was stopped."""
+    while True:
+        try:
+            voice_audio_queue.get_nowait()
+        except queue.Empty:
+            return
+
+
+def voice_recognize_audio_block(recognizer, data):
+    """Run speech recognition on one block of audio.
+
+    Returns ("final" or "partial", recognized text).
+    """
+    if recognizer.AcceptWaveform(data):
+        return "final", json.loads(recognizer.Result()).get("text", "")
+
+    return "partial", json.loads(recognizer.PartialResult()).get("partial", "")
+
 def voice_find_trigger_config(text):
     """Find a configured word or multi-word phrase in recognized speech."""
     normalized_text = " ".join(text.lower().split())
@@ -4415,7 +4927,10 @@ async def voice_listen_loop(ws):
             "Loading Voice model...",
             "Loading Vosk model...",
         )
-        model = Model(voice_MODEL_PATH)
+        # Loading the model takes a few seconds, so it runs on a worker thread
+        # to keep the WebSocket (and, in the Party Pack, every other plugin)
+        # responsive in the meantime.
+        model = await asyncio.to_thread(Model, voice_MODEL_PATH)
 
         recognizer = KaldiRecognizer(model, 16000)
 
@@ -4431,6 +4946,9 @@ async def voice_listen_loop(ws):
                 "Ready"
             )
 
+            # Don't react to things said before listening started.
+            voice_clear_audio_queue()
+
             with sd.RawInputStream(
                 samplerate=16000,
                 blocksize=4000,
@@ -4439,26 +4957,20 @@ async def voice_listen_loop(ws):
                 callback=voice_audio_callback
             ):
                 while voice_listening_active.is_set():
-                    data = voice_audio_queue.get()
+                    # Waiting for audio and recognizing speech both block, so
+                    # they run on a worker thread for the same reason.
+                    data = await asyncio.to_thread(voice_get_next_audio_block)
+                    if data is None:
+                        continue
+
                     now = time.time()
+                    source, text = await asyncio.to_thread(
+                        voice_recognize_audio_block, recognizer, data
+                    )
 
-                    if recognizer.AcceptWaveform(data):
-                        result = json.loads(recognizer.Result())
-                        text = result.get("text", "").lower().strip()
-
-                        last_trigger_time, last_partial_text = await voice_process_text(
-                            ws, text, now, last_trigger_time, "final", last_partial_text
-                        )
-
-                    else:
-                        partial = json.loads(recognizer.PartialResult())
-                        text = partial.get("partial", "").lower().strip()
-
-                        last_trigger_time, last_partial_text = await voice_process_text(
-                            ws, text, now, last_trigger_time, "partial", last_partial_text
-                        )
-
-                    await asyncio.sleep(0)
+                    last_trigger_time, last_partial_text = await voice_process_text(
+                        ws, text.lower().strip(), now, last_trigger_time, source, last_partial_text
+                    )
 
             print("Listening stopped")
 
@@ -4478,7 +4990,13 @@ async def voice_handle_client(websocket):
 
     try:
         async for message in websocket:
-            msg = json.loads(message)
+            try:
+                msg = json.loads(message)
+            except json.JSONDecodeError as error:
+                # A bad message shouldn't drop the connection to the extension.
+                print("Received invalid JSON:", error)
+                continue
+
             await voice_handle_message(websocket, msg)
 
     except websockets.exceptions.ConnectionClosed:
@@ -4668,6 +5186,7 @@ async def voice_main():
 # =============================================================================
 
 import asyncio
+import concurrent.futures
 import websockets
 import json
 import time
@@ -4686,7 +5205,7 @@ gesture_PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 gesture_PLUGIN_NAME = "Hand Gesture Commercial Trigger"
 gesture_PLUGIN_ID = "gesture-trigger-plugin"
-gesture_PLUGIN_VERSION = "1.1.0"
+gesture_PLUGIN_VERSION = "1.1.1"
 gesture_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/thumbs-down-commercials"
 
 # --------------------------------------------------
@@ -4769,6 +5288,35 @@ gesture_last_status_display = None
 gesture_gesture_group_states = {}
 
 gesture_any_trigger_display_until = time.time()
+
+
+def gesture_initialize_camera_thread():
+    """Set up Windows COM on the camera thread (used to list camera names)."""
+    if platform.system() == "Windows":
+        try:
+            import comtypes
+
+            comtypes.CoInitialize()
+        except Exception as error:
+            print(f"Could not set up COM on the camera thread: {error}")
+
+
+# All camera and gesture-recognizer work runs on this one thread. It blocks
+# (waiting for frames, recognizing gestures, listing cameras), so keeping it
+# off the event loop keeps the WebSocket (and, in the Party Pack, every other
+# plugin) responsive. A single thread is used because camera objects should
+# stay on the thread that opened them.
+gesture_camera_executor = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="gesture-camera",
+    initializer=gesture_initialize_camera_thread,
+)
+
+
+async def gesture_run_on_camera_thread(function, *args):
+    """Run blocking camera or gesture-recognizer work on the camera thread."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(gesture_camera_executor, function, *args)
 
 # --------------------------------------------------
 # Model management
@@ -5393,6 +5941,89 @@ async def gesture_process_gesture_group(ws, gesture_name, hands, now, frame):
 # Camera loop
 # --------------------------------------------------
 
+def gesture_open_camera():
+    """Open and set up the selected camera. Runs on the camera thread."""
+    cap = cv2.VideoCapture(gesture_CAMERA_INDEX, gesture_get_video_capture_backend())
+
+    #TODO: add advanced/troubleshooting option for this
+    # cap.set(
+    #     cv2.CAP_PROP_FOURCC,
+    #     cv2.VideoWriter_fourcc(*"MJPG")
+    # )
+
+    if gesture_CAMERA_RESOLUTION != "native":
+        width, height = map(int, gesture_CAMERA_RESOLUTION.split("x"))
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    #TODO: add advanced/troubleshooting option for this
+    # cap.set(cv2.CAP_PROP_FPS, 30)
+
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    print(f"Camera resolution: {width}x{height}")
+
+    return cap
+
+
+def gesture_read_and_recognize_frame(cap, recognizer):
+    """Read the next camera frame and recognize hand gestures in it.
+
+    Runs on the camera thread. Returns (frame, result), or (None, None) when
+    no frame could be read.
+    """
+    success, frame = cap.read()
+
+    if not success:
+        return None, None
+
+    if gesture_MIRROR_CAMERA:
+        frame = cv2.flip(frame, 1)
+
+    #TODO: add option for this
+    # display_frame = frame
+
+    # processing_frame = cv2.resize(
+    #     frame,
+    #     None,
+    #     fx=0.5,
+    #     fy=0.5,
+    #     interpolation=cv2.INTER_AREA
+    # )
+
+    # rgb_frame = cv2.cvtColor(
+    #     processing_frame,
+    #     cv2.COLOR_BGR2RGB
+    # )
+
+    rgb_frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2RGB
+    )
+
+    mp_image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb_frame
+    )
+
+    return frame, recognizer.recognize(mp_image)
+
+
+def gesture_release_camera_resources(cap, recognizer):
+    """Close the camera and gesture recognizer. Runs on the camera thread."""
+    if cap is not None:
+        cap.release()
+
+    if recognizer is not None:
+        try:
+            recognizer.close()
+            print("Recognizer closed")
+        except Exception:
+            pass
+
+
 async def gesture_camera_loop(ws):
     cap = None
     recognizer = None
@@ -5427,29 +6058,12 @@ async def gesture_camera_loop(ws):
             )
         )
 
-        recognizer = vision.GestureRecognizer.create_from_options(options)
+        recognizer = await gesture_run_on_camera_thread(
+            vision.GestureRecognizer.create_from_options,
+            options,
+        )
 
-        cap = cv2.VideoCapture(gesture_CAMERA_INDEX, gesture_get_video_capture_backend())
-
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(
-        #     cv2.CAP_PROP_FOURCC,
-        #     cv2.VideoWriter_fourcc(*"MJPG")
-        # )
-
-        if gesture_CAMERA_RESOLUTION != "native":
-            width, height = map(int, gesture_CAMERA_RESOLUTION.split("x"))
-
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-        #TODO: add advanced/troubleshooting option for this
-        # cap.set(cv2.CAP_PROP_FPS, 30)
-
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        print(f"Camera resolution: {width}x{height}")
+        cap = await gesture_run_on_camera_thread(gesture_open_camera)
 
         if not cap.isOpened():
             print("Failed to open webcam")
@@ -5469,42 +6083,15 @@ async def gesture_camera_loop(ws):
         while True:
             await gesture_camera_active.wait()
 
-            success, frame = cap.read()
+            frame, result = await gesture_run_on_camera_thread(
+                gesture_read_and_recognize_frame,
+                cap,
+                recognizer,
+            )
 
-            if not success:
+            if frame is None:
                 await asyncio.sleep(0.01)
                 continue
-
-            if gesture_MIRROR_CAMERA:
-                frame = cv2.flip(frame, 1)
-
-            #TODO: add option for this
-            # display_frame = frame
-
-            # processing_frame = cv2.resize(
-            #     frame,
-            #     None,
-            #     fx=0.5,
-            #     fy=0.5,
-            #     interpolation=cv2.INTER_AREA
-            # )
-
-            # rgb_frame = cv2.cvtColor(
-            #     processing_frame,
-            #     cv2.COLOR_BGR2RGB
-            # )
-
-            rgb_frame = cv2.cvtColor(
-                frame,
-                cv2.COLOR_BGR2RGB
-            )
-
-            mp_image = mp.Image(
-                image_format=mp.ImageFormat.SRGB,
-                data=rgb_frame
-            )
-
-            result = recognizer.recognize(mp_image)
 
             now = time.time()
             detected_hands = []
@@ -5575,8 +6162,6 @@ async def gesture_camera_loop(ws):
                 if cv2.waitKey(1) & 0xFF == 27:
                     break
 
-            await asyncio.sleep(0)
-
     except asyncio.CancelledError:
         print("camera_loop shutting down")
         raise
@@ -5587,9 +6172,8 @@ async def gesture_camera_loop(ws):
     finally:
         print("Cleaning up camera resources")
 
-        if cap is not None:
-            cap.release()
-
+        # Note: the debug window belongs to this (event loop) thread, while
+        # the camera and recognizer belong to the camera thread.
         if debug_window_created:
             try:
                 cv2.destroyAllWindows()
@@ -5600,12 +6184,11 @@ async def gesture_camera_loop(ws):
             except cv2.error:
                 pass
 
-        if recognizer is not None:
+        if cap is not None or recognizer is not None:
             try:
-                recognizer.close()
-                print("Recognizer closed")
-            except Exception:
-                pass
+                await gesture_run_on_camera_thread(gesture_release_camera_resources, cap, recognizer)
+            except Exception as error:
+                print(f"Could not release camera resources: {error}")
 
         print("Camera resources released")
 
@@ -5772,7 +6355,7 @@ async def gesture_send_manifest(ws):
 
     # only get list of cameras if not already running and if it is, only set it if it isn't already cached
     if not gesture_camera_task:
-        gesture_camera_options = gesture_get_available_cameras()
+        gesture_camera_options = await gesture_run_on_camera_thread(gesture_get_available_cameras)
     elif not gesture_camera_options:
         gesture_camera_options = [{"label": "Camera 0", "value": "0"}]
 
@@ -5969,10 +6552,15 @@ async def gesture_main():
 # Prefix: vlc_
 # =============================================================================
 
+import ctypes
 import json
 import os
 import re
+import secrets
+import socket
+import struct
 import subprocess
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -5992,7 +6580,7 @@ vlc_PLUGIN_PROTOCOL_VERSION = 1  # DO NOT TOUCH
 
 vlc_PLUGIN_NAME = "VLC Over Commercials"
 vlc_PLUGIN_ID = "vlc-over-commercials"
-vlc_PLUGIN_VERSION = "1.1.0"
+vlc_PLUGIN_VERSION = "1.1.1"
 vlc_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custom-plugins/examples/vlc-over-commercials"
 
 
@@ -6000,9 +6588,9 @@ vlc_PLUGIN_URL = "https://github.com/RG-O/YoutubeOverCommercials/tree/main/custo
 # VLC settings
 # -----------------------------------------------------------------------------
 
-vlc_VLC_HTTP_URL = "http://localhost:8080/requests/status.json"
-vlc_VLC_HTTP_PASSWORD = "1234"
-vlc_VLC_HTTP_AUTH = ("", vlc_VLC_HTTP_PASSWORD)
+# VLC's web interface only listens on this computer (not the local network),
+# on a free port with a new random password each time VLC is opened.
+vlc_VLC_HTTP_HOST = "127.0.0.1"
 
 vlc_DEFAULT_MEDIA_URL = "https://upload.wikimedia.org/wikipedia/commons/8/88/Big_Buck_Bunny_alt.webm"
 vlc_DEFAULT_VOLUME = 256
@@ -6010,9 +6598,15 @@ vlc_FALLBACK_VOLUME = 205
 vlc_FREEZE_TIMEOUT_SECONDS = 20
 vlc_AUDIO_TIMEOUT_SECONDS = 20
 vlc_HEALTH_CHECK_INTERVAL_SECONDS = 1
+vlc_FOCUS_RETURN_DELAY_SECONDS = 0.3
 vlc_WINDOW_SIZE_TOLERANCE_PIXELS = 2
 vlc_HISTORY_SAVE_INTERVAL_SECONDS = 5
 vlc_HISTORY_FILE = APP_DIR / "vlc_media_history.json"
+vlc_SNAPSHOT_DIR = Path(tempfile.gettempdir()) / "vlc-over-commercials-snapshots"
+vlc_SNAPSHOT_TIMEOUT_SECONDS = 3
+vlc_SNAPSHOT_RETRY_SECONDS = 30
+# VLC shows the snapshot file name on top of the video for about a second.
+vlc_SNAPSHOT_OSD_SECONDS = 1.2
 
 
 # -----------------------------------------------------------------------------
@@ -6023,13 +6617,17 @@ vlc_SCRIPT_DIR = APP_DIR
 
 vlc_optimized_width_percentage = 90
 vlc_optimized_height_percentage = 85
-vlc_previous_overlay_width_percentage = 0
-vlc_previous_overlay_height_percentage = 0
+# Display size of the current video, found from a VLC snapshot. The key is the
+# media URL and the shape VLC reports, so it is only refreshed when one changes.
+vlc_display_dimensions_cache_key = None
+vlc_display_dimensions = None
+vlc_last_snapshot_time = 0
 
 vlc_vlc_process = None
 vlc_vlc_window_handle = None
+vlc_vlc_http_url = None
+vlc_vlc_http_auth = None
 vlc_original_foreground_window = None
-vlc_is_original_foreground_window_topmost = False
 vlc_is_setup_complete = False
 vlc_saved_volume = vlc_DEFAULT_VOLUME
 vlc_current_media_url = None
@@ -6042,6 +6640,7 @@ vlc_last_history_save_time = 0
 vlc_health_monitor_thread = None
 vlc_health_monitor_stop_event = threading.Event()
 vlc_vlc_command_lock = threading.Lock()
+vlc_snapshot_lock = threading.Lock()
 # Prevent media URL changes and health-triggered reloads from overlapping.
 # RLock lets reset_unhealthy_media() safely call switch_vlc_media(), which also
 # uses this same lock.
@@ -6237,11 +6836,14 @@ def vlc_get_vlc_status(command=None, params=None, timeout=3):
     if command:
         request_params["command"] = command
 
+    if not vlc_vlc_http_url:
+        raise requests.ConnectionError("VLC has not been opened by this plugin.")
+
     with vlc_vlc_command_lock:
         response = requests.get(
-            vlc_VLC_HTTP_URL,
+            vlc_vlc_http_url,
             params=request_params,
-            auth=vlc_VLC_HTTP_AUTH,
+            auth=vlc_vlc_http_auth,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -6358,8 +6960,6 @@ def vlc_update_current_media_audio_status(timeout=5):
 def vlc_switch_vlc_media(media_url, preserve_state=True, resume_time=None):
     """Replace VLC media while retaining reload locking and VOD resume."""
     global vlc_current_media_url
-    global vlc_previous_overlay_width_percentage
-    global vlc_previous_overlay_height_percentage
 
     if not media_url:
         return False
@@ -6390,10 +6990,9 @@ def vlc_switch_vlc_media(media_url, preserve_state=True, resume_time=None):
         vlc_send_vlc_command("in_play", {"input": media_url})
 
         vlc_current_media_url = media_url
-        vlc_previous_overlay_width_percentage = 0
-        vlc_previous_overlay_height_percentage = 0
 
         vlc_wait_for_vlc_playing(timeout=30)
+        vlc_prepare_display_dimensions()
         vlc_update_current_media_audio_status()
 
         try:
@@ -6535,6 +7134,15 @@ def vlc_monitor_vlc_health():
             vlc_remember_media(vlc_current_media_url, status)
             vlc_last_history_save_time = time.monotonic()
 
+        # Re-measure the video if its shape changed or an earlier measurement
+        # failed. Only done while the overlay is not showing, since VLC briefly
+        # shows the snapshot's file name.
+        if (
+            not vlc_is_commercial_state
+            and time.time() - vlc_last_snapshot_time >= vlc_SNAPSHOT_RETRY_SECONDS
+        ):
+            vlc_get_vlc_video_dimensions(allow_snapshot=True, status=status)
+
         stats = status.get("stats", {})
 
         # Video freeze detection
@@ -6604,10 +7212,33 @@ def vlc_stop_health_monitor():
     vlc_health_monitor_stop_event.set()
 
 
+def vlc_find_free_port():
+    """Return a port on this computer that nothing is currently using."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as test_socket:
+        test_socket.bind((vlc_VLC_HTTP_HOST, 0))
+        return test_socket.getsockname()[1]
+
+
+def vlc_get_english_environment():
+    """Return environment variables that make VLC use English.
+
+    The labels in VLC's status (like "Video_resolution") are translated into
+    VLC's language, and this plugin reads them to find the video's size.
+    Note: VLC's own --language option did not change them in testing, but
+    the LANG environment variable did.
+    """
+    environment = dict(os.environ)
+    environment["LANG"] = "en"
+    environment["LANGUAGE"] = "en"
+    return environment
+
+
 def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
     """Start VLC and remember the main window owned by that process."""
     global vlc_vlc_process
     global vlc_vlc_window_handle
+    global vlc_vlc_http_url
+    global vlc_vlc_http_auth
     global vlc_current_media_url
 
     vlc_path = vlc_find_vlc_exe(custom_vlc_path)
@@ -6616,6 +7247,13 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "Could not find vlc.exe in Program Files or Program Files (x86)."
         )
 
+    vlc_clear_snapshots()
+
+    http_port = vlc_find_free_port()
+    http_password = secrets.token_urlsafe(16)
+    vlc_vlc_http_url = f"http://{vlc_VLC_HTTP_HOST}:{http_port}/requests/status.json"
+    vlc_vlc_http_auth = ("", http_password)
+
     vlc_vlc_process = subprocess.Popen(
         [
             vlc_path,
@@ -6623,8 +7261,12 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "--qt-minimal-view",
             "--extraintf",
             "http",
+            "--http-host",
+            vlc_VLC_HTTP_HOST,
+            "--http-port",
+            str(http_port),
             "--http-password",
-            vlc_VLC_HTTP_PASSWORD,
+            http_password,
             "--qt-continue=2",
             "--qt-notification=0",
             "--no-video-title-show",
@@ -6634,7 +7276,14 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
             "--no-one-instance",
             "--no-one-instance-when-started-from-file",
             "--loop",
-        ]
+            # Snapshots are only used to measure the video's real shape.
+            "--snapshot-path",
+            str(vlc_SNAPSHOT_DIR),
+            "--snapshot-format",
+            "png",
+            "--no-snapshot-preview",
+        ],
+        env=vlc_get_english_environment(),
     )
 
     print(f"Started VLC process with PID {vlc_vlc_process.pid}.")
@@ -6678,9 +7327,15 @@ def vlc_open_vlc_with_media(media_url, custom_vlc_path=None):
         pass
 
 
-def vlc_get_vlc_video_dimensions():
-    """Return the current video's width and height."""
-    status = vlc_get_vlc_status()
+def vlc_get_vlc_stored_video_dimensions(status=None):
+    """Return the current video's stored width and height from VLC's status.
+
+    This is the size of the pixels in the file, which is not always the shape
+    VLC displays. Videos with non-square pixels, like DVDs and many TV
+    recordings, display wider than this.
+    """
+    if status is None:
+        status = vlc_get_vlc_status()
     categories = status.get("information", {}).get("category", {})
 
     for stream_info in categories.values():
@@ -6709,6 +7364,128 @@ def vlc_get_vlc_video_dimensions():
             return int(width), int(height)
 
     return None
+
+
+def vlc_read_png_dimensions(path):
+    """Return a PNG file's width and height from its header."""
+    try:
+        with open(path, "rb") as file:
+            header = file.read(24)
+    except OSError:
+        return None
+
+    if (
+        len(header) < 24
+        or header[:8] != b"\x89PNG\r\n\x1a\n"
+        or header[12:16] != b"IHDR"
+    ):
+        return None
+
+    width, height = struct.unpack(">II", header[16:24])
+    if width <= 0 or height <= 0:
+        return None
+
+    return width, height
+
+
+def vlc_clear_snapshots():
+    """Delete snapshots left over from measuring videos."""
+    if not vlc_SNAPSHOT_DIR.exists():
+        return
+
+    for snapshot in vlc_SNAPSHOT_DIR.glob("*.png"):
+        try:
+            snapshot.unlink()
+        except OSError:
+            pass
+
+
+def vlc_get_vlc_snapshot_dimensions():
+    """Take a VLC snapshot and return the size it was saved at.
+
+    VLC saves snapshots at the size it actually displays the video, so this
+    gives the real shape of the picture even for videos with non-square pixels.
+    """
+    global vlc_last_snapshot_time
+
+    with vlc_snapshot_lock:
+        try:
+            vlc_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+            existing_snapshots = set(vlc_SNAPSHOT_DIR.glob("*.png"))
+            vlc_last_snapshot_time = time.time()
+            vlc_send_vlc_command("snapshot")
+        except (OSError, requests.RequestException) as error:
+            print(f"Could not take VLC snapshot: {error}")
+            return None
+
+        start_time = time.time()
+        while time.time() - start_time < vlc_SNAPSHOT_TIMEOUT_SECONDS:
+            for snapshot in set(vlc_SNAPSHOT_DIR.glob("*.png")) - existing_snapshots:
+                dimensions = vlc_read_png_dimensions(snapshot)
+                if dimensions:
+                    vlc_clear_snapshots()
+                    return dimensions
+
+            time.sleep(0.1)
+
+        return None
+
+
+def vlc_get_vlc_video_dimensions(allow_snapshot=False, status=None):
+    """Return the width and height the current video is displayed at.
+
+    Snapshots are only taken when allow_snapshot is True, because VLC briefly
+    shows the snapshot's file name on the video. Without a measured snapshot,
+    the stored resolution is used.
+    """
+    global vlc_display_dimensions_cache_key
+    global vlc_display_dimensions
+
+    stored_dimensions = vlc_get_vlc_stored_video_dimensions(status)
+    if not stored_dimensions:
+        return None
+
+    stored_width, stored_height = stored_dimensions
+    cache_key = (vlc_current_media_url, round(stored_width / stored_height, 3))
+
+    if cache_key == vlc_display_dimensions_cache_key and vlc_display_dimensions:
+        return vlc_display_dimensions
+
+    if not allow_snapshot:
+        return stored_dimensions
+
+    snapshot_dimensions = vlc_get_vlc_snapshot_dimensions()
+    if not snapshot_dimensions:
+        # Not cached, so the snapshot is tried again next time.
+        print("Could not measure the video with a VLC snapshot. Using its stored resolution.")
+        return stored_dimensions
+
+    if snapshot_dimensions != stored_dimensions:
+        print(
+            f"Video is stored at {stored_width}x{stored_height} but displays at "
+            f"{snapshot_dimensions[0]}x{snapshot_dimensions[1]}."
+        )
+
+    vlc_display_dimensions_cache_key = cache_key
+    vlc_display_dimensions = snapshot_dimensions
+    return vlc_display_dimensions
+
+
+def vlc_prepare_display_dimensions():
+    """Measure the video's display size while VLC is not being watched.
+
+    Called right after new media starts playing, before VLC is shown, so the
+    snapshot's file name is gone by the time the overlay appears.
+    """
+    try:
+        vlc_get_vlc_video_dimensions(allow_snapshot=True)
+    except requests.RequestException:
+        return
+
+    # Only wait when a snapshot was just taken (not when the size was cached).
+    remaining_osd_time = vlc_SNAPSHOT_OSD_SECONDS - (time.time() - vlc_last_snapshot_time)
+    if remaining_osd_time > 0:
+        time.sleep(remaining_osd_time)
 
 
 def vlc_wait_for_vlc_playing(timeout=60):
@@ -6767,10 +7544,60 @@ def vlc_is_live_media(status):
 # -----------------------------------------------------------------------------
 
 
+def vlc_make_process_dpi_aware():
+    """Work in real screen pixels instead of Windows' scaled ones.
+
+    With display scaling (like 125% or 150%), Windows otherwise hands this
+    program scaled sizes and positions, so windows end up the wrong size or
+    in the wrong place, especially on a second monitor with different
+    scaling. Note: this applies to the whole program and can only be set
+    once. In the Party Pack the first plugin to call it sets it for all of
+    them, and later calls are simply refused.
+    """
+    try:
+        # Per-monitor DPI awareness (version 2), Windows 10 1703 and newer.
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        # Per-monitor DPI awareness on older Windows versions.
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+
+
+vlc_make_process_dpi_aware()
+
+
+def vlc_get_browser_monitor_area():
+    """Return (left, top, width, height) of the monitor the browser is on.
+
+    Uses the main monitor if the browser window isn't known.
+    """
+    try:
+        if vlc_original_foreground_window and win32gui.IsWindow(vlc_original_foreground_window):
+            monitor = win32api.MonitorFromWindow(
+                vlc_original_foreground_window,
+                win32con.MONITOR_DEFAULTTONEAREST,
+            )
+        else:
+            monitor = win32api.MonitorFromPoint(
+                (0, 0),
+                win32con.MONITOR_DEFAULTTOPRIMARY,
+            )
+
+        left, top, right, bottom = win32api.GetMonitorInfo(monitor)["Monitor"]
+        return left, top, right - left, bottom - top
+
+    except win32api.error:
+        return 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+
+
 def vlc_calculate_largest_aspect_fit(max_width_percent=90, max_height_percent=75):
     """Fit the video inside a percentage-based box without stretching it."""
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    _, _, screen_width, screen_height = vlc_get_browser_monitor_area()
 
     max_width_pixels = int(screen_width * max_width_percent / 100)
     max_height_pixels = int(screen_height * max_height_percent / 100)
@@ -6807,25 +7634,25 @@ def vlc_position_and_resize_window(
     if not hwnd or not win32gui.IsWindow(hwnd):
         return
 
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    # Positioned on the browser's monitor, which may not be the main one.
+    screen_left, screen_top, screen_width, screen_height = vlc_get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
     if horizontal == "left":
-        x = 0
+        x = screen_left
     elif horizontal == "right":
-        x = screen_width - target_width
+        x = screen_left + screen_width - target_width
     else:
-        x = (screen_width - target_width) // 2
+        x = screen_left + (screen_width - target_width) // 2
 
     if vertical == "top":
-        y = 0
+        y = screen_top
     elif vertical == "bottom":
-        y = screen_height - target_height
+        y = screen_top + screen_height - target_height
     else:
-        y = (screen_height - target_height) // 2
+        y = screen_top + (screen_height - target_height) // 2
 
     print(
         f"Positioning VLC: {target_width}x{target_height} at ({x}, {y})"
@@ -6848,14 +7675,13 @@ def vlc_remove_topmost(hwnd, width_percent=90, height_percent=75):
     if not hwnd or not win32gui.IsWindow(hwnd):
         return
 
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    screen_left, screen_top, screen_width, screen_height = vlc_get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
-    x = (screen_width - target_width) // 2
-    y = (screen_height - target_height) // 2
+    x = screen_left + (screen_width - target_width) // 2
+    y = screen_top + (screen_height - target_height) // 2
 
     win32gui.SetWindowPos(
         hwnd,
@@ -6932,46 +7758,75 @@ def vlc_close_window_by_hwnd(hwnd):
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
 
 
-def vlc_set_original_window_topmost(make_topmost):
-    """Temporarily change the original foreground window's topmost state."""
-    global vlc_is_original_foreground_window_topmost
+def vlc_activate_window(hwnd):
+    """Make a window the active window.
 
-    if not vlc_original_foreground_window:
-        return
-
-    insert_after = (
-        win32con.HWND_TOPMOST if make_topmost else win32con.HWND_NOTOPMOST
+    Windows only lets the app currently in use change the active window, so
+    this briefly shares input with that app (AttachThreadInput) to be allowed.
+    """
+    foreground_window = win32gui.GetForegroundWindow()
+    current_thread = win32api.GetCurrentThreadId()
+    foreground_thread = (
+        win32process.GetWindowThreadProcessId(foreground_window)[0]
+        if foreground_window
+        else 0
     )
 
-    win32gui.SetWindowPos(
-        vlc_original_foreground_window,
-        insert_after,
-        0,
-        0,
-        0,
-        0,
-        win32con.SWP_NOMOVE
-        | win32con.SWP_NOSIZE
-        | win32con.SWP_NOACTIVATE,
-    )
+    is_attached = False
+    try:
+        if foreground_thread and foreground_thread != current_thread:
+            win32process.AttachThreadInput(current_thread, foreground_thread, True)
+            is_attached = True
 
-    vlc_is_original_foreground_window_topmost = make_topmost
-    #TODO: add thread to monitor when original_foreground_window is back to foreground window
+        win32gui.BringWindowToTop(hwnd)
+        win32gui.SetForegroundWindow(hwnd)
+    except win32gui.error as error:
+        print(f"Could not activate window: {error}")
+    finally:
+        if is_attached:
+            win32process.AttachThreadInput(current_thread, foreground_thread, False)
 
 
-def vlc_hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar=True):
-    """Use the original two-step minimize behavior for Windows 10 and 11."""
-    vlc_safely_minimize_window(hwnd)
-    if should_clear_taskbar:
-        time.sleep(0.2)
-        vlc_position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-        time.sleep(0.2)
-        vlc_safely_minimize_window(hwnd)
-        time.sleep(0.2)
+def vlc_is_vlc_window(hwnd):
+    """Return True when a window belongs to the VLC process this plugin opened."""
+    if not hwnd or not vlc_vlc_process:
+        return False
 
-        if vlc_original_foreground_window:
-            time.sleep(0.4)
-            vlc_set_original_window_topmost(True)
+    try:
+        _, process_id = win32process.GetWindowThreadProcessId(hwnd)
+    except win32gui.error:
+        return False
+
+    return process_id == vlc_vlc_process.pid
+
+
+def vlc_return_focus_to_browser(delay_seconds=vlc_FOCUS_RETURN_DELAY_SECONDS):
+    """Give keyboard focus back to the browser if VLC took it.
+
+    Windows only hides the taskbar while the fullscreen browser is the active
+    window, so VLC taking focus is what makes the taskbar show over the
+    stream. Focus is only taken back from VLC, so a window the user switched
+    to on purpose is left alone.
+
+    Returns True when the browser is the active window afterwards.
+    """
+    browser_window = vlc_original_foreground_window
+    if not browser_window or not win32gui.IsWindow(browser_window):
+        return False
+
+    # VLC can take focus a moment after it is shown.
+    time.sleep(delay_seconds)
+
+    foreground_window = win32gui.GetForegroundWindow()
+    if foreground_window == browser_window:
+        return True
+
+    if foreground_window and not vlc_is_vlc_window(foreground_window):
+        return False
+
+    print("VLC took focus from the browser. Giving it back.")
+    vlc_activate_window(browser_window)
+    return win32gui.GetForegroundWindow() == browser_window
 
 
 # -----------------------------------------------------------------------------
@@ -7004,26 +7859,18 @@ def vlc_read_preferences(data):
 def vlc_show_commercial_overlay(hwnd, preferences):
     global vlc_optimized_width_percentage
     global vlc_optimized_height_percentage
-    global vlc_previous_overlay_width_percentage
-    global vlc_previous_overlay_height_percentage
     global vlc_expected_commercial_window_rect
 
-    dimensions_changed = (
-        preferences["overlay_width"] != vlc_previous_overlay_width_percentage
-        or preferences["overlay_height"] != vlc_previous_overlay_height_percentage
+    # Recalculated every commercial so a size measured after the last one (or a
+    # stream that changed shape) is always used. The video's display size is
+    # cached, so this is cheap.
+    (
+        vlc_optimized_width_percentage,
+        vlc_optimized_height_percentage,
+    ) = vlc_calculate_largest_aspect_fit(
+        max_width_percent=preferences["overlay_width"],
+        max_height_percent=preferences["overlay_height"],
     )
-
-    vlc_previous_overlay_width_percentage = preferences["overlay_width"]
-    vlc_previous_overlay_height_percentage = preferences["overlay_height"]
-
-    if dimensions_changed:
-        (
-            vlc_optimized_width_percentage,
-            vlc_optimized_height_percentage,
-        ) = vlc_calculate_largest_aspect_fit(
-            max_width_percent=preferences["overlay_width"],
-            max_height_percent=preferences["overlay_height"],
-        )
 
     vlc_position_and_resize_window(
         hwnd,
@@ -7043,6 +7890,8 @@ def vlc_show_commercial_overlay(hwnd, preferences):
     #if is_live_media(status):
     vlc_set_vlc_volume(vlc_saved_volume)
 
+    vlc_return_focus_to_browser()
+
 
 def vlc_hide_commercial_overlay(hwnd, preferences):
     global vlc_saved_volume
@@ -7054,6 +7903,7 @@ def vlc_hide_commercial_overlay(hwnd, preferences):
     if not vlc_is_live_media(status):
         vlc_send_vlc_command("pl_forcepause")
         vlc_safely_minimize_window(hwnd)
+        vlc_return_focus_to_browser()
         return
 
     vlc_set_vlc_volume(0)
@@ -7072,6 +7922,8 @@ def vlc_hide_commercial_overlay(hwnd, preferences):
         )
     else:
         vlc_safely_minimize_window(hwnd)
+
+    vlc_return_focus_to_browser()
 
 
 def vlc_resume_fullscreen(hwnd, preferences):
@@ -7095,8 +7947,14 @@ def vlc_resume_fullscreen(hwnd, preferences):
                 horizontal=preferences["pip_horizontal"],
             )
 
+    vlc_return_focus_to_browser()
+
 
 def vlc_initialize_plugin(preferences):
+    """Open VLC and get it ready.
+
+    Returns True when the browser has keyboard focus afterwards.
+    """
     global vlc_original_foreground_window
     global vlc_is_setup_complete
     global vlc_saved_volume
@@ -7115,8 +7973,6 @@ def vlc_initialize_plugin(preferences):
         title = win32gui.GetWindowText(vlc_original_foreground_window)
         print(f"Original foreground window: {title}")
 
-    should_clear_taskbar = plugin_preferences.get("shouldClearTaskbar", False)
-
     media_url = vlc_get_media_url_from_preferences(preferences, use_default=True)
     custom_vlc_path = plugin_preferences.get("vlcPath", "")
     vlc_open_vlc_with_media(media_url, custom_vlc_path=custom_vlc_path)
@@ -7125,6 +7981,7 @@ def vlc_initialize_plugin(preferences):
     if not vlc_wait_for_vlc_playing():
         raise RuntimeError("VLC did not begin displaying video before timeout.")
 
+    vlc_prepare_display_dimensions()
     vlc_update_current_media_audio_status()
     time.sleep(0.5)
 
@@ -7134,12 +7991,6 @@ def vlc_initialize_plugin(preferences):
 
     vlc_make_borderless(hwnd)
 
-    # Bring VLC forward briefly so the Windows taskbar appears now instead of
-    # unexpectedly appearing later when the first commercial begins.
-    time.sleep(0.2)
-    vlc_position_and_resize_window(hwnd, width_percent=10, height_percent=10)
-    time.sleep(0.2)
-
     status = vlc_get_vlc_status()
     current_volume = int(status.get("volume", vlc_FALLBACK_VOLUME))
     vlc_saved_volume = current_volume or vlc_FALLBACK_VOLUME
@@ -7148,7 +7999,7 @@ def vlc_initialize_plugin(preferences):
         vlc_send_vlc_command("pl_forcepause")
         time.sleep(0.2)
         vlc_set_vlc_volume(vlc_saved_volume) # in case VLC opened with volume as 0, this should set it to the fallback
-        vlc_hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
+        vlc_safely_minimize_window(hwnd)
     else:
         vlc_set_vlc_volume(0)
 
@@ -7164,29 +8015,33 @@ def vlc_initialize_plugin(preferences):
                 vertical=preferences["pip_vertical"],
                 horizontal=preferences["pip_horizontal"],
             )
-            #TODO: add ability to clear taskbar while in pip mode
         else:
-            vlc_hide_vlc_and_clear_taskbar(hwnd, should_clear_taskbar)
+            vlc_safely_minimize_window(hwnd)
 
     vlc_is_setup_complete = True
     vlc_start_health_monitor()
+
+    # Opening VLC takes focus away from the browser, which is what makes the
+    # Windows taskbar show over the stream.
+    return vlc_return_focus_to_browser()
 
 
 def vlc_end_plugin():
     global vlc_vlc_process
     global vlc_vlc_window_handle
+    global vlc_vlc_http_url
+    global vlc_vlc_http_auth
     global vlc_is_setup_complete
     global vlc_current_media_url
     global vlc_current_media_has_audio
     global vlc_is_commercial_state
     global vlc_history_saving_disabled
     global vlc_expected_commercial_window_rect
+    global vlc_display_dimensions_cache_key
+    global vlc_display_dimensions
 
     vlc_stop_health_monitor()
     vlc_save_current_media_progress()
-
-    if vlc_is_original_foreground_window_topmost:
-        vlc_set_original_window_topmost(False)
 
     hwnd = vlc_get_vlc_window()
     vlc_remove_topmost(
@@ -7213,11 +8068,16 @@ def vlc_end_plugin():
 
     vlc_vlc_process = None
     vlc_vlc_window_handle = None
+    vlc_vlc_http_url = None
+    vlc_vlc_http_auth = None
     vlc_current_media_url = None
     vlc_current_media_has_audio = False
     vlc_is_commercial_state = False
     vlc_expected_commercial_window_rect = None
+    vlc_display_dimensions_cache_key = None
+    vlc_display_dimensions = None
     vlc_is_setup_complete = False
+    vlc_clear_snapshots()
     print("Extension stopped.")
 
 # -----------------------------------------------------------------------------
@@ -7295,17 +8155,6 @@ async def vlc_send_manifest(websocket):
                     "options": vlc_get_history_dropdown_options(),
                 },
                 {
-                    "key": "shouldClearTaskbar",
-                    "label": "Should Attempt to Hide Taskbar",
-                    "tooltip": (
-                        "When VLC opens, it sometimes has the Windows taskbar display. "
-                        "This can quickly be fixed by clicking on the browser stream, "
-                        "but this setting attempts to dismiss it for you to save a click. "
-                    ),
-                    "type": "checkbox",
-                    "default": False,
-                },
-                {
                     "key": "clearAndDisableHistory",
                     "label": "Clear and Stop Saving Media History",
                     "description": (
@@ -7352,10 +8201,16 @@ async def vlc_handle_message(websocket, message):
     vlc_history_saving_disabled = disable_history
 
     if message_type == "init":
-        await asyncio.to_thread(vlc_initialize_plugin, preferences)
+        is_browser_focused = await asyncio.to_thread(vlc_initialize_plugin, preferences)
+
+        if is_browser_focused:
+            display = "VLC Over Commercials is ready"
+        else:
+            display = "VLC Over Commercials is ready. Click your stream to return focus to it."
+
         await vlc_send_status(
             websocket,
-            "VLC Over Commercials is ready",
+            display,
             "VLC initialized successfully and is ready to display during commercials.",
             "success",
             7000,
@@ -7392,8 +8247,6 @@ async def vlc_handle_message(websocket, message):
                 await asyncio.to_thread(vlc_resume_fullscreen, hwnd, preferences)
         else:
             print("User exited browser fullscreen.")
-            if vlc_is_original_foreground_window_topmost:
-                await asyncio.to_thread(vlc_set_original_window_topmost, False)
             if hwnd:
                 await asyncio.to_thread(vlc_safely_minimize_window, hwnd)
                 await asyncio.sleep(0.1)

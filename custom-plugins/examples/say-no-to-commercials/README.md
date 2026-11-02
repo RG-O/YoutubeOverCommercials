@@ -23,16 +23,26 @@ from [say-no-to-commercials.py](say-no-to-commercials.py) into your own local py
 1. Set "WebSocket URL" to "ws://localhost:64145"
 1. Click the refresh button if need be
 1. Verify you get successful connection to plugin. 
-1. Scroll down to plugin settings and set your camera and gesture preferences.
+1. Scroll down to plugin settings and set your trigger words or phrases and emojis.
 1. Click "Save & Apply"
 1. Go to whatever website you like to stream from and set it to full screen
 1. Click Ctrl + Shift + F (Firefox: Ctrl + Alt + C) to initiate the extension 
 which will then connect to the plugin.
 1. Upon first use, the plugin will download and unpack the Vosk speech recognition AI
-model (50–100 MB)
-1. After download, gesture towards your camera when there is a commercial to block it!
+model (50â€“100 MB)
+1. After download, say your commercial trigger word or phrase when there is a commercial to block it, 
+and your content trigger word or phrase when the program is back!
 
 ## Help
 
 If you need any help feel free to reach out on the [extension discord](/README.md#discord) 
 or report any issues or enhancement requests on the [issues tab](https://github.com/RG-O/YoutubeOverCommercials/issues)
+
+## Changelog
+
+### Version 1.0.2
+
+- Fixed the plugin freezing (along with other Plugin Party Pack plugins) if the microphone stops sending audio
+- Improved responsiveness by loading the voice model and recognizing speech in the background
+- Fixed words said before listening started being able to trigger a commercial
+- Fixed an invalid message from the extension disconnecting the plugin

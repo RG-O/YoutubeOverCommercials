@@ -1,4 +1,5 @@
 import asyncio
+import ctypes
 import json
 import time
 
@@ -14,10 +15,69 @@ PLUGIN_PROTOCOL_VERSION = 1 # DO NOT TOUCH
 
 PLUGIN_NAME = "Overlay Any Window"
 PLUGIN_ID = "overlay-any-window" # Must be unique
-PLUGIN_VERSION = "1.1.0"
+PLUGIN_VERSION = "1.1.1"
 
 PORT = 64146
 SPACEBAR_KEY = 0x20
+DWMWA_CLOAKED = 14
+GA_ROOT = 2
+FRONT_CHECK_ATTEMPTS = 5
+FRONT_CHECK_DELAY_SECONDS = 0.1
+FOCUS_MESSAGE_DISPLAY_MILLISECONDS = 12000
+
+# Results of trying to show the overlay window in front of the browser.
+WINDOW_IN_FRONT = "in_front"
+WINDOW_IN_FRONT_BY_ACTIVATING = "in_front_by_activating"
+WINDOW_NOT_IN_FRONT = "not_in_front"
+# Note: WS_MINIMIZEBOX/WS_MAXIMIZEBOX are the title bar buttons.
+# WS_MINIMIZE/WS_MAXIMIZE are the window's actual minimized/maximized state
+# and must never be changed when adding or removing borders.
+BORDER_STYLES = (
+    win32con.WS_CAPTION
+    | win32con.WS_THICKFRAME
+    | win32con.WS_MINIMIZEBOX
+    | win32con.WS_MAXIMIZEBOX
+    | win32con.WS_SYSMENU
+)
+
+# The window found at init, so it can still be found if its title changes
+# later (for example a media player showing the name of what is playing).
+selected_window_title = None
+selected_window_hwnd = None
+
+# How the selected window looked before the plugin changed it, so it can be
+# put back the same way. Some windows (like Firefox's Picture-in-Picture
+# window) start always on top, and once that is removed their app won't let
+# another program make them always on top again.
+original_window_state = None
+
+# The browser window that had keyboard focus before this plugin had to
+# activate the overlay window, so focus can be given back once it is hidden.
+focus_taken_from_window = None
+
+# The browser window the extension is running in (the active window when the
+# extension starts), so the overlay can be shown on the same monitor.
+browser_window = None
+
+# The lost-focus message is only shown the first time it happens each time
+# the extension is started.
+has_sent_focus_message = False
+
+
+def is_window_cloaked(hwnd):
+    """Return True for windows Windows reports as visible but hides from view.
+
+    Windows 10 and 11 keep hidden "ghost" copies of many app windows, often
+    with the same title as the real window.
+    """
+    cloaked = ctypes.c_int(0)
+    result = ctypes.windll.dwmapi.DwmGetWindowAttribute(
+        hwnd,
+        DWMWA_CLOAKED,
+        ctypes.byref(cloaked),
+        ctypes.sizeof(cloaked),
+    )
+    return result == 0 and cloaked.value != 0
 
 
 def get_window_dropdown_options():
@@ -25,7 +85,7 @@ def get_window_dropdown_options():
     window_titles = set()
 
     def enum_handler(hwnd, _):
-        if not win32gui.IsWindowVisible(hwnd):
+        if not win32gui.IsWindowVisible(hwnd) or is_window_cloaked(hwnd):
             return
 
         title = win32gui.GetWindowText(hwnd).strip()
@@ -52,7 +112,108 @@ def find_window_by_title(title):
             result.append(hwnd)
 
     win32gui.EnumWindows(enum_handler, matching_windows)
+
+    # Prefer a real window over a hidden ghost copy with the same title.
+    for hwnd in matching_windows:
+        if not is_window_cloaked(hwnd):
+            return hwnd
+
     return matching_windows[0] if matching_windows else None
+
+
+def find_selected_window(title):
+    """Find the selected window, reusing the one found before if it still exists."""
+    global selected_window_title
+    global selected_window_hwnd
+
+    if (
+        title == selected_window_title
+        and selected_window_hwnd
+        and win32gui.IsWindow(selected_window_hwnd)
+    ):
+        return selected_window_hwnd
+
+    hwnd = find_window_by_title(title)
+    if hwnd:
+        selected_window_title = title
+        selected_window_hwnd = hwnd
+
+    return hwnd
+
+
+def remember_original_window_state(hwnd):
+    """Save how the window looks before the plugin changes it."""
+    global original_window_state
+
+    # Keep the first state saved for this window until the extension stops,
+    # so a second init doesn't save the plugin's own changes as "original".
+    if original_window_state and original_window_state["hwnd"] == hwnd:
+        return
+
+    original_window_state = {
+        "hwnd": hwnd,
+        "is_topmost": is_window_topmost(hwnd),
+        "rect": win32gui.GetWindowRect(hwnd),
+        "style": win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE),
+    }
+
+
+def get_original_window_state(hwnd):
+    """Return the saved original state for this window, if there is one."""
+    if original_window_state and original_window_state["hwnd"] == hwnd:
+        return original_window_state
+
+    return None
+
+
+def was_window_originally_topmost(hwnd):
+    """Return True when the window was always on top before the plugin started."""
+    state = get_original_window_state(hwnd)
+    return bool(state and state["is_topmost"])
+
+
+def forget_original_window_state():
+    """Clear the saved state once the window has been put back."""
+    global original_window_state
+    original_window_state = None
+
+
+def get_set_up_window():
+    """Return the window the plugin has currently set up as the overlay, if any."""
+    if original_window_state:
+        return original_window_state["hwnd"]
+
+    return None
+
+
+def set_up_window(hwnd, settings):
+    """Get a window ready to be used as the overlay."""
+    remember_original_window_state(hwnd)
+    restore_if_maximized(hwnd)
+
+    if settings["should_remove_borders"]:
+        make_borderless(hwnd)
+
+    # For some reason running this at the begining helps the window come
+    # forward later. Skipped for windows that are already always on top,
+    # since removing it can't be undone for some (like Firefox's
+    # Picture-in-Picture window) and they are already in front.
+    if not was_window_originally_topmost(hwnd):
+        remove_topmost(hwnd, width_percent=90, height_percent=85)
+
+    time.sleep(0.5)
+
+
+def release_window(hwnd):
+    """Put a window back the way it was before the plugin set it up."""
+    if win32gui.IsWindow(hwnd):
+        # Always unmute in case the preference changed while the extension
+        # was running.
+        mute_application_of_window(hwnd, mute=False)
+        remove_topmost(hwnd, width_percent=90, height_percent=75)
+        restore_borders(hwnd)
+
+    forget_original_window_state()
 
 
 def mute_application_of_window(hwnd, mute=True):
@@ -84,32 +245,91 @@ def send_spacebar(hwnd):
     win32gui.PostMessage(hwnd, win32con.WM_KEYUP, SPACEBAR_KEY, 0)
 
 
+def make_process_dpi_aware():
+    """Work in real screen pixels instead of Windows' scaled ones.
+
+    With display scaling (like 125% or 150%), Windows otherwise hands this
+    program scaled sizes and positions, so windows end up the wrong size or
+    in the wrong place, especially on a second monitor with different
+    scaling. Note: this applies to the whole program and can only be set
+    once. In the Party Pack the first plugin to call it sets it for all of
+    them, and later calls are simply refused.
+    """
+    try:
+        # Per-monitor DPI awareness (version 2), Windows 10 1703 and newer.
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+
+    try:
+        # Per-monitor DPI awareness on older Windows versions.
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        pass
+
+
+make_process_dpi_aware()
+
+
+def remember_browser_window(overlay_hwnd):
+    """Remember the browser window (the active window when the extension starts)."""
+    global browser_window
+
+    foreground_window = win32gui.GetForegroundWindow()
+    if foreground_window and foreground_window != overlay_hwnd:
+        browser_window = foreground_window
+
+
+def get_browser_monitor_area():
+    """Return (left, top, width, height) of the monitor the browser is on.
+
+    Uses the main monitor if the browser window isn't known.
+    """
+    try:
+        if browser_window and win32gui.IsWindow(browser_window):
+            monitor = win32api.MonitorFromWindow(
+                browser_window,
+                win32con.MONITOR_DEFAULTTONEAREST,
+            )
+        else:
+            monitor = win32api.MonitorFromPoint(
+                (0, 0),
+                win32con.MONITOR_DEFAULTTOPRIMARY,
+            )
+
+        left, top, right, bottom = win32api.GetMonitorInfo(monitor)["Monitor"]
+        return left, top, right - left, bottom - top
+
+    except win32api.error:
+        return 0, 0, win32api.GetSystemMetrics(0), win32api.GetSystemMetrics(1)
+
+
 def calculate_window_position(
     width_percent,
     height_percent,
     horizontal,
     vertical,
 ):
-    """Calculate a window's size and screen position."""
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
+    """Calculate a window's size and position on the browser's monitor."""
+    screen_left, screen_top, screen_width, screen_height = get_browser_monitor_area()
 
     target_width = int(screen_width * width_percent / 100)
     target_height = int(screen_height * height_percent / 100)
 
     if horizontal == "left":
-        x = 0
+        x = screen_left
     elif horizontal == "right":
-        x = screen_width - target_width
+        x = screen_left + screen_width - target_width
     else:
-        x = (screen_width - target_width) // 2
+        x = screen_left + (screen_width - target_width) // 2
 
     if vertical == "top":
-        y = 0
+        y = screen_top
     elif vertical == "bottom":
-        y = screen_height - target_height
+        y = screen_top + screen_height - target_height
     else:
-        y = (screen_height - target_height) // 2
+        y = screen_top + (screen_height - target_height) // 2
 
     return x, y, target_width, target_height
 
@@ -121,7 +341,11 @@ def position_and_resize_window(
     vertical="middle",
     horizontal="middle",
 ):
-    """Show, resize, position, and temporarily keep a window on top."""
+    """Show, resize, position, and keep a window on top of the fullscreen browser.
+
+    Returns WINDOW_IN_FRONT, WINDOW_IN_FRONT_BY_ACTIVATING (the browser lost
+    keyboard focus), or WINDOW_NOT_IN_FRONT.
+    """
     x, y, width, height = calculate_window_position(
         width_percent,
         height_percent,
@@ -129,8 +353,46 @@ def position_and_resize_window(
         vertical,
     )
 
-    win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+    if win32gui.IsIconic(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+        # Some apps finish restoring a moment later and can undo a position
+        # that was set too early.
+        time.sleep(0.15)
 
+    # Check it actually ended up in front, since some apps move themselves
+    # again right after being restored.
+    for _ in range(FRONT_CHECK_ATTEMPTS):
+        set_window_topmost(hwnd, x, y, width, height)
+        time.sleep(FRONT_CHECK_DELAY_SECONDS)
+
+        if is_window_in_front(hwnd):
+            return WINDOW_IN_FRONT
+
+        # Some windows won't accept always-on-top from another program (for
+        # example a Firefox Picture-in-Picture window that already lost it),
+        # so trying again won't help.
+        if not is_window_topmost(hwnd):
+            break
+
+    # Last resort: make it the active window, which takes keyboard focus away
+    # from the browser.
+    activate_overlay_window(hwnd)
+    set_window_topmost(hwnd, x, y, width, height)
+    time.sleep(FRONT_CHECK_DELAY_SECONDS)
+
+    if is_window_in_front(hwnd) or win32gui.GetForegroundWindow() == hwnd:
+        print(
+            "Window did not come to the front on its own, so it was activated "
+            "instead (the browser gets keyboard focus back once the overlay is hidden)."
+        )
+        return WINDOW_IN_FRONT_BY_ACTIVATING
+
+    print("Window could not be brought to the front, even by activating it.")
+    return WINDOW_NOT_IN_FRONT
+
+
+def set_window_topmost(hwnd, x, y, width, height):
+    """Place a window above all normal windows without activating it."""
     win32gui.SetWindowPos(
         hwnd,
         win32con.HWND_TOPMOST,
@@ -138,12 +400,119 @@ def position_and_resize_window(
         y,
         width,
         height,
-        win32con.SWP_NOACTIVATE,
+        win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW,
     )
 
 
+def is_window_topmost(hwnd):
+    """Return True when a window is marked always on top."""
+    ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+    return bool(ex_style & win32con.WS_EX_TOPMOST)
+
+
+def is_window_in_front(hwnd):
+    """Return True when the window is restored, topmost, and the one seen at its center."""
+    if win32gui.IsIconic(hwnd):
+        return False
+
+    if not is_window_topmost(hwnd):
+        return False
+
+    left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    center = ((left + right) // 2, (top + bottom) // 2)
+
+    try:
+        window_at_center = win32gui.WindowFromPoint(center)
+    except win32gui.error:
+        return False
+
+    if not window_at_center:
+        return False
+
+    # The point can land on one of the window's child controls.
+    return ctypes.windll.user32.GetAncestor(window_at_center, GA_ROOT) == hwnd
+
+
+def activate_window(hwnd):
+    """Make a window the active window.
+
+    Windows only lets the app currently in use change the active window, so
+    this briefly shares input with that app (AttachThreadInput) to be allowed.
+    """
+    foreground_window = win32gui.GetForegroundWindow()
+    current_thread = win32api.GetCurrentThreadId()
+    foreground_thread = (
+        win32process.GetWindowThreadProcessId(foreground_window)[0]
+        if foreground_window
+        else 0
+    )
+
+    is_attached = False
+    try:
+        if foreground_thread and foreground_thread != current_thread:
+            win32process.AttachThreadInput(current_thread, foreground_thread, True)
+            is_attached = True
+
+        win32gui.BringWindowToTop(hwnd)
+        win32gui.SetForegroundWindow(hwnd)
+    except win32gui.error as error:
+        print(f"Could not activate window: {error}")
+    finally:
+        if is_attached:
+            win32process.AttachThreadInput(current_thread, foreground_thread, False)
+
+
+def activate_overlay_window(hwnd):
+    """Last resort to bring a window in front: make it the active window.
+
+    Focus is not given straight back to the browser, because activating the
+    browser would put it back on top of a window that won't stay always on
+    top. Instead focus is returned once the overlay is hidden.
+    """
+    global focus_taken_from_window
+
+    previous_foreground_window = win32gui.GetForegroundWindow()
+    if (
+        focus_taken_from_window is None
+        and previous_foreground_window
+        and previous_foreground_window != hwnd
+    ):
+        focus_taken_from_window = previous_foreground_window
+
+    activate_window(hwnd)
+
+
+def return_focus_to_browser():
+    """Give keyboard focus back to the browser if this plugin took it."""
+    global focus_taken_from_window
+
+    window = focus_taken_from_window
+    focus_taken_from_window = None
+
+    if window and win32gui.IsWindow(window):
+        activate_window(window)
+
+
 def remove_topmost(hwnd, width_percent=90, height_percent=75):
-    """Remove topmost status and place the window near the bottom of the stack."""
+    """Remove topmost status and place the window near the bottom of the stack.
+
+    Windows that were always on top before the plugin started are put back
+    where they were instead, still always on top.
+    """
+    state = get_original_window_state(hwnd)
+    if state and state["is_topmost"]:
+        left, top, right, bottom = state["rect"]
+        win32gui.SetWindowPos(
+            hwnd,
+            win32con.HWND_TOPMOST,
+            left,
+            top,
+            right - left,
+            bottom - top,
+            win32con.SWP_NOACTIVATE,
+        )
+        return
+
     x, y, width, height = calculate_window_position(
         width_percent,
         height_percent,
@@ -167,17 +536,24 @@ def minimize_window(hwnd):
     win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
 
 
-def make_borderless(hwnd):
-    """Remove the window title bar and resize borders."""
-    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+def restore_if_maximized(hwnd):
+    """A maximized window can't be freely sized, so restore it to normal size."""
+    # Note: win32gui has no IsZoomed, so it is called from user32 directly.
+    if win32gui.IsWindow(hwnd) and ctypes.windll.user32.IsZoomed(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
 
-    style &= ~(
-        win32con.WS_CAPTION
-        | win32con.WS_THICKFRAME
-        | win32con.WS_MINIMIZE
-        | win32con.WS_MAXIMIZE
-        | win32con.WS_SYSMENU
-    )
+
+def make_borderless(hwnd):
+    """Remove the window title bar and resize borders.
+
+    Note: many Windows 11 apps (like Notepad, File Explorer, Terminal,
+    browsers, and Microsoft Store apps) draw their own title bar, tabs, and
+    minimize/maximize/close buttons inside the window. Those can't be removed
+    by another program, which is why this can be turned off in the plugin's
+    preferences.
+    """
+    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+    style &= ~BORDER_STYLES
 
     win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
 
@@ -199,13 +575,14 @@ def restore_borders(hwnd):
     """Restore the normal title bar and resize borders."""
     style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
 
-    style |= (
-        win32con.WS_CAPTION
-        | win32con.WS_THICKFRAME
-        | win32con.WS_MINIMIZE
-        | win32con.WS_MAXIMIZE
-        | win32con.WS_SYSMENU
-    )
+    # Only give back the border pieces the window had before, so windows
+    # that never had a title bar (like Firefox's Picture-in-Picture window)
+    # don't get one.
+    state = get_original_window_state(hwnd)
+    if state:
+        style |= state["style"] & BORDER_STYLES
+    else:
+        style |= BORDER_STYLES
 
     win32gui.SetWindowLong(hwnd, win32con.GWL_STYLE, style)
 
@@ -236,6 +613,9 @@ def get_overlay_settings(message):
         "should_send_spacebar": bool(
             plugin_preferences.get("should-send-spacebar", False)
         ),
+        "should_remove_borders": bool(
+            plugin_preferences.get("should-remove-borders", False)
+        ),
         "overlay_width": float(preferences.get("videoOverlayWidth", 90)),
         "overlay_height": float(preferences.get("videoOverlayHeight", 75)),
         "overlay_horizontal": preferences.get(
@@ -262,7 +642,7 @@ def get_overlay_settings(message):
 
 def show_pip_window(hwnd, settings):
     """Show the selected window using the configured picture-in-picture size."""
-    position_and_resize_window(
+    return position_and_resize_window(
         hwnd,
         width_percent=settings["pip_width"],
         height_percent=settings["pip_height"],
@@ -273,7 +653,7 @@ def show_pip_window(hwnd, settings):
 
 def show_overlay_window(hwnd, settings):
     """Show the selected window using the configured overlay size."""
-    position_and_resize_window(
+    return position_and_resize_window(
         hwnd,
         width_percent=settings["overlay_width"],
         height_percent=settings["overlay_height"],
@@ -313,34 +693,92 @@ async def handle_message(websocket, message):
         await send_manifest(websocket)
         return
 
+    # Moving, showing, and muting windows includes short waits for windows to
+    # settle, so it runs on a worker thread. This keeps the WebSocket (and, in
+    # the Party Pack, every other plugin) responsive in the meantime.
+    statuses = await asyncio.to_thread(process_message_with_com, message)
+
+    for status in statuses:
+        await send_status(websocket, **status)
+
+
+def process_message_with_com(message):
+    """Run process_message with Windows COM set up on this worker thread.
+
+    pycaw (used for muting) uses Windows COM, which has to be set up on each
+    thread that uses it.
+    """
+    import comtypes
+
+    comtypes.CoInitialize()
+    try:
+        return process_message(message)
+    finally:
+        comtypes.CoUninitialize()
+
+
+def process_message(message):
+    """Handle a message from the extension.
+
+    Returns a list of status messages (send_status arguments) to send back.
+    """
+    statuses = []
+    message_type = message.get("type")
     settings = get_overlay_settings(message)
     window_title = settings["window_title"]
+    set_up_hwnd = get_set_up_window()
+
+    if message_type == "end":
+        print("Extension stopped.")
+
+        # Put back the window that was actually set up, even if a different
+        # window has been chosen in the extension since then. If nothing is
+        # set up it was already put back (the Party Pack sends a second "end"
+        # during its cleanup), and doing it again would strip always-on-top
+        # and add a title bar to windows that never had them.
+        if set_up_hwnd:
+            release_window(set_up_hwnd)
+
+        return_focus_to_browser()
+        return statuses
 
     if not window_title:
-        await send_status(
-            websocket,
-            "No window selected",
-            "The window-title preference is empty.",
-        )
-        return
+        statuses.append({
+            "display": "No window selected",
+            "debug": "The window-title preference is empty.",
+        })
+        return statuses
 
-    hwnd = find_window_by_title(window_title)
+    hwnd = find_selected_window(window_title)
 
     if hwnd is None:
-        await send_status(
-            websocket,
-            f'Could not find "{window_title}"',
-            f'Could not find a visible window titled "{window_title}".',
-        )
-        return
+        statuses.append({
+            "display": f'Could not find "{window_title}"',
+            "debug": f'Could not find a visible window titled "{window_title}".',
+        })
+        return statuses
+
+    # A different window was chosen in the extension after the plugin was set
+    # up, so put the old window back and set up the new one in its place.
+    if set_up_hwnd and set_up_hwnd != hwnd:
+        print(f'Switching overlay window to "{window_title}".')
+        release_window(set_up_hwnd)
+
+        # Init sets up the window itself below.
+        if message_type != "init":
+            set_up_window(hwnd, settings)
+
+            if settings["should_mute"]:
+                mute_application_of_window(hwnd, mute=True)
 
     if message_type == "init":
-        make_borderless(hwnd)
-        remove_topmost(hwnd, width_percent=90, height_percent=85) # For some reason running this at the begining helps the window come forward later
-        time.sleep(0.5)
+        reset_focus_message()
+        remember_browser_window(hwnd)
+        set_up_window(hwnd, settings)
 
         if settings["is_pip_mode"]:
-            show_pip_window(hwnd, settings)
+            result = show_pip_window(hwnd, settings)
+            add_window_front_status(statuses, result, window_title)
         else:
             minimize_window(hwnd)
 
@@ -348,7 +786,7 @@ async def handle_message(websocket, message):
             mute_application_of_window(hwnd, mute=True)
 
         print("Extension initiated.")
-        return
+        return statuses
 
     if message_type == "commercial_state_change":
         is_commercial = bool(
@@ -357,7 +795,8 @@ async def handle_message(websocket, message):
 
         if is_commercial:
             print("Starting overlay.")
-            show_overlay_window(hwnd, settings)
+            result = show_overlay_window(hwnd, settings)
+            add_window_front_status(statuses, result, window_title)
 
             if settings["should_mute"]:
                 mute_application_of_window(hwnd, mute=False)
@@ -377,11 +816,13 @@ async def handle_message(websocket, message):
                 mute_application_of_window(hwnd, mute=True)
 
             if settings["is_pip_mode"]:
-                show_pip_window(hwnd, settings)
+                result = show_pip_window(hwnd, settings)
+                add_window_front_status(statuses, result, window_title)
             else:
                 minimize_window(hwnd)
+                return_focus_to_browser()
 
-        return
+        return statuses
 
     if message_type == "browser_fullscreen_state_change":
         is_fullscreen = bool(
@@ -394,10 +835,18 @@ async def handle_message(websocket, message):
             if settings["should_mute"]:
                 mute_application_of_window(hwnd, mute=True)
 
-            make_borderless(hwnd)
+            restore_if_maximized(hwnd)
+
+            if settings["should_remove_borders"]:
+                make_borderless(hwnd)
 
             if settings["is_pip_mode"]:
-                show_pip_window(hwnd, settings)
+                result = show_pip_window(hwnd, settings)
+                add_window_front_status(statuses, result, window_title)
+            else:
+                # Keep it out of the way until the next commercial (a window
+                # that is always on top would otherwise sit over the stream).
+                minimize_window(hwnd)
 
         else:
             print("Browser exited fullscreen.")
@@ -408,34 +857,69 @@ async def handle_message(websocket, message):
             remove_topmost(hwnd, width_percent=90, height_percent=85)
             restore_borders(hwnd)
 
-        return
+        return statuses
 
-    if message_type == "end":
-        print("Extension stopped.")
-
-        # Always unmute during cleanup in case the preference changed while
-        # the extension was running.
-        mute_application_of_window(hwnd, mute=False)
-        remove_topmost(hwnd, width_percent=90, height_percent=75)
-        restore_borders(hwnd)
-        return
-
-    await send_status(
-        websocket,
-        "Unknown message",
-        f'Unsupported message type: "{message_type}".',
-    )
+    statuses.append({
+        "display": "Unknown message",
+        "debug": f'Unsupported message type: "{message_type}".',
+    })
+    return statuses
 
 
-async def send_status(websocket, display, debug):
+def reset_focus_message():
+    """Allow the lost-focus message to be shown again (once per extension start)."""
+    global has_sent_focus_message
+    has_sent_focus_message = False
+
+
+def add_window_front_status(statuses, result, window_title):
+    """Let the user know when the overlay window took focus or couldn't be shown on top."""
+    global has_sent_focus_message
+
+    if result == WINDOW_IN_FRONT_BY_ACTIVATING and not has_sent_focus_message:
+        has_sent_focus_message = True
+        statuses.append({
+            "display": (
+                f'To show "{window_title}" on top, Overlay Any Window had to make it '
+                "the active window, so your browser lost keyboard focus. Click your "
+                "browser to give it focus again (for example to use the keyboard "
+                "shortcut). This may hide the overlay window."
+            ),
+            "debug": "The window would not stay always on top, so it was activated instead.",
+            "display_type": "info",
+            "display_time": FOCUS_MESSAGE_DISPLAY_MILLISECONDS,
+        })
+
+    elif result == WINDOW_NOT_IN_FRONT:
+        statuses.append({
+            "display": (
+                f'Overlay Any Window could not show "{window_title}" on top of your '
+                "browser. Try closing and reopening that window, or choose a "
+                "different one."
+            ),
+            "debug": "The window would not stay always on top and could not be activated.",
+            "display_type": "error",
+        })
+
+
+async def send_status(websocket, display, debug, display_type=None, display_time=None):
+    meta = {
+        "display": display,
+        "debug": debug,
+    }
+
+    # Optional: "info" shows blue and "error" shows red. The message
+    # disappears after displayTime milliseconds (7 seconds if not sent).
+    if display_type is not None:
+        meta["displayType"] = display_type
+    if display_time is not None:
+        meta["displayTime"] = display_time
+
     message = {
         "type": "status",
         "timestamp": time.time(),
         "data": {},
-        "meta": {
-            "display": display,
-            "debug": debug,
-        },
+        "meta": meta,
     }
 
     try:
@@ -494,6 +978,21 @@ async def send_manifest(websocket):
                         "Send a spacebar command to try to play the selected "
                         "window's media when commercials begin and pause it "
                         "when commercials end. Start with the media paused."
+                    ),
+                    "type": "checkbox",
+                    "default": False,
+                },
+                {
+                    "key": "should-remove-borders",
+                    "label": "Remove window title bar and borders",
+                    "tooltip": (
+                        "Hides the selected window's title bar and borders while "
+                        "it is used as the overlay. Works best with classic apps. "
+                        "Many Windows 11 apps (like Notepad, File Explorer, "
+                        "Terminal, browsers, and Microsoft Store apps) draw their "
+                        "own title bar, tabs, and buttons, which can't be removed "
+                        "and may be left with an odd-looking border, so turn this "
+                        "off for those."
                     ),
                     "type": "checkbox",
                     "default": False,
